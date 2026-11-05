@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
-import { POPULAR_NPM, POPULAR_PYPI, POPULAR_SCOPES } from "./popular.mjs";
+import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
 
 const rule = r => ({ category: "supply-chain", confidence: "medium", ...r });
@@ -31,9 +31,9 @@ function distance(a, b) {
 const norm = n => n.toLowerCase().replace(/[-_.]+/g, "-");
 
 /** The popular package (or npm scope) a name imitates, if any. */
-export function lookalike(name, popular, scopes = POPULAR_SCOPES) {
+export function lookalike(name, popular, scopes = POPULAR_SCOPES, known = popular) {
   const n = norm(name);
-  if (popular.has(n)) return null;
+  if (popular.has(n) || known.has(n)) return null;
   const scoped = n.match(/^@([^/]+)\/(.+)$/);
   if (scoped) {
     if (scopes.has(scoped[1])) return null;
@@ -72,7 +72,7 @@ function checkPackageJson(file, text, out, { installed = false } = {}) {
   }
   // When vetting a package, its own name imitating a popular one is a strong signal.
   if (!pkg.private && typeof pkg.name === "string" && pkg.version) {
-    const like = lookalike(pkg.name, POPULAR_NPM);
+    const like = lookalike(pkg.name, TARGET_NPM, POPULAR_SCOPES, KNOWN_NPM);
     if (like) out.push(finding(rule({ id: "package-name-typosquat", severity: "high", title: "This package's name imitates a popular package",
       why: "Typosquats borrow a popular name with a small change so people install them by mistake.", fix: "Install the real package instead; treat this one as hostile." }), file.rel, lineIn(text, `"name"`), `"${pkg.name}" looks like "${like}"`));
   }
@@ -81,7 +81,7 @@ function checkPackageJson(file, text, out, { installed = false } = {}) {
     for (const [name, spec] of Object.entries(pkg[section] || {})) {
       if (typeof spec !== "string") continue;
       const at = lineIn(text, `"${name}"`);
-      const like = lookalike(name, POPULAR_NPM);
+      const like = lookalike(name, TARGET_NPM, POPULAR_SCOPES, KNOWN_NPM);
       if (like) out.push(finding(TYPO, file.rel, at, `"${name}" looks like "${like}"`));
       if (spec === "*" || spec === "latest" || spec === "x" || spec === "") {
         out.push(finding(rule({ id: "dep-unpinned", severity: "low", title: "Dependency accepts any version",
@@ -147,7 +147,7 @@ function checkRequirements(file, text, out) {
     const spec = line.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:(?:[<>=!~]=?|===)\s*[^\s;,]+(?:\s*,\s*(?:[<>=!~]=?|===)\s*[^\s;,]+)*)?\s*(?:;.*)?$/);
     const name = spec?.[1];
     if (!name) return;
-    const like = lookalike(name, POPULAR_PYPI);
+    const like = lookalike(name, TARGET_PYPI, POPULAR_SCOPES, KNOWN_PYPI);
     if (like) out.push(finding(TYPO, file.rel, i + 1, `"${name}" looks like "${like}"`));
   });
 }
@@ -159,7 +159,7 @@ function checkPyproject(file, text, out) {
     for (const d of m[1].matchAll(/"([^"]*)"|'([^']*)'/g)) { const name = (d[1] ?? d[2]).match(/^\s*([A-Za-z0-9][A-Za-z0-9._-]*)/)?.[1]; if (name) names.add(name); }
   }
   for (const m of text.matchAll(/^\[tool\.poetry\.(?:dev-)?dependencies\]([\s\S]*?)(?=^\[)/gm)) for (const d of m[1].matchAll(/^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=/gm)) names.add(d[1]);
-  for (const n of names) { const like = lookalike(n, POPULAR_PYPI); if (like && n.toLowerCase() !== "python") out.push(finding(TYPO, file.rel, lineIn(text, n), `"${n}" looks like "${like}"`)); }
+  for (const n of names) { const like = lookalike(n, TARGET_PYPI, POPULAR_SCOPES, KNOWN_PYPI); if (like && n.toLowerCase() !== "python") out.push(finding(TYPO, file.rel, lineIn(text, n), `"${n}" looks like "${like}"`)); }
 }
 
 function checkSetupPy(file, text, out) {

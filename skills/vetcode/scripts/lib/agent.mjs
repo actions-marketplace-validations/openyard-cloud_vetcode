@@ -50,6 +50,7 @@ const INJECTION = [
   [/\b(this|the)\s+(file|code|package|repo(sitory)?)\s+(is|has\s+been)\s+(safe|verified|audited|trusted)\b[^.\n]{0,60}\b(skip|do\s+not|don'?t|no\s+need)/i, "tells a reviewer to skip checking"],
   [/\b(read|cat|open|send|upload|post|include|copy|print|attach|append|exfiltrate|collect)\b[^.\n]{0,60}(~\/\.ssh|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.git-credentials|\.env\b)|\b(send|upload|post|exfiltrate|forward)\b[^.\n]{0,40}\b(the\s+)?(tokens?|secrets?|credentials?|api[_ ]?keys?|env(ironment)? variables)\b[^.\n]{0,40}\b(to|at)\b[^.\n]{0,30}(https?:\/\/|webhook|server|endpoint)/i, "points the model at credentials", true],
   [/\b(curl|wget)\b[^\n]*\|\s*(ba|z)?sh\b|--dangerously-skip-permissions|--yolo\b|--trust-all-tools|bypassPermissions/i, "asks the model to run downloaded code or skip permission prompts"],
+  [/extract(?:ed)?\s+(?:it\s+)?(?:using|with)\s+(?:the\s+)?pass(?:word)?|\(pass(?:word)?:\s*`?[\w-]+`?\)|\b(?:download|install)\b[^\n]{0,160}\.(?:zip|exe|dmg|pkg|msi|appimage)\b[^\n]{0,160}\b(?:run|execute|open|launch)\b|\b(?:run|execute|launch)\s+the\s+(?:executable|installer|binary|installation command)|\b(?:glot\.io|pastebin\.com|paste\.ee|rentry\.co|hastebin\.com|controlc\.com)\/|must be (?:installed|running) before (?:using|you use) this skill[^\n]{0,200}https?:\/\//i, "tells you to download and run an outside program"],
 ];
 
 function checkInstructions(file, text, out) {

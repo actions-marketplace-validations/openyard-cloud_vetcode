@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
 import { POPULAR_NPM, POPULAR_PYPI, POPULAR_SCOPES } from "./popular.mjs";
-import { installEntryFiles, checkInstallEntry } from "./capabilities.mjs";
+import { installEntryFiles, checkInstallEntry, libraryEntryFiles } from "./capabilities.mjs";
 
 const rule = r => ({ category: "supply-chain", confidence: "medium", ...r });
 const readJson = text => { try { return JSON.parse(text.replace(/^\uFEFF/, "")); } catch { return null; } };
@@ -40,9 +40,11 @@ export function lookalike(name, popular, scopes = POPULAR_SCOPES) {
     for (const s of scopes) if (s.length >= 4 && distance(scoped[1], s) === 1) return `@${s}/${scoped[2]}`;
     return null;
   }
+  const core = n.replace(/(?:[-.]?js)$/, "").replace(/^node-/, "");
   for (const p of popular) {
     if (p.startsWith("@") || p.length < 5) continue;
-    if (distance(n, p) === 1 || n === p + "s" || n === p + "-js" || n === p + "js" || n === "node-" + p || (p.includes("-") && n === p.replace(/-/g, ""))) return p;
+    if (core !== n && core.length >= 4 && popular.has(core)) return null;
+    if (distance(n, p) === 1 || (core !== n && core !== p && distance(core, p) === 1) || n === p + "s" || n === p + "-js" || n === p + "js" || n === "node-" + p || (p.includes("-") && n === p.replace(/-/g, ""))) return p;
   }
   return null;
 }
@@ -66,6 +68,12 @@ function checkPackageJson(file, text, out, { installed = false } = {}) {
       out.push(finding(rule({ id: "install-script", severity: "info", confidence: "high", title: `Installed package ${pkg.name} runs a "${hook}" script`,
         why: "Install scripts are where most npm malware lives; this one looks ordinary but runs on every install.", fix: "Know why it needs to; consider `npm config set ignore-scripts true` and allow-listing." }), file.rel, lineIn(text, `"${hook}"`), `"${hook}": "${cmd}"`));
     }
+  }
+  // When vetting a package, its own name imitating a popular one is a strong signal.
+  if (!pkg.private && typeof pkg.name === "string" && pkg.version) {
+    const like = lookalike(pkg.name, POPULAR_NPM);
+    if (like) out.push(finding(rule({ id: "package-name-typosquat", severity: "high", title: "This package's name imitates a popular package",
+      why: "Typosquats borrow a popular name with a small change so people install them by mistake.", fix: "Install the real package instead; treat this one as hostile." }), file.rel, lineIn(text, `"name"`), `"${pkg.name}" looks like "${like}"`));
   }
   if (installed) return;
   for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
@@ -151,7 +159,9 @@ function checkPyproject(file, text, out) {
 function checkSetupPy(file, text, out) {
   const m = /\b(?:urllib\.request|urlopen|requests\.(?:get|post)|httpx\.|subprocess\.|os\.system|os\.popen|exec\s*\(|eval\s*\(|socket\.|base64\.b64decode|__import__\()/.exec(text);
   if (!m) return;
-  out.push(finding(rule({ id: "setup-py-runs-code", severity: "high", title: "setup.py runs network or shell code",
+  // Building C extensions or reading git tags needs subprocess; fetching or decoding code does not.
+  const strong = /\b(?:urllib\.request|urlopen|requests\.(?:get|post)|httpx\.|socket\.|base64\.b64decode|__import__\(|exec\s*\(|eval\s*\()|\b(?:curl|wget|powershell)\b/.test(text);
+  out.push(finding(rule({ id: "setup-py-runs-code", severity: strong ? "high" : "low", title: strong ? "setup.py fetches, decodes or evaluates code" : "setup.py runs shell commands",
     why: "setup.py executes during `pip install`; downloading or launching programs there is a classic way to ship malware.",
     fix: "Read exactly what it runs. Prefer packages that ship wheels; install untrusted ones in a throwaway container." }), file.rel, lineOf(text, m.index), text.split("\n")[lineOf(text, m.index) - 1]));
 }
@@ -313,8 +323,10 @@ export function scanInstalledPackage(dir, root, out) {
 export function scanProjectInstallEntries(root, files, out) {
   for (const f of files) {
     if (!/(^|\/)package\.json$/.test(f.rel)) continue;
-    const dir = path.join(root, path.dirname(f.rel));
-    for (const abs of installEntryFiles(dir, hookScripts(readJson(f.text)))) checkInstallEntry(abs, relTo(root, abs), out, false);
+    const dir = path.join(root, path.dirname(f.rel)), pkg = readJson(f.text);
+    const install = installEntryFiles(dir, hookScripts(pkg));
+    for (const abs of install) checkInstallEntry(abs, relTo(root, abs), out, false);
+    for (const abs of libraryEntryFiles(dir, pkg)) if (!install.includes(abs)) checkInstallEntry(abs, relTo(root, abs), out, false, "library");
   }
 }
 

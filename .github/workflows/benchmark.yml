@@ -1,0 +1,45 @@
+name: Benchmark
+# Runs vetcode against public malware datasets and benign packages on a throwaway GitHub
+# runner, so no malicious sample ever lands on a contributor's machine. Start it by hand:
+# Actions → Benchmark → Run workflow. Results are attached to the run as an artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      npm:
+        description: npm packages per class (malicious and benign)
+        default: "1000"
+      pypi:
+        description: PyPI packages per class
+        default: "300"
+      seed:
+        description: Sampling seed (same seed, same sample)
+        default: "7"
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download samples (files only, nothing is installed or run)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NPM_N: ${{ inputs.npm }}
+          PYPI_N: ${{ inputs.pypi }}
+          SEED: ${{ inputs.seed }}
+        run: node bench/fetch.mjs --cache "$RUNNER_TEMP/bench" --npm "$NPM_N" --pypi "$PYPI_N" --seed "$SEED"
+      - name: Scan and score
+        run: node bench/run.mjs --cache "$RUNNER_TEMP/bench" --out bench-results
+      - name: Summary
+        run: node bench/summary.mjs bench-results >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vetcode-benchmark
+          path: bench-results/
+          retention-days: 30

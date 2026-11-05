@@ -25,20 +25,31 @@ Free and open source (MIT), from the [OpenYard](https://openyard.cloud) communit
 
 ## Install
 
-vetcode comes in three forms; pick what your agent supports.
+**One command, any agent that loads [Agent Skills](https://agentskills.io)** (Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode…):
+
+```bash
+npx skills add openyard-cloud/vetcode
+```
+
+**One command, Claude Code as a plugin** (run in your terminal):
+
+```bash
+claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
+```
+
+Everything else (MCP, claude.ai, CI, a whole team) is below. All forms need Node.js 18+.
 
 | Your agent | Use |
 |---|---|
-| Claude Code | the plugin (below) or the skill |
-| Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… (anything that loads [Agent Skills](https://agentskills.io)) | the **skill** |
-| Any agent or app that speaks **MCP** (Cursor, VS Code, Codex, Gemini CLI, Windsurf, Zed, Claude Desktop, ChatGPT…) | the **MCP server** |
-| CI, scripts, or no agent at all | the **CLI** |
-
-All of them need Node.js 18+.
+| Claude Code | the [plugin](#claude-code) or the [skill](#skill-any-agent-that-loads-agent-skills) |
+| Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… | the [skill](#skill-any-agent-that-loads-agent-skills) |
+| Any agent or app that speaks MCP (Cursor, VS Code, Codex, Gemini CLI, Windsurf, Zed, Claude Desktop, ChatGPT…) | the [MCP server](#mcp-server) |
+| claude.ai | the [skill zip](#claudeai) |
+| CI, scripts, or no agent at all | the [CLI](#the-scanner-on-its-own) |
 
 ### Skill (any agent that loads Agent Skills)
 
-With the [skills CLI](https://vercel.com/docs/agent-resources/skills), which knows where each agent looks:
+The [skills CLI](https://vercel.com/docs/agent-resources/skills) knows where each agent looks for skills:
 
 ```bash
 npx skills add openyard-cloud/vetcode
@@ -46,14 +57,31 @@ npx skills add openyard-cloud/vetcode
 
 Or copy the folder yourself: `git clone https://github.com/openyard-cloud/vetcode`, then copy `vetcode/skills/vetcode` into your agent's skills folder: `.agents/skills/` (the shared location many agents read, e.g. Codex and Copilot), `.claude/skills/` (Claude Code), `.github/skills/` (Copilot), `.gemini/skills/` (Gemini CLI) or `.cursor/skills/` (Cursor), in the project or under your home folder.
 
-**Claude Code plugin:** run both lines; the first adds the marketplace, without it the second says `Marketplace "openyard" not found`.
+### Claude Code
+
+As a plugin, from inside a session it takes two commands, because Claude Code only installs from marketplaces it already knows. The first line is needed once per machine; without it the second says `Marketplace "openyard" not found`.
 
 ```
 /plugin marketplace add openyard-cloud/vetcode
 /plugin install vetcode@openyard
 ```
 
-**claude.ai:** download `vetcode-skill.zip` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and upload it under Settings → Capabilities → Skills.
+From the terminal the same is one line: `claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard`.
+
+**For a whole team**, commit this to the project's `.claude/settings.json`. Everyone who opens the project and trusts the folder gets the OpenYard marketplace registered, so each person only runs `/plugin install vetcode@openyard` once:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "openyard": { "source": { "source": "github", "repo": "openyard-cloud/vetcode" } }
+  },
+  "enabledPlugins": { "vetcode@openyard": true }
+}
+```
+
+### claude.ai
+
+Download `vetcode-skill.zip` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and upload it under Settings → Capabilities → Skills.
 
 ### MCP server
 
@@ -178,8 +206,9 @@ New rules, fewer false positives and real-world samples are all welcome. See [CO
 
 - **Cách hoạt động:** bộ quét (không cần cài gì thêm) tìm các điểm đáng ngờ trong vài giây. Sau đó Claude đọc code quanh từng điểm, lần theo dữ liệu, loại báo động giả, và tìm thêm lỗi mà regex không thấy được như thiếu phân quyền, IDOR hay sai logic nghiệp vụ.
 - **Kiểm tra:** mã độc, tấn công chuỗi cung ứng (package giả tên, script cài đặt độc), lỗ hổng nhắm vào AI agent (hooks, chỉ dẫn ẩn trong `CLAUDE.md`, MCP độc), lộ key và secret, lỗ hổng web/API, cấu hình server và cloud (Docker, nginx, Supabase RLS, Firebase, Cloudflare), CI/CD.
-- **Dùng được với nhiều agent:** Claude, Codex, Gemini CLI, GitHub Copilot, Cursor, Windsurf…, dưới dạng skill (`npx skills add openyard-cloud/vetcode`), MCP server, hoặc dòng lệnh. Xem phần Install ở trên.
-- **Cài cho Claude Code:** chạy lần lượt `/plugin marketplace add openyard-cloud/vetcode` rồi `/plugin install vetcode@openyard`. Thiếu lệnh đầu sẽ báo `Marketplace "openyard" not found`.
+- **Cài bằng một lệnh, cho mọi agent đọc được skill** (Claude Code, Codex, Gemini CLI, Copilot, Cursor…): `npx skills add openyard-cloud/vetcode`
+- **Cài làm plugin Claude Code bằng một lệnh** (chạy ở terminal): `claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard`. Nếu gõ trong Claude Code thì cần 2 lệnh `/plugin marketplace add openyard-cloud/vetcode` rồi `/plugin install vetcode@openyard`; thiếu lệnh đầu sẽ báo `Marketplace "openyard" not found`.
+- **Agent dùng MCP** (Cursor, VS Code, Windsurf, Claude Desktop, ChatGPT…): xem cấu hình mẫu ở phần MCP server.
 - **Dùng:** hỏi bằng tiếng Việt, ví dụ "kiểm tra bảo mật repo này", "quét mã độc trước khi cài", "soát lỗ hổng trước khi deploy". Báo cáo sẽ trả lời bằng tiếng Việt.
 - **Riêng tư:** mọi thứ chạy trên máy bạn. Chỉ khi bật `--online` thì tên và phiên bản package mới được gửi tới OSV.dev. Secret luôn được che trong báo cáo.
 

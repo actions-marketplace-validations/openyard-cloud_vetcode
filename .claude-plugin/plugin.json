@@ -1,0 +1,10 @@
+{
+  "name": "vetcode",
+  "version": "0.1.0",
+  "description": "Security check for apps, websites and servers: malware and supply-chain attacks, leaked secrets, web/API vulnerabilities and server misconfiguration, confirmed by reading the code.",
+  "author": { "name": "OpenYard", "url": "https://openyard.cloud" },
+  "homepage": "https://github.com/openyard-cloud/vetcode",
+  "repository": "https://github.com/openyard-cloud/vetcode",
+  "license": "MIT",
+  "keywords": ["security", "malware", "supply-chain", "secrets", "owasp", "sast", "skill"]
+}

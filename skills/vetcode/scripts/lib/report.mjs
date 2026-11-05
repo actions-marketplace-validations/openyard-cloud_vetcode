@@ -1,0 +1,42 @@
+// Turns scan results into a Markdown report for people (and for Claude to triage).
+import { SEVERITIES } from "./engine.mjs";
+
+const ICON = { critical: "🟥", high: "🟧", medium: "🟨", low: "🟦", info: "⬜" };
+const PER_RULE = 15;
+const code = s => "`" + String(s).replace(/`/g, "ˋ") + "`";
+
+export function markdown(result) {
+  const { stats, findings } = result;
+  const c = stats.counts;
+  const out = [
+    `# vetcode report`,
+    ``,
+    `**Target:** ${code(result.target)} · **mode:** ${result.mode} · **files:** ${stats.files}${stats.packages ? ` · **installed packages:** ${stats.packages}` : ""} · ${(stats.ms / 1000).toFixed(1)} s`,
+    ``,
+    `**Findings:** ${SEVERITIES.map(s => `${ICON[s]} ${s} ${c[s]}`).join(" · ")}`,
+    ``,
+    `Checks: built-in rules${stats.tools.length ? ` + ${stats.tools.join(", ")}` : ""} · OSV lookup: ${stats.osv} · git history: ${stats.history ? "yes" : "no"}`,
+  ];
+  if (stats.ignorePatterns || stats.suppressedLines) out.push(``, `> ⚠️ ${stats.ignorePatterns ? `${stats.ignorePatterns} pattern(s) from .vetcodeignore` : ""}${stats.ignorePatterns && stats.suppressedLines ? " and " : ""}${stats.suppressedLines ? `${stats.suppressedLines} line(s) with vetcode-ignore comments` : ""} were skipped. For code you did not write, run again with --no-ignore.`);
+  if (stats.partial?.length) out.push(``, `> ⚠️ ${stats.partial.length} file(s) over 1 MB were only partly read (first and last 256 KB, secrets and malware checks): ${stats.partial.slice(0, 5).map(p => code(p.file)).join(", ")}${stats.partial.length > 5 ? " …" : ""}. Read them yourself if they are not known bundles.`);
+  if (!findings.length) {
+    out.push(``, `No candidates found. This is not proof of safety: logic flaws, authorization gaps and new malware need a manual review.`);
+    return out.join("\n") + "\n";
+  }
+  out.push(``, `Each item is a **candidate** found by pattern: confirm it by reading the code before acting on it.`);
+  for (const sev of SEVERITIES) {
+    const group = findings.filter(f => f.severity === sev);
+    if (!group.length) continue;
+    out.push(``, `## ${ICON[sev]} ${sev[0].toUpperCase() + sev.slice(1)} (${group.length})`);
+    const byRule = new Map();
+    for (const f of group) { if (!byRule.has(f.rule)) byRule.set(f.rule, []); byRule.get(f.rule).push(f); }
+    for (const [rule, list] of byRule) {
+      const f0 = list[0];
+      out.push(``, `### ${f0.title} · ${code(rule)} · ${f0.category}${f0.tool ? ` · via ${f0.tool}` : ""}`, ``);
+      for (const f of list.slice(0, PER_RULE)) out.push(`- ${code(f.line ? `${f.file}:${f.line}` : f.file)}${f.confidence === "low" ? " _(low confidence)_" : ""}${f.evidence ? ` ${code(f.evidence)}` : ""}`);
+      if (list.length > PER_RULE) out.push(`- … and ${list.length - PER_RULE} more (see the JSON report)`);
+      out.push(``, `**Why:** ${f0.why}`, ``, `**Fix:** ${f0.fix}`);
+    }
+  }
+  return out.join("\n") + "\n";
+}

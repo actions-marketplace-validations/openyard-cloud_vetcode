@@ -1,5 +1,6 @@
 {
   "name": "openyard",
+  "description": "Free, open-source tools from the OpenYard community (openyard.cloud).",
   "owner": {
     "name": "OpenYard",
     "url": "https://openyard.cloud"

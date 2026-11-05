@@ -1,4 +1,6 @@
-# vetcode
+<p align="center"><img src="assets/logo.svg" width="112" alt="vetcode logo"></p>
+
+<h1 align="center">vetcode</h1>
 
 **A security check you can run before you trust code: your own app before it ships, or someone else's repo, package, extension or MCP server before you install it.**
 

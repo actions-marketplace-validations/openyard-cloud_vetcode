@@ -10,7 +10,7 @@ const json = s => { try { return JSON.parse(s); } catch { return null; } };
 const SEV = { CRITICAL: "critical", HIGH: "high", ERROR: "high", MEDIUM: "medium", MODERATE: "medium", WARNING: "medium", LOW: "low", INFO: "info", UNKNOWN: "medium" };
 
 export function availableTools() {
-  return Object.fromEntries(["gitleaks", "semgrep", "osv-scanner", "trivy"].map(t => [t, has(t)]));
+  return Object.fromEntries(["gitleaks", "zizmor", "semgrep", "osv-scanner", "trivy"].map(t => [t, has(t)]));
 }
 
 export function runTools(root, { online, only }, out, log) {
@@ -27,6 +27,17 @@ export function runTools(root, { online, only }, out, log) {
         why: "gitleaks matched a credential pattern; check whether it is real and whether it is meant to be public.", fix: "If real: revoke and rotate it, then move it to an environment variable or secret store." }, g.File?.replace(root + "/", "") || "?", g.StartLine || 1, g.Match || "", { tool: "gitleaks" }));
     }
     used.push("gitleaks");
+  }
+  if (tools.zizmor) {
+    // zizmor is offline with --offline; its SARIF is a stable interface across versions.
+    const r = run("zizmor", ["--offline", "--format", "sarif", root], root);
+    for (const res of json(r.stdout)?.runs?.[0]?.results || []) {
+      const loc = res.locations?.[0]?.physicalLocation;
+      out.push(finding({ id: `zizmor-${res.ruleId}`, category: "supply-chain", severity: res.level === "error" ? "high" : res.level === "warning" ? "medium" : "low", confidence: "high",
+        title: `GitHub Actions: ${res.ruleId} (zizmor)`, why: res.message?.text?.slice(0, 300) || "", fix: `See https://docs.zizmor.sh/audits/#${res.ruleId}` },
+        (loc?.artifactLocation?.uri || "").replace(/^file:\/\//, "").replace(root + "/", ""), loc?.region?.startLine || 1, res.message?.text?.slice(0, 120) || "", { tool: "zizmor" }));
+    }
+    used.push("zizmor");
   }
   if (!online) return used;
   if (tools.semgrep) {

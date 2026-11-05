@@ -8,10 +8,12 @@ import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
 import { MALWARE_RULES, MALWARE_FILE_RULES } from "./malware.mjs";
 import { WEB_RULES } from "./web.mjs";
 import { CONFIG_RULES, CONFIG_FILE_RULES, supabaseTablesWithoutRls } from "./config.mjs";
-import { scanSupplyChain, scanInstalledPackage } from "./supply.mjs";
+import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, hardeningAdvice } from "./supply.mjs";
+import crypto from "node:crypto";
 import { scanAgentFiles } from "./agent.mjs";
 import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
+import { checkMcpLock } from "./mcplock.mjs";
 
 export const VERSION = "0.1.0";
 
@@ -70,6 +72,9 @@ export async function vet(target, opts = {}) {
   }
   log(`${files.length} files read`);
   supabaseTablesWithoutRls(files, findings);
+  scanProjectInstallEntries(root, files, findings);
+  if (!only) hardeningAdvice(root, files, findings);
+  const mcpLock = opts.mcpLock ? checkMcpLock(opts.mcpLock, files, findings) : null;
   if (!only) scanSecretFiles(root, findings);
   if (opts.history) { scanHistory(root, findings); log("git history checked for secrets"); }
 
@@ -103,12 +108,20 @@ export async function vet(target, opts = {}) {
   const seen = new Set();
   const unique = findings.filter(f => { const k = `${f.rule}|${f.file}|${f.line}|${f.evidence}`; if (seen.has(k)) return false; seen.add(k); return true; })
     .sort((a, b) => rank(a.severity) - rank(b.severity) || a.category.localeCompare(b.category) || a.file.localeCompare(b.file) || a.line - b.line);
-  const counts = Object.fromEntries(SEVERITIES.map(s => [s, unique.filter(f => f.severity === s).length]));
+  // A fingerprint without the line number, so findings survive unrelated edits above them.
+  for (const f of unique) f.fingerprint = crypto.createHash("sha256").update(`${f.rule}|${f.file}|${f.evidence}`).digest("hex").slice(0, 16);
+  let baselined = 0, reported = unique;
+  if (opts.baseline) {
+    const known = new Set((JSON.parse(fs.readFileSync(opts.baseline, "utf8")).findings || []).map(f => f.fingerprint));
+    reported = unique.filter(f => !known.has(f.fingerprint));
+    baselined = unique.length - reported.length;
+  }
+  const counts = Object.fromEntries(SEVERITIES.map(s => [s, reported.filter(f => f.severity === s).length]));
   return {
     version: VERSION, target: root, mode: only ? `diff${opts.diff ? ` vs ${opts.diff}` : ""}` : "full",
     stats: { files: files.length, packages, ms: Date.now() - started, counts, tools, osv, history: !!opts.history,
-      ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial },
-    findings: unique,
+      ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },
+    findings: reported,
   };
 }
 

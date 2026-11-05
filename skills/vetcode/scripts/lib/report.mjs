@@ -18,6 +18,8 @@ export function markdown(result) {
     `Checks: built-in rules${stats.tools.length ? ` + ${stats.tools.join(", ")}` : ""} · OSV lookup: ${stats.osv} · git history: ${stats.history ? "yes" : "no"}`,
   ];
   if (stats.ignorePatterns || stats.suppressedLines) out.push(``, `> ⚠️ ${stats.ignorePatterns ? `${stats.ignorePatterns} pattern(s) from .vetcodeignore` : ""}${stats.ignorePatterns && stats.suppressedLines ? " and " : ""}${stats.suppressedLines ? `${stats.suppressedLines} line(s) with vetcode-ignore comments` : ""} were skipped. For code you did not write, run again with --no-ignore.`);
+  if (stats.baselined) out.push(``, `${stats.baselined} finding(s) already in the baseline are not shown.`);
+  if (stats.mcpLock) out.push(``, `MCP lock: ${stats.mcpLock}.`);
   if (stats.partial?.length) out.push(``, `> ⚠️ ${stats.partial.length} file(s) over 1 MB were only partly read (first and last 256 KB, secrets and malware checks): ${stats.partial.slice(0, 5).map(p => code(p.file)).join(", ")}${stats.partial.length > 5 ? " …" : ""}. Read them yourself if they are not known bundles.`);
   if (!findings.length) {
     out.push(``, `No candidates found. This is not proof of safety: logic flaws, authorization gaps and new malware need a manual review.`);

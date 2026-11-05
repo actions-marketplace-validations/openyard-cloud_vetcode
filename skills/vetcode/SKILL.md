@@ -25,6 +25,8 @@ A scanner finds **candidates** fast; you decide which are real by reading the co
 | A check of their current changes / a PR | `--diff [base-branch]` | Only new code; regressions in auth and input handling |
 | Pre-deploy check | `--online` | Secrets, config, auth, exposed services (references/server.md) |
 | "Is my machine already infected by this package?" | `--deps --no-ignore --online` on the project that installed it | Install scripts, OSV `MAL-` advisories, then incident steps below |
+| Regular checks of a project that has known, accepted findings | `--json new.json --baseline last.json` | Only what is new since the last accepted report |
+| Watching the MCP servers a project uses | `--mcp-lock .vetcode-mcp.lock` (first run records, later runs compare) | Any `mcp-changed` / `mcp-new-server` finding |
 
 ## 2. Run the scanner
 
@@ -34,7 +36,7 @@ Requires Node 18+. The script is in this skill's folder:
 node "<skill-dir>/scripts/vet.mjs" <target> --json "$TMPDIR/vetcode.json" [options]
 ```
 
-Options: `--online`, `--deps`, `--history`, `--diff [base]`, `--no-ignore`, `--no-tools`, `--fail-on <severity>`, `--quiet`. It prints a Markdown summary and writes every finding to the JSON file. It reads what git sees (tracked + untracked, minus `.gitignore`); outside git it reads everything except dependency and build folders. If gitleaks, semgrep, osv-scanner or trivy are installed it uses them too (semgrep, osv-scanner and trivy only with `--online`).
+Options: `--online`, `--deps`, `--history`, `--diff [base]`, `--no-ignore`, `--no-tools`, `--baseline <old.json>` (show only findings not in an earlier report), `--mcp-lock <file>` (remember the project's MCP servers and tool descriptions; later runs report changes), `--sarif <file>`, `--fail-on <severity>`, `--quiet`. It prints a Markdown summary and writes every finding to the JSON file. It reads what git sees (tracked + untracked, minus `.gitignore`); outside git it reads everything except dependency and build folders. If gitleaks, zizmor, semgrep, osv-scanner or trivy are installed it uses them too (semgrep, osv-scanner and trivy only with `--online`).
 
 If Node is not available, skip to step 4 and review by hand with the reference checklists, saying so in the report.
 

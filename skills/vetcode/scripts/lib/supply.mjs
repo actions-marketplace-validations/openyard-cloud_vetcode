@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
 import { POPULAR_NPM, POPULAR_PYPI, POPULAR_SCOPES } from "./popular.mjs";
+import { installEntryFiles, checkInstallEntry } from "./capabilities.mjs";
 
 const rule = r => ({ category: "supply-chain", confidence: "medium", ...r });
 const readJson = text => { try { return JSON.parse(text.replace(/^\uFEFF/, "")); } catch { return null; } };
@@ -157,8 +158,29 @@ function checkSetupPy(file, text, out) {
 
 const GH_INPUT = /\$\{\{\s*github\.(?:event\.(?:issue|pull_request|comment|review|review_comment|discussion|discussion_comment|head_commit|pages|commits|workflow_run)\b[\w.[\]*'"-]*\.(?:title|body|head_ref|ref|label|message|name|email|default_branch|page_name)|head_ref)\s*\}\}/;
 
+// Actions that were compromised in the past: pin them by SHA to a version you have checked.
+const ONCE_COMPROMISED = /^(?:tj-actions\/(?:changed-files|eslint-changed-files|verify-changed-files)|reviewdog\/action-[\w-]+|ultralytics\/actions)$/i;
+
 function checkWorkflow(file, text, out) {
   const lines = text.split(/\r?\n/);
+  const w = rule => out.push(finding(rule.r, file.rel, rule.line, rule.ev));
+  // Whole-workflow checks (zizmor's artipacked, excessive-permissions, self-hosted-runner, dangerous-triggers).
+  const uploads = /uses:\s*actions\/upload-artifact/.test(text);
+  for (const m of text.matchAll(/uses:\s*actions\/checkout@[^\n]*((?:\n\s+[^\n-][^\n]*)*)/g)) {
+    if (uploads && !/persist-credentials:\s*false/.test(m[1])) w({ r: rule({ id: "gha-persisted-credentials", severity: "medium", confidence: "medium", title: "Checkout keeps the token on disk in a job that uploads artifacts",
+      why: "actions/checkout writes the GITHUB_TOKEN into .git/config; uploading the workspace publishes it (\"artipacked\").", fix: "Add `persist-credentials: false` to the checkout step." }), line: lineOf(text, m.index), ev: "actions/checkout without persist-credentials: false" });
+  }
+  if (!/^permissions\s*:/m.test(text) && !/^\s{2,}permissions\s*:/m.test(text)) w({ r: rule({ id: "gha-default-permissions", severity: "low", confidence: "high", title: "Workflow does not limit its token",
+    why: "Without a permissions block the token gets the repository default, which is often write access.", fix: "Add `permissions: { contents: read }` at the top and widen per job." }), line: 1, ev: "no permissions: block" });
+  const pub = /\bon\s*:[\s\S]{0,200}?\b(pull_request|pull_request_target|issue_comment|workflow_run)\b/.test(text);
+  const selfHosted = /runs-on\s*:\s*\[?[^\n]*self-hosted/.exec(text);
+  if (pub && selfHosted) w({ r: rule({ id: "gha-self-hosted-untrusted", severity: "high", confidence: "medium", title: "Self-hosted runner used for events outsiders can trigger",
+    why: "On a public repository, a pull request or comment can run code on your own machine.", fix: "Use GitHub-hosted runners for untrusted events, or ephemeral isolated runners." }), line: lineOf(text, selfHosted.index), ev: selfHosted[0].trim() });
+  for (const m of text.matchAll(/credentials\s*:\s*\n\s+username\s*:[^\n]*\n\s+password\s*:\s*(?!\$\{\{)(\S+)/g)) w({ r: rule({ id: "gha-hardcoded-registry-password", severity: "high", confidence: "high", title: "Container registry password written in the workflow",
+    why: "Anyone who can read the repository has it.", fix: "Use `${{ secrets.NAME }}`." }), line: lineOf(text, m.index), ev: "credentials.password: " + m[1].slice(0, 3) + "…" });
+  if (/\bnpm\s+publish\b|\btwine\s+upload\b|pypa\/gh-action-pypi-publish/.test(text) && /NODE_AUTH_TOKEN|NPM_TOKEN|PYPI_(?:API_)?TOKEN|TWINE_PASSWORD|password\s*:\s*\$\{\{\s*secrets/.test(text) && !/id-token\s*:\s*write/.test(text))
+    w({ r: rule({ id: "gha-long-lived-publish-token", severity: "low", confidence: "medium", title: "Publishes with a long-lived registry token",
+      why: "A stolen token publishes malicious versions of your package; worms like Shai-Hulud spread exactly this way.", fix: "Use trusted publishing (OIDC: `permissions: id-token: write`) on npm and PyPI, and remove the token secret." }), line: lineOf(text, text.search(/npm\s+publish|twine\s+upload|gh-action-pypi-publish/)), ev: "registry token in a publish workflow" });
   const prt = /^\s*(?:pull_request_target|workflow_run|issue_comment)\s*:|on:\s*\[?[^\]\n]*(?:pull_request_target|workflow_run|issue_comment)/m.test(text);
   let inRun = false, runIndent = -1;
   lines.forEach((line, i) => {
@@ -196,11 +218,18 @@ function checkWorkflow(file, text, out) {
         why: "Masking is easy to bypass (encoding, splitting); printed secrets end up in logs.", fix: "Never print secrets; pass them via env to the tool that needs them." }), file.rel, i + 1, line));
     }
     const uses = line.match(/^\s*-?\s*uses\s*:\s*([\w.-]+\/[\w./-]+)@([\w.-]+)/);
+    if (uses && ONCE_COMPROMISED.test(uses[1]) && !/^[0-9a-f]{40}$/.test(uses[2])) {
+      out.push(finding(rule({ id: "gha-once-compromised-action", severity: "medium", confidence: "high", title: `${uses[1]} was compromised before and is not pinned`,
+        why: "Its tags were moved to malicious code in a past incident; a tag reference would pick that up again.", fix: "Pin to a reviewed commit SHA, or replace it." }), file.rel, i + 1, line.trim()));
+    }
     if (uses && !/^(?:actions|github)\//.test(uses[1]) && !/^[0-9a-f]{40}$/.test(uses[2])) {
       out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: "Third-party action pinned to a tag, not a commit",
         why: "Tags can be moved: a compromised action repository can change what runs in your CI (as in the tj-actions incident).", fix: `Pin to the full commit SHA: uses: ${uses[1]}@<sha> # ${uses[2]}` }), file.rel, i + 1, line.trim()));
     }
   });
+  const trig = /^\s*(pull_request_target|workflow_run)\s*:|^on\s*:\s*\[?[^\n]*(pull_request_target|workflow_run)/m.exec(text);
+  if (trig && !out.some(f => f.rule === "gha-pwn-request" && f.file === file.rel)) w({ r: rule({ id: "gha-dangerous-trigger", severity: "low", confidence: "medium", title: `Workflow uses ${trig[1] || trig[2]}`,
+    why: "This trigger runs with secrets and a write token even for outside contributors; it is safe only if no step touches their code or text.", fix: "Prefer pull_request; if you need this trigger, never check out or interpolate PR content." }), line: lineOf(text, trig.index), ev: trig[0].trim() });
 }
 
 function checkVscode(file, text, out) {
@@ -268,11 +297,46 @@ export function scanSupplyChain(file, text, out) {
   }
 }
 
+const relTo = (root, abs) => path.relative(root, abs).split(path.sep).join("/");
+const hookScripts = pkg => Object.fromEntries(INSTALL_HOOKS.filter(h => typeof pkg?.scripts?.[h] === "string").map(h => [h, pkg.scripts[h]]));
+
 /** Installed npm packages: install scripts and malware rules on their files (--deps). */
 export function scanInstalledPackage(dir, root, out) {
-  const rel = path.relative(root, path.join(dir, "package.json")).split(path.sep).join("/");
   const text = fs.readFileSync(path.join(dir, "package.json"), "utf8");
-  checkPackageJson({ rel }, text, out, { installed: true });
-  const pkg = readJson(text);
-  return pkg && INSTALL_HOOKS.some(h => typeof pkg.scripts?.[h] === "string");
+  checkPackageJson({ rel: relTo(root, path.join(dir, "package.json")) }, text, out, { installed: true });
+  const pkg = readJson(text), hooks = hookScripts(pkg);
+  for (const f of installEntryFiles(dir, hooks)) checkInstallEntry(f, relTo(root, f), out, true);
+  return Object.keys(hooks).length > 0;
+}
+
+/** The project's own install-time files (package.json hooks, setup.py). */
+export function scanProjectInstallEntries(root, files, out) {
+  for (const f of files) {
+    if (!/(^|\/)package\.json$/.test(f.rel)) continue;
+    const dir = path.join(root, path.dirname(f.rel));
+    for (const abs of installEntryFiles(dir, hookScripts(readJson(f.text)))) checkInstallEntry(abs, relTo(root, abs), out, false);
+  }
+}
+
+// Install-script defences a project may already have: lower the noise and say what is missing.
+export function installHardening(root, files) {
+  const read = rel => files.find(f => f.rel === rel)?.text ?? "";
+  const pkg = readJson(read("package.json")) || {};
+  return {
+    ignoreScripts: /^\s*ignore-scripts\s*=\s*true/m.test(read(".npmrc")) || /enableScripts:\s*false/.test(read(".yarnrc.yml")),
+    allowList: !!(pkg.lavamoat?.allowScripts || pkg.pnpm?.onlyBuiltDependencies || pkg.trustedDependencies || /onlyBuiltDependencies|allowBuilds/.test(read("pnpm-workspace.yaml"))),
+    releaseAge: /minimumReleaseAge|minimum-release-age|npmMinimalAgeGate|min-release-age/.test(read("pnpm-workspace.yaml") + read(".npmrc") + read(".yarnrc.yml") + read("bunfig.toml")),
+  };
+}
+
+export function hardeningAdvice(root, files, out) {
+  const lock = files.find(f => /^(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/.test(f.rel));
+  if (!lock) return;
+  const h = installHardening(root, files);
+  if (h.ignoreScripts || h.allowList) for (const f of out) if (f.rule === "lock-install-scripts") f.why += " The project already limits install scripts (ignore-scripts or an allow-list), so check that these are the allowed ones.";
+  const missing = [!h.ignoreScripts && !h.allowList && "install scripts run for every dependency", !h.releaseAge && "brand-new releases install immediately"].filter(Boolean);
+  if (!missing.length) return;
+  out.push(finding(rule({ id: "supply-hardening", severity: "low", confidence: "high", title: "Dependency installs are not hardened",
+    why: `In this project ${missing.join(", and ")}. Most npm malware lives in install scripts and is caught within a day or two of publishing.`,
+    fix: "pnpm: `onlyBuiltDependencies` (allow-list) and `minimumReleaseAge: 1440` in pnpm-workspace.yaml; npm: `ignore-scripts=true` in .npmrc plus @lavamoat/allow-scripts; yarn: `enableScripts: false` and `npmMinimalAgeGate`; bun: `trustedDependencies`." }), lock.rel, 1, missing.join("; ")));
 }

@@ -53,7 +53,8 @@ export const WEB_RULES = [
     re: new RegExp(String.raw`\b(?:system|exec|shell_exec|passthru|popen|proc_open|pcntl_exec)\s*\([^;]*${USER_PHP}|\x60[^\x60]*${USER_PHP}`),
     why: "Remote command execution.", fix: "Avoid the shell; if unavoidable, use escapeshellarg on every argument and an allow-list." }),
   rule({ id: "code-eval-input", severity: "critical", confidence: "high", title: "User input evaluated as code", files: SERVER,
-    re: new RegExp(String.raw`\b(?:eval|exec|Function|assert|create_function)\s*\([^;\n]*(?:${USER_JS}|${USER_PY}|${USER_PHP}|\binput\s*\()`),
+    // `exec` is code execution in Python but a shell call in Node (covered by cmd-injection-js).
+    re: new RegExp(String.raw`\b(?:eval|Function|assert|create_function)\s*\([^;\n]*(?:${USER_JS}|${USER_PY}|${USER_PHP}|\binput\s*\()|\bexec\s*\([^;\n]*(?:${USER_PY}|\binput\s*\()`),
     why: "Remote code execution.", fix: "Never evaluate input; parse it (JSON.parse, ast.literal_eval) instead." }),
   rule({ id: "code-eval-dynamic", severity: "medium", confidence: "low", title: "eval / new Function on a non-literal", files: JS, skip: /\.min\.\w+$/,
     re: /(?<![.\w])eval\s*\(\s*(?!["'`])[A-Za-z_$]|\bnew\s+Function\s*\(\s*(?!["'`])[A-Za-z_$]/,

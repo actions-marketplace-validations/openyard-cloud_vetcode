@@ -1,0 +1,12 @@
+{
+  "name": "openyard",
+  "owner": { "name": "OpenYard", "url": "https://openyard.cloud" },
+  "plugins": [
+    {
+      "name": "vetcode",
+      "source": "./",
+      "description": "Security check for apps, websites and servers: malware, supply chain, secrets, web and server vulnerabilities.",
+      "version": "0.1.0"
+    }
+  ]
+}

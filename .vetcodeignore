@@ -1,0 +1,3 @@
+# The rule files and tests describe attacks on purpose.
+skills/vetcode/scripts/lib/
+tests/

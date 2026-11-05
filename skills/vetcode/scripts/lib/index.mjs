@@ -15,7 +15,7 @@ import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
 
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 /** Files changed against `base` (committed, staged, unstaged and untracked). */
 export function changedFiles(root, base) {

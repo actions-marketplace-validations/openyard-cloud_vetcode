@@ -10,6 +10,7 @@ Thanks for helping. The most useful contributions:
 
 - `skills/vetcode/SKILL.md`: what Claude does with the scanner's output.
 - `skills/vetcode/scripts/vet.mjs`: the CLI. Rules live in `scripts/lib/` by area: `malware.mjs`, `supply.mjs`, `agent.mjs`, `secrets.mjs`, `web.mjs`, `config.mjs`.
+- `mcp/server.mjs`: the same scanner and checklists as an MCP server (stdio, no dependencies), for agents that do not load skills.
 - `tests/vet.test.mjs`: run with `npm test` (Node 18+, no dependencies).
 
 ## Writing a rule

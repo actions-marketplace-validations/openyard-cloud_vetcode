@@ -256,7 +256,7 @@ function checkMcp(file, text, out) {
         why: "Anyone on the network path can read the traffic and inject tool results.", fix: "Use https." }), file.rel, at, s.url));
     }
     const pkg = /^(?:npx|bunx|pnpm\s+dlx|uvx|pipx\s+run)$/.test(String(s.command)) ? (s.args || []).find(a => !String(a).startsWith("-")) : null;
-    if (pkg && !/@\d|==\d/.test(String(pkg).replace(/^@[^/]+\//, ""))) {
+    if (pkg && !/@\d|==\d|#v?\d|#[0-9a-f]{7,40}\b/.test(String(pkg).replace(/^@[^/]+\//, ""))) {
       out.push(finding(rule({ id: "mcp-unpinned", severity: "medium", confidence: "high", title: `MCP server "${name}" runs the latest version of ${pkg}`,
         why: "Every start fetches whatever is newest; a hijacked release runs on your machine without review.", fix: `Pin a version you reviewed, e.g. ${pkg}@1.2.3.` }), file.rel, at, cmd));
     }

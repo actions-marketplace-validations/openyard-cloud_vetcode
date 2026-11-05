@@ -4,7 +4,7 @@
 
 **A security check you can run before you trust code: your own app before it ships, or someone else's repo, package, extension or MCP server before you install it.**
 
-vetcode is an [Agent Skill](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview) for Claude (Claude Code, claude.ai, and other agents that load skills). A zero-dependency scanner finds candidates in seconds; then Claude reads the code around each one, traces where the data comes from, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, concrete attack scenarios and fixes.
+vetcode is an [Agent Skill](https://agentskills.io), an MCP server and a CLI, for Claude, Codex, Gemini, Copilot, Cursor and any other AI coding agent. A zero-dependency scanner finds candidates in seconds; then your agent reads the code around each one, traces where the data comes from, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, concrete attack scenarios and fixes.
 
 Free and open source (MIT), from the [OpenYard](https://openyard.cloud) community.
 
@@ -25,18 +25,75 @@ Free and open source (MIT), from the [OpenYard](https://openyard.cloud) communit
 
 ## Install
 
-**Claude Code** (plugin):
+vetcode comes in three forms; pick what your agent supports.
+
+| Your agent | Use |
+|---|---|
+| Claude Code | the plugin (below) or the skill |
+| Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… (anything that loads [Agent Skills](https://agentskills.io)) | the **skill** |
+| Any agent or app that speaks **MCP** (Cursor, VS Code, Codex, Gemini CLI, Windsurf, Zed, Claude Desktop, ChatGPT…) | the **MCP server** |
+| CI, scripts, or no agent at all | the **CLI** |
+
+All of them need Node.js 18+.
+
+### Skill (any agent that loads Agent Skills)
+
+With the [skills CLI](https://vercel.com/docs/agent-resources/skills), which knows where each agent looks:
+
+```bash
+npx skills add openyard-cloud/vetcode
+```
+
+Or copy the folder yourself: `git clone https://github.com/openyard-cloud/vetcode`, then copy `vetcode/skills/vetcode` into your agent's skills folder: `.agents/skills/` (the shared location many agents read, e.g. Codex and Copilot), `.claude/skills/` (Claude Code), `.github/skills/` (Copilot), `.gemini/skills/` (Gemini CLI) or `.cursor/skills/` (Cursor), in the project or under your home folder.
+
+**Claude Code plugin:** run both lines; the first adds the marketplace, without it the second says `Marketplace "openyard" not found`.
 
 ```
 /plugin marketplace add openyard-cloud/vetcode
 /plugin install vetcode@openyard
 ```
 
-or copy the skill folder by hand: `git clone https://github.com/openyard-cloud/vetcode && cp -r vetcode/skills/vetcode ~/.claude/skills/`
-
 **claude.ai:** download `vetcode-skill.zip` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and upload it under Settings → Capabilities → Skills.
 
-Requires Node.js 18+ for the scanner. Without Node, Claude still reviews by hand using the checklists in `references/`.
+### MCP server
+
+The server runs `npx` straight from this repository, pinned to a release. It offers three tools (`vetcode_scan`, `vetcode_guide`, `vetcode_reference`) and a `security_review` prompt.
+
+Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settings.json`, Windsurf `mcp_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.2.0", "vetcode-mcp"] }
+  }
+}
+```
+
+VS Code (`.vscode/mcp.json`):
+
+```json
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.2.0", "vetcode-mcp"] } } }
+```
+
+Codex (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.vetcode]
+command = "npx"
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.2.0", "vetcode-mcp"]
+```
+
+Then ask your agent to "use vetcode to review this project". The agent should call `vetcode_guide` once; the server also tells it to.
+
+### Agents that only read an instructions file
+
+For tools that read `AGENTS.md` (or `.cursorrules`, `CONVENTIONS.md`…) but neither skills nor MCP, clone this repository next to your project and add:
+
+```markdown
+## Security reviews
+When asked to check code for security problems or malware, follow `../vetcode/skills/vetcode/SKILL.md`
+and run its scanner: `node ../vetcode/skills/vetcode/scripts/vet.mjs <folder>`.
+```
 
 ## Use
 
@@ -47,7 +104,7 @@ Just ask:
 - "Is this MCP server safe to install?"
 - "Review my changes for security issues"
 
-or run `/vetcode` (Claude Code; `/vetcode:vetcode` when installed as a plugin).
+or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin).
 
 ### The scanner on its own
 
@@ -99,7 +156,7 @@ Name the rule. Folders can go in `.vetcodeignore` (gitignore syntax). Every repo
 
 ## How it works, and its limits
 
-The scanner is regex and heuristics: fast, offline, explainable, and noisy on purpose. It produces candidates, not verdicts. The skill tells Claude to confirm each one with a concrete exploit scenario, drop what it cannot justify, and review what patterns cannot see. [Cisco's measurements on malicious agent skills](https://github.com/cisco-ai-defense/skill-scanner) found that rules alone catch a small share of them, while adding a model's judgement catches far more; vetcode is built around that combination.
+The scanner is regex and heuristics: fast, offline, explainable, and noisy on purpose. It produces candidates, not verdicts. The skill tells the agent to confirm each one with a concrete exploit scenario, drop what it cannot justify, and review what patterns cannot see. [Cisco's measurements on malicious agent skills](https://github.com/cisco-ai-defense/skill-scanner) found that rules alone catch a small share of them, while adding a model's judgement catches far more; vetcode is built around that combination.
 
 It is not a guarantee. New malware, logic bugs and infrastructure outside the repository can still slip through. Treat a clean report as "nothing obvious found".
 
@@ -117,11 +174,12 @@ New rules, fewer false positives and real-world samples are all welcome. See [CO
 
 ## Tiếng Việt
 
-**vetcode** là một skill kiểm tra bảo mật cho Claude. Dùng nó để soát app, web, server của bạn trước khi deploy, hoặc soát repo, package, extension, MCP server của người khác trước khi cài.
+**vetcode** là công cụ kiểm tra bảo mật cho các AI agent lập trình (Claude, Codex, Gemini, Copilot, Cursor…). Dùng nó để soát app, web, server của bạn trước khi deploy, hoặc soát repo, package, extension, MCP server của người khác trước khi cài.
 
 - **Cách hoạt động:** bộ quét (không cần cài gì thêm) tìm các điểm đáng ngờ trong vài giây. Sau đó Claude đọc code quanh từng điểm, lần theo dữ liệu, loại báo động giả, và tìm thêm lỗi mà regex không thấy được như thiếu phân quyền, IDOR hay sai logic nghiệp vụ.
 - **Kiểm tra:** mã độc, tấn công chuỗi cung ứng (package giả tên, script cài đặt độc), lỗ hổng nhắm vào AI agent (hooks, chỉ dẫn ẩn trong `CLAUDE.md`, MCP độc), lộ key và secret, lỗ hổng web/API, cấu hình server và cloud (Docker, nginx, Supabase RLS, Firebase, Cloudflare), CI/CD.
-- **Cài cho Claude Code:** `/plugin marketplace add openyard-cloud/vetcode` rồi `/plugin install vetcode@openyard`.
+- **Dùng được với nhiều agent:** Claude, Codex, Gemini CLI, GitHub Copilot, Cursor, Windsurf…, dưới dạng skill (`npx skills add openyard-cloud/vetcode`), MCP server, hoặc dòng lệnh. Xem phần Install ở trên.
+- **Cài cho Claude Code:** chạy lần lượt `/plugin marketplace add openyard-cloud/vetcode` rồi `/plugin install vetcode@openyard`. Thiếu lệnh đầu sẽ báo `Marketplace "openyard" not found`.
 - **Dùng:** hỏi bằng tiếng Việt, ví dụ "kiểm tra bảo mật repo này", "quét mã độc trước khi cài", "soát lỗ hổng trước khi deploy". Báo cáo sẽ trả lời bằng tiếng Việt.
 - **Riêng tư:** mọi thứ chạy trên máy bạn. Chỉ khi bật `--online` thì tên và phiên bản package mới được gửi tới OSV.dev. Secret luôn được che trong báo cáo.
 

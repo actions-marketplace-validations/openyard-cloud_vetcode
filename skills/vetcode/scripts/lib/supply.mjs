@@ -63,6 +63,8 @@ const INSTALL_ODDITIES = [
     title: "Install script deletes the file it ran", why: "Removing the script right after running it leaves nothing to inspect; malware does this to cover its tracks." },
   { id: "install-fetches-packages", re: /\b(?:npm|yarn|pnpm)\s+(?:i|install|add)\s+(?!-)[@\w]/,
     title: "Install script installs other packages", why: "Dependencies belong in package.json, where they are visible and locked. Installing extra packages from a script hides what ends up on the machine." },
+  { id: "install-runs-test-file", re: /\b(?:node|nodejs|python\d?|sh|bash)\s+(?:-\S+\s+)*["']?(?:\.\/)?(?:[\w.-]+\/)*(?:tests?|__tests__|spec|fixtures?|__fixtures__|__mocks__)\/[\w./-]+/i,
+    title: "Install script runs a file from the tests or fixtures", why: "Tests and fixtures are not part of installing a package. Pointing an install hook at them hides the code that runs where reviewers and scanners treat it as test material." },
   { id: "install-background", re: /\bnode\s[^&|;]*\s&\s*(?:$|;)/,
     title: "Install script keeps running in the background", why: "Detaching a process from the install lets it outlive the install and keep working unnoticed." },
 ];
@@ -387,7 +389,7 @@ export function scanInstalledPackage(dir, root, out) {
   const text = fs.readFileSync(path.join(dir, "package.json"), "utf8");
   checkPackageJson({ rel: relTo(root, path.join(dir, "package.json")) }, text, out, { installed: true });
   const pkg = readJson(text), hooks = Object.fromEntries(Object.entries(hookScripts(pkg)).filter(([h]) => !/prepare|prepublish/.test(h)));
-  for (const f of installEntryFiles(dir, hooks)) checkInstallEntry(f, relTo(root, f), out, true, "install", { popular: isKnownNpm(pkg?.name) });
+  for (const f of installEntryFiles(dir, hooks, pkg)) checkInstallEntry(f, relTo(root, f), out, true, "install", { popular: isKnownNpm(pkg?.name) });
   return Object.keys(hooks).length > 0;
 }
 
@@ -410,7 +412,7 @@ export function scanProjectInstallEntries(root, files, out) {
   for (const f of files) {
     if (!/(^|\/)package\.json$/.test(f.rel)) continue;
     const dir = path.join(root, path.dirname(f.rel)), pkg = readJson(f.text);
-    const install = installEntryFiles(dir, hookScripts(pkg));
+    const install = installEntryFiles(dir, hookScripts(pkg), pkg);
     // A private package is the user's own app; its setup scripts are theirs to know.
     for (const abs of install) checkInstallEntry(abs, relTo(root, abs), out, false, "install", { popular: isKnownNpm(pkg?.name), ownApp: !!pkg?.private });
     for (const abs of libraryEntryFiles(dir, pkg)) if (!install.includes(abs)) checkInstallEntry(abs, relTo(root, abs), out, false, "library");

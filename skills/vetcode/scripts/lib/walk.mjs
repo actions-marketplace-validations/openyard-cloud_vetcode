@@ -58,11 +58,22 @@ export function readPartial(abs) {
 }
 
 /** Text of a file, or null when it is binary, too big or unreadable. */
+function utf16Of(buf) {
+  if (buf.length < 2) return null;
+  if (buf[0] === 0xff && buf[1] === 0xfe) return new TextDecoder("utf-16le").decode(buf.subarray(2));
+  if (buf[0] === 0xfe && buf[1] === 0xff) return new TextDecoder("utf-16be").decode(buf.subarray(2));
+  return null;
+}
+
 export function readText(abs) {
   try {
     const st = fs.statSync(abs);
     if (!st.isFile() || st.size > MAX_BYTES) return null;
     const buf = fs.readFileSync(abs);
+    // UTF-16 text is full of zero bytes but is not binary; reading it as binary would let a
+    // file hide from every rule just by being saved in another encoding.
+    const utf16 = utf16Of(buf);
+    if (utf16 != null) return utf16;
     if (buf.subarray(0, 8000).includes(0)) return null;
     return buf.toString("utf8");
   } catch { return null; }

@@ -19,7 +19,7 @@ import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
-import { decoded, payloads } from "./normalize.mjs";
+import { decoded, payloads, stashed } from "./normalize.mjs";
 
 export const VERSION = "0.2.0";
 
@@ -38,6 +38,7 @@ function scanHidden(file, findings) {
   const alt = decoded(file.text);
   if (alt) views.push({ text: alt, how: "once its split strings are joined and escapes decoded" });
   for (const p of payloads(file.text)) views.push({ text: p.text, line: p.line, how: "inside a base64 payload it runs" });
+  for (const p of stashed(file.text)) views.push({ text: p.text, line: p.line, how: "inside an encoded string that decodes to code" });
   if (!views.length) return;
   const seen = new Set(findings.filter(f => f.file === file.rel).map(f => f.rule));
   for (const v of views) {

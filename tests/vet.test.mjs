@@ -166,6 +166,14 @@ test("typosquat check leaves real packages alone", () => {
   for (const name of ["requests", "boto", "pymssql", "attrs"]) assert.equal(lookalike(name, POPULAR_PYPI), null, name);
   assert.equal(lookalike("axois", POPULAR_NPM), "axios");
   assert.equal(lookalike("python-dateutils", POPULAR_PYPI), "python-dateutil");
+  assert.equal(lookalike("es7-shim", new Set(["es6-shim"])), null, "numbered series");
+});
+
+test("a typo in devDependencies decides for a project, not for a published package being vetted", async () => {
+  const manifest = JSON.stringify({ name: "some-lib", version: "1.0.0", devDependencies: { axois: "^1.0.0" }, dependencies: { expres: "^4.0.0" } });
+  const sev = r => Object.fromEntries(r.findings.filter(f => f.rule === "dep-typosquat").map(f => [f.evidence.split('"')[1], f.severity]));
+  assert.deepEqual(sev(await run(project({ "package.json": manifest }))), { axois: "medium", expres: "high" });
+  assert.deepEqual(sev(await run(project({ "package.json": manifest, "package-lock.json": "{}" }))), { axois: "high", expres: "high" });
 });
 
 test("web vulnerabilities", async () => {

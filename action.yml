@@ -1,0 +1,68 @@
+name: vetcode security review
+description: Reviews pull requests for malware, supply-chain attacks, leaked secrets, vulnerabilities and risky CI or AI-agent config, as inline comments.
+author: OpenYard
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  path:
+    description: Folder to scan, relative to the repository root.
+    default: "."
+  fail-on:
+    description: Fail the check when a finding at this severity or worse is on a changed line (critical, high, medium, low). Empty to never fail.
+    default: high
+  comment:
+    description: Post a review with inline comments on the pull request ("true" or "false").
+    default: "true"
+  sarif:
+    description: Write a SARIF file at this path for GitHub code scanning. Empty to skip.
+    default: vetcode.sarif
+  online:
+    description: Also look dependencies up on OSV.dev for known vulnerable and malicious versions ("true" or "false").
+    default: "false"
+  github-token:
+    description: Token used to post the review. Needs pull-requests write.
+    default: ${{ github.token }}
+
+outputs:
+  findings:
+    description: Findings in the files the pull request changes.
+    value: ${{ steps.review.outputs.findings }}
+  blocking:
+    description: Findings at fail-on or worse on changed lines.
+    value: ${{ steps.review.outputs.blocking }}
+
+runs:
+  using: composite
+  steps:
+    - name: Scan the changed files
+      id: scan
+      shell: bash
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+        FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        SCAN_PATH: ${{ inputs.path }}
+        ONLINE: ${{ inputs.online }}
+        SARIF: ${{ inputs.sarif }}
+      run: |
+        args=("$SCAN_PATH" --json "$RUNNER_TEMP/vetcode.json" --quiet --no-tools)
+        if [ -n "$BASE" ]; then
+          git cat-file -e "$BASE^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$BASE"
+          args+=(--diff "$BASE")
+        fi
+        # A pull request from a fork could add vetcode-ignore comments to hide what it adds.
+        if [ "$FORK" = "true" ]; then args+=(--no-ignore); fi
+        if [ "$ONLINE" = "true" ]; then args+=(--online); fi
+        if [ -n "$SARIF" ]; then args+=(--sarif "$SARIF"); fi
+        node "$GITHUB_ACTION_PATH/skills/vetcode/scripts/vet.mjs" "${args[@]}" > /dev/null
+    - name: Review
+      id: review
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        BASE: ${{ github.event.pull_request.base.sha }}
+        SCAN_PATH: ${{ inputs.path }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        COMMENT: ${{ inputs.comment }}
+      run: node "$GITHUB_ACTION_PATH/action/review.mjs" "$RUNNER_TEMP/vetcode.json" --base "$BASE" --path "$SCAN_PATH" --fail-on "${FAIL_ON:-none}" --comment "$COMMENT"

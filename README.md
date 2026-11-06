@@ -184,25 +184,54 @@ node skills/vetcode/scripts/vet.mjs [path] [options]
 | `--fail-on <severity>` | exit 1 if a finding at that level or worse exists |
 | `--no-tools` | do not run external tools (gitleaks and zizmor run automatically if installed) |
 
-### In CI
+### Pull request review on GitHub
+
+vetcode can review every pull request: it scans only the files the pull request changes, comments on the exact lines it adds, lists what was already there, and fails the check only for problems on changed lines.
 
 ```yaml
+# .github/workflows/vetcode.yml
 name: vetcode
-on: [pull_request]
+on: pull_request
 permissions:
   contents: read
-  security-events: write
+  pull-requests: write    # inline review comments
+  security-events: write  # optional: SARIF in the Security tab
 jobs:
-  scan:
+  review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with: { repository: openyard-cloud/vetcode, path: .vetcode }
-      - run: node .vetcode/skills/vetcode/scripts/vet.mjs . --sarif vetcode.sarif --fail-on high
+        with: { persist-credentials: false }
+      - uses: openyard-cloud/vetcode@main   # pin a release tag or commit SHA
+        with:
+          fail-on: high        # critical, high, medium, low, or empty to never fail
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with: { sarif_file: vetcode.sarif }
+```
+
+Comments are not repeated on later pushes. Pull requests from forks get a read-only token, so for them the results go to the job summary; their `vetcode-ignore` comments are also ignored, so a contributor cannot hide what they add. Inputs: `path`, `fail-on`, `comment`, `sarif`, `online`, `github-token`.
+
+**With an AI agent.** The action is the scanner on its own. To have an agent confirm each finding and look for what patterns cannot see (authorization, business logic), run your agent in the same workflow and point it at the skill, for example with [Claude Code Action](https://github.com/anthropics/claude-code-action):
+
+```yaml
+      - uses: actions/checkout@v4
+        with: { repository: openyard-cloud/vetcode, path: .vetcode, persist-credentials: false }
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request for security problems. Follow .vetcode/skills/vetcode/SKILL.md
+            and run its scanner with --diff origin/${{ github.base_ref }}. Comment only on confirmed findings.
+```
+
+### Other CI
+
+Any CI that has Node.js 18+ can run the scanner and fail the build:
+
+```bash
+git clone --depth 1 https://github.com/openyard-cloud/vetcode .vetcode
+node .vetcode/skills/vetcode/scripts/vet.mjs . --sarif vetcode.sarif --fail-on high
 ```
 
 ### Suppressing a false positive

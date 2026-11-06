@@ -55,20 +55,31 @@ Rules alone catch a minority of malicious skills for every tool; most of them ar
 
 ## Install
 
-vetcode comes in three forms; pick what your agent supports.
+**One command, any agent that loads [Agent Skills](https://agentskills.io)** (Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode…):
+
+```bash
+npx skills add openyard-cloud/vetcode
+```
+
+**One command, Claude Code as a plugin** (run in your terminal):
+
+```bash
+claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
+```
+
+Everything else (MCP, claude.ai, CI, a whole team) is below. All forms need Node.js 18+.
 
 | Your agent | Use |
 |---|---|
-| Claude Code | the plugin (below) or the skill |
-| Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… (anything that loads [Agent Skills](https://agentskills.io)) | the **skill** |
-| Any agent or app that speaks **MCP** (Cursor, VS Code, Codex, Gemini CLI, Windsurf, Zed, Claude Desktop, ChatGPT…) | the **MCP server** |
-| CI, scripts, or no agent at all | the **CLI** |
-
-All of them need Node.js 18+.
+| Claude Code | the [plugin](#claude-code) or the [skill](#skill-any-agent-that-loads-agent-skills) |
+| Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… | the [skill](#skill-any-agent-that-loads-agent-skills) |
+| Any agent or app that speaks MCP (Cursor, VS Code, Codex, Gemini CLI, Windsurf, Zed, Claude Desktop, ChatGPT…) | the [MCP server](#mcp-server) |
+| claude.ai | the [skill zip](#claudeai) |
+| CI, scripts, or no agent at all | the [CLI](#the-scanner-on-its-own) |
 
 ### Skill (any agent that loads Agent Skills)
 
-With the [skills CLI](https://vercel.com/docs/agent-resources/skills), which knows where each agent looks:
+The [skills CLI](https://vercel.com/docs/agent-resources/skills) knows where each agent looks for skills:
 
 ```bash
 npx skills add openyard-cloud/vetcode
@@ -76,14 +87,31 @@ npx skills add openyard-cloud/vetcode
 
 Or copy the folder yourself: `git clone https://github.com/openyard-cloud/vetcode`, then copy `vetcode/skills/vetcode` into your agent's skills folder: `.agents/skills/` (the shared location many agents read, e.g. Codex and Copilot), `.claude/skills/` (Claude Code), `.github/skills/` (Copilot), `.gemini/skills/` (Gemini CLI) or `.cursor/skills/` (Cursor), in the project or under your home folder.
 
-**Claude Code plugin:** run both lines; the first adds the marketplace, without it the second says `Marketplace "openyard" not found`.
+### Claude Code
+
+As a plugin, from inside a session it takes two commands, because Claude Code only installs from marketplaces it already knows. The first line is needed once per machine; without it the second says `Marketplace "openyard" not found`.
 
 ```
 /plugin marketplace add openyard-cloud/vetcode
 /plugin install vetcode@openyard
 ```
 
-**claude.ai:** download `vetcode-skill.zip` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and upload it under Settings → Capabilities → Skills.
+From the terminal the same is one line: `claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard`.
+
+**For a whole team**, commit this to the project's `.claude/settings.json`. Everyone who opens the project and trusts the folder gets the OpenYard marketplace registered, so each person only runs `/plugin install vetcode@openyard` once:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "openyard": { "source": { "source": "github", "repo": "openyard-cloud/vetcode" } }
+  },
+  "enabledPlugins": { "vetcode@openyard": true }
+}
+```
+
+### claude.ai
+
+Download `vetcode-skill.zip` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and upload it under Settings → Capabilities → Skills.
 
 ### MCP server
 
@@ -199,4 +227,3 @@ vetcode borrows ideas (not code) from projects that do parts of this very well, 
 ## Contributing
 
 New rules, fewer false positives and real-world samples are all welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Found a way to make vetcode miss malware? Please report it privately: [SECURITY.md](SECURITY.md).
-

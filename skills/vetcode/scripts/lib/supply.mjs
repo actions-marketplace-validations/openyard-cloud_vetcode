@@ -52,9 +52,11 @@ export function lookalike(name, popular, scopes = POPULAR_SCOPES, known = popula
   return null;
 }
 
+// `node -e "console.log('Thanks for installing, see https://…')"`: a notice, nothing runs.
+const PRINT_ONLY = /^\s*node\s+-e\s+(["'])\s*console\.(?:log|info|warn)\((?:(?!require|import|process|eval|Function|fetch|child_process|Buffer|\$\{).)*\)\s*;?\s*\1\s*$/s;
 const isKnownNpm = name => KNOWN_NPM.has(String(name).toLowerCase().replace(/[_.]+/g, "-"));
 const INSTALL_ODDITIES = [
-  { id: "install-runs-non-code", re: /\b(?:node|nodejs)\s+(?:-\S+\s+)*["']?[\w./-]+\.(?:md|txt|json|png|jpe?g|gif|css|html?|log|cfg|ini|ya?ml|lock)\b/i,
+  { id: "install-runs-non-code", re: /\b(?:node|nodejs)\s+(?:--?(?!e\b|p\b|eval\b|print\b)[\w-]+(?:=\S+)?\s+)*["']?[\w./-]+\.(?:md|txt|json|png|jpe?g|gif|css|html?|log|cfg|ini|ya?ml|lock)(?=["']?(?:\s|$|&|;|\|))/i,
     title: "Install script runs a non-code file as a program", why: "Running README.md or an image with node only works when code is hidden inside it, which is done to get past reviewers." },
   { id: "install-self-delete", re: /(?:&&|;)\s*(?:del|rm|rimraf|erase)\s+(?:-\w+\s+)*["']?[\w./\\-]+\.(?:c|m)?js\b/i,
     title: "Install script deletes the file it ran", why: "Removing the script right after running it leaves nothing to inspect; malware does this to cover its tracks." },
@@ -80,7 +82,7 @@ function checkPackageJson(file, text, out, { installed = false, root } = {}) {
     const cmd = pkg.scripts?.[hook];
     // prepare and prepublish run in the author's checkout, never when a package is installed from a registry.
     if (typeof cmd !== "string" || (installed && /prepare|prepublish/.test(hook))) continue;
-    if (SUSPICIOUS_SCRIPT.test(cmd)) {
+    if (SUSPICIOUS_SCRIPT.test(cmd) && !PRINT_ONLY.test(cmd)) {
       out.push(finding(rule({ id: "install-script-suspicious", severity: installed || hook === "preinstall" ? "critical" : "high", confidence: "high",
         title: `${installed ? `Installed package ${pkg.name}` : "Package"} runs a suspicious "${hook}" script`,
         why: "Install scripts run with your user's rights the moment the package is installed; this one downloads, decodes or launches something.",

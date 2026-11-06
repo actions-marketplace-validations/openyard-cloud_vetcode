@@ -108,6 +108,7 @@ test("install scripts shaped like attacks: probes, hidden files, self-deletion, 
     "package.json": pkg("esbuild", "0.24.0", { postinstall: "node install.js" }), "install.js": "require('https').get('https://registry.npmjs.org/@esbuild/darwin-arm64');\n",
     "app/package.json": JSON.stringify({ name: "my-app", private: true, version: "1.0.0", scripts: { postinstall: "node setup.js && npm run build" } }), "app/setup.js": "fetch('https://api.example.com/schema');\n",
     "lib/package.json": pkg("number-magic", "1.3.6", { prepare: "npm run build", postinstall: "husky install" }),
+    "notice/package.json": pkg("ranged-date", "2.1.0", { postinstall: `node -e "console.log('Breaking changes in 2.x, see https://github.com/x/ranged-date/README.md')"` }),
   }), { noIgnore: true });
   assert.deepEqual(ok.findings.filter(f => /^install-|^dep-confusion/.test(f.rule) && f.severity !== "info").map(f => `${f.rule} ${f.file}`), []);
 });

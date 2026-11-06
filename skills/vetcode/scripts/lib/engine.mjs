@@ -1,5 +1,5 @@
 // Runs line rules over a file and builds findings. A rule is plain data:
-//   { id, category, severity, title, re, files?, skip?, unless?, why, fix, confidence }
+//   { id, category, severity, title, re, files?, skip?, unless?, unlessFile?, why, fix, confidence }
 // `files` limits it to matching paths, `skip` excludes paths, `unless` drops lines that
 // also match (a sanitiser on the same line, an env lookup, ...), `requires` skips files
 // whose text does not match (e.g. shell rules only where child_process is imported).
@@ -26,7 +26,7 @@ export const rank = s => SEVERITIES.indexOf(s);
 
 // Docs and tests describe attacks without being them; their findings are kept but marked.
 export const DOC = /\.(md|mdx|markdown|rst|txt|adoc)$/i;
-export const TEST = /(^|\/)(tests?|__tests__|spec|specs|fixtures?|__fixtures__|__mocks__|examples?|samples?)\/|\.(test|spec)\.\w+$|_test\.\w+$|(^|\/)test_\w+\.py$/i;
+export const TEST = /(^|\/)(tests?|testdata|__tests__|spec|specs|fixtures?|__fixtures__|__mocks__|examples?|samples?)\/|\.(test|spec)\.\w+$|_test\.\w+$|(^|\/)test_\w+\.py$/i;
 
 const clip = (s, n = 160) => { s = s.trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 
@@ -51,7 +51,7 @@ export function presentIn(text, r) {
 }
 
 export function scanLines(file, text, rules, out) {
-  const applicable = rules.filter(r => (!r.files || r.files.test(file.rel)) && !(r.skip && r.skip.test(file.rel)) && (!r.requires || r.requires.test(text)) && presentIn(text, r));
+  const applicable = rules.filter(r => (!r.files || r.files.test(file.rel)) && !(r.skip && r.skip.test(file.rel)) && (!r.requires || r.requires.test(text)) && !(r.unlessFile && r.unlessFile.test(text)) && presentIn(text, r));
   if (!applicable.length) return;
   const lines = text.split(/\r?\n/);
   const longOk = applicable.some(r => r.longLines);

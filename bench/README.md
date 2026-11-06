@@ -65,9 +65,11 @@ node bench/redteam.mjs            # this build
 node bench/redteam.mjs --lib <path to another build>/skills/vetcode/scripts/lib/index.mjs
 ```
 
-Twelve techniques from 2025–2026 campaigns that the public datasets barely contain (code
+Fifteen techniques from 2021–2026 campaigns that the public datasets barely contain (code
 pushed off-screen in dist/, GlassWorm Unicode payloads, payloads in images, protestware,
 time bombs, sandbox evasion, homoglyphs, disguised executables, purpose mismatch, recon
-beacons, ClawHavoc-style skills, skills that hide actions), each next to a clean look-alike.
+beacons, ClawHavoc-style skills, skills that hide actions, a Visual Studio project with an encoded
+PowerShell build event, a Rust build script that steals SSH keys, a Go init() reverse shell),
+each next to a clean look-alike.
 Samples are generated at run time and carry no working payload. The set was built
 alongside the rules, so it measures coverage, not an independent detection rate.

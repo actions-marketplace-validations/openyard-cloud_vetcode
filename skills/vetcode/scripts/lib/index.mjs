@@ -9,6 +9,8 @@ import { scanLines, scanFile, options, rank, SEVERITIES } from "./engine.mjs";
 import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
 import { MALWARE_RULES, MALWARE_FILE_RULES } from "./malware.mjs";
 import { WEB_RULES } from "./web.mjs";
+import { LANG_RULES } from "./langs.mjs";
+import { ECOSYSTEM_FILE_RULES } from "./ecosystems.mjs";
 import { CONFIG_RULES, CONFIG_FILE_RULES, supabaseTablesWithoutRls } from "./config.mjs";
 import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, scanPythonImportTime, hardeningAdvice } from "./supply.mjs";
 import crypto from "node:crypto";
@@ -77,6 +79,8 @@ export async function vet(target, opts = {}) {
     scanLines(file, file.text, MALWARE_RULES, findings);
     scanFile(file, file.text, MALWARE_FILE_RULES, findings);
     scanLines(file, file.text, WEB_RULES, findings);
+    scanLines(file, file.text, LANG_RULES, findings);
+    scanFile(file, file.text, ECOSYSTEM_FILE_RULES, findings);
     scanLines(file, file.text, CONFIG_RULES, findings);
     scanFile(file, file.text, CONFIG_FILE_RULES, findings);
     scanSupplyChain(file, file.text, findings, root);

@@ -8,7 +8,9 @@ import { DOC, finding, suppressedHere, presentIn } from "./engine.mjs";
 const ROTATE = "Revoke and rotate it at the provider first (assume it is already copied), then move it to an environment variable or secret store and remove it from the code and git history.";
 
 export const SECRET_RULES = [
-  { id: "secret-private-key", severity: "critical", title: "Private key in the repository", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/ },
+  { id: "secret-private-key", severity: "critical", title: "Private key in the repository", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/,
+    // A header named in docs, or matched against (`starts_with("-----BEGIN …-----")`), holds no key.
+    unless: /^\s*(?:\/\/[/!]?|\*|#|--)\s|-----BEGIN[^"'`\n]*-----["'`]\s*[,;)\]]/ },
   { id: "secret-aws-key", severity: "critical", title: "AWS access key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, unless: /EXAMPLE/ },
   { id: "secret-github-token", severity: "critical", title: "GitHub token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/ },
   { id: "secret-gitlab-token", severity: "critical", title: "GitLab token", re: /\bglpat-[A-Za-z0-9_-]{20,}\b/ },

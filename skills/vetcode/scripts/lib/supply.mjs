@@ -5,8 +5,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
-import { POPULAR_NPM, POPULAR_PYPI, POPULAR_SCOPES } from "./popular.mjs";
-import { installEntryFiles, checkInstallEntry, libraryEntryFiles } from "./capabilities.mjs";
+import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
+import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
 
 const rule = r => ({ category: "supply-chain", confidence: "medium", ...r });
 const readJson = text => { try { return JSON.parse(text.replace(/^\uFEFF/, "")); } catch { return null; } };
@@ -29,11 +29,12 @@ function distance(a, b) {
   return d[a.length][b.length];
 }
 const norm = n => n.toLowerCase().replace(/[-_.]+/g, "-");
+const sameButOneDigit = (a, b) => { const diff = [...a].map((c, i) => i).filter(i => a[i] !== b[i]); return diff.length === 1 && /\d/.test(a[diff[0]]) && /\d/.test(b[diff[0]]); };
 
 /** The popular package (or npm scope) a name imitates, if any. */
-export function lookalike(name, popular, scopes = POPULAR_SCOPES) {
+export function lookalike(name, popular, scopes = POPULAR_SCOPES, known = popular) {
   const n = norm(name);
-  if (popular.has(n)) return null;
+  if (popular.has(n) || known.has(n)) return null;
   const scoped = n.match(/^@([^/]+)\/(.+)$/);
   if (scoped) {
     if (scopes.has(scoped[1])) return null;
@@ -44,22 +45,44 @@ export function lookalike(name, popular, scopes = POPULAR_SCOPES) {
   for (const p of popular) {
     if (p.startsWith("@") || p.length < 5) continue;
     if (core !== n && core.length >= 4 && popular.has(core)) return null;
+    if (n.startsWith(p) && /^\d+$/.test(n.slice(p.length))) continue; // httpx2, boto3: versioned names
+    if (n.length === p.length && sameButOneDigit(n, p)) continue; // es6-shim / es7-shim: a numbered series
     if (distance(n, p) === 1 || (core !== n && core !== p && distance(core, p) === 1) || n === p + "s" || n === p + "-js" || n === p + "js" || n === "node-" + p || (p.includes("-") && n === p.replace(/-/g, ""))) return p;
   }
   return null;
 }
 
+// `node -e "console.log('Thanks for installing, see https://…')"`: a notice, nothing runs.
+const PRINT_ONLY = /^\s*node\s+-e\s+(["'])\s*console\.(?:log|info|warn)\((?:(?!require|import|process|eval|Function|fetch|child_process|Buffer|\$\{).)*\)\s*;?\s*\1\s*$/s;
+const isKnownNpm = name => KNOWN_NPM.has(String(name).toLowerCase().replace(/[_.]+/g, "-"));
+const INSTALL_ODDITIES = [
+  { id: "install-runs-non-code", re: /\b(?:node|nodejs)\s+(?:--?(?!e\b|p\b|eval\b|print\b)[\w-]+(?:=\S+)?\s+)*["']?[\w./-]+\.(?:md|txt|json|png|jpe?g|gif|css|html?|log|cfg|ini|ya?ml|lock)(?=["']?(?:\s|$|&|;|\|))/i,
+    title: "Install script runs a non-code file as a program", why: "Running README.md or an image with node only works when code is hidden inside it, which is done to get past reviewers." },
+  { id: "install-self-delete", re: /(?:&&|;)\s*(?:del|rm|rimraf|erase)\s+(?:-\w+\s+)*["']?[\w./\\-]+\.(?:c|m)?js\b/i,
+    title: "Install script deletes the file it ran", why: "Removing the script right after running it leaves nothing to inspect; malware does this to cover its tracks." },
+  { id: "install-fetches-packages", re: /\b(?:npm|yarn|pnpm)\s+(?:i|install|add)\s+(?!-)[@\w]/,
+    title: "Install script installs other packages", why: "Dependencies belong in package.json, where they are visible and locked. Installing extra packages from a script hides what ends up on the machine." },
+  { id: "install-background", re: /\bnode\s[^&|;]*\s&\s*(?:$|;)/,
+    title: "Install script keeps running in the background", why: "Detaching a process from the install lets it outlive the install and keep working unnoticed." },
+];
+
 const TYPO = rule({ id: "dep-typosquat", severity: "high", title: "Dependency name looks like a popular package",
   why: "Typosquats copy a popular name with one letter changed so a typo installs malware.",
   fix: "Check the exact name on the registry (owner, downloads, age, repository link). If it was a typo, remove it and treat the machine as exposed if it was installed." });
 
-function checkPackageJson(file, text, out, { installed = false } = {}) {
+const LOCKS = ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"];
+
+function checkPackageJson(file, text, out, { installed = false, root } = {}) {
   const pkg = readJson(text);
   if (!pkg || typeof pkg !== "object") return;
+  // A published package being vetted (npm never ships its lockfile) rather than a project
+  // someone works in: its devDependencies never reach the people who install it.
+  const published = !!root && !pkg.private && !!pkg.name && !!pkg.version && !LOCKS.some(l => fs.existsSync(path.join(root, path.dirname(file.rel), l)));
   for (const hook of INSTALL_HOOKS) {
     const cmd = pkg.scripts?.[hook];
-    if (typeof cmd !== "string") continue;
-    if (SUSPICIOUS_SCRIPT.test(cmd)) {
+    // prepare and prepublish run in the author's checkout, never when a package is installed from a registry.
+    if (typeof cmd !== "string" || (installed && /prepare|prepublish/.test(hook))) continue;
+    if (SUSPICIOUS_SCRIPT.test(cmd) && !PRINT_ONLY.test(cmd)) {
       out.push(finding(rule({ id: "install-script-suspicious", severity: installed || hook === "preinstall" ? "critical" : "high", confidence: "high",
         title: `${installed ? `Installed package ${pkg.name}` : "Package"} runs a suspicious "${hook}" script`,
         why: "Install scripts run with your user's rights the moment the package is installed; this one downloads, decodes or launches something.",
@@ -69,9 +92,23 @@ function checkPackageJson(file, text, out, { installed = false } = {}) {
         why: "Install scripts are where most npm malware lives; this one looks ordinary but runs on every install.", fix: "Know why it needs to; consider `npm config set ignore-scripts true` and allow-listing." }), file.rel, lineIn(text, `"${hook}"`), `"${hook}": "${cmd}"`));
     }
   }
+  // Install commands shaped only the way attacks shape them.
+  const hooks = INSTALL_HOOKS.filter(h => h !== "prepare" && typeof pkg.scripts?.[h] === "string");
+  for (const hook of hooks) {
+    const cmd = pkg.scripts[hook], odd = INSTALL_ODDITIES.find(o => o.re.test(cmd));
+    if (odd) out.push(finding(rule({ id: odd.id, severity: "high", confidence: "high", title: odd.title, why: odd.why,
+      fix: "Do not install it. If it is already installed, read every file the script ran and treat the machine as exposed." }), file.rel, lineIn(text, `"${hook}"`), `"${hook}": "${cmd}"`));
+  }
+  // Dependency confusion: an internal-sounding name published with a huge version number so it
+  // outranks the company's private package, plus an install script to report the hit.
+  if (hooks.length && !pkg.private && typeof pkg.name === "string" && parseInt(pkg.version, 10) >= 90 && !isKnownNpm(pkg.name)) {
+    out.push(finding(rule({ id: "dep-confusion-version", severity: "high", title: `Version ${pkg.version} with an install script`,
+      why: "Dependency-confusion packages use version numbers like 99.x so they win over a private package of the same name, and an install script to call home.",
+      fix: "Check that this package really comes from the registry you expect; pin private packages to their scope and registry." }), file.rel, lineIn(text, `"version"`), `"version": "${pkg.version}"`));
+  }
   // When vetting a package, its own name imitating a popular one is a strong signal.
   if (!pkg.private && typeof pkg.name === "string" && pkg.version) {
-    const like = lookalike(pkg.name, POPULAR_NPM);
+    const like = lookalike(pkg.name, TARGET_NPM, POPULAR_SCOPES, KNOWN_NPM);
     if (like) out.push(finding(rule({ id: "package-name-typosquat", severity: "high", title: "This package's name imitates a popular package",
       why: "Typosquats borrow a popular name with a small change so people install them by mistake.", fix: "Install the real package instead; treat this one as hostile." }), file.rel, lineIn(text, `"name"`), `"${pkg.name}" looks like "${like}"`));
   }
@@ -80,8 +117,8 @@ function checkPackageJson(file, text, out, { installed = false } = {}) {
     for (const [name, spec] of Object.entries(pkg[section] || {})) {
       if (typeof spec !== "string") continue;
       const at = lineIn(text, `"${name}"`);
-      const like = lookalike(name, POPULAR_NPM);
-      if (like) out.push(finding(TYPO, file.rel, at, `"${name}" looks like "${like}"`));
+      const like = lookalike(name, TARGET_NPM, POPULAR_SCOPES, KNOWN_NPM);
+      if (like) out.push(finding(published && section !== "dependencies" && section !== "optionalDependencies" ? { ...TYPO, severity: "medium" } : TYPO, file.rel, at, `"${name}" looks like "${like}"`));
       if (spec === "*" || spec === "latest" || spec === "x" || spec === "") {
         out.push(finding(rule({ id: "dep-unpinned", severity: "low", title: "Dependency accepts any version",
           why: "Any future version, including a hijacked one, installs without review.", fix: "Pin a version range and commit the lockfile." }), file.rel, at, `"${name}": "${spec}"`));
@@ -125,6 +162,7 @@ function checkOtherLocks(file, text, out) {
 }
 
 function checkRequirements(file, text, out) {
+  stealerKit(file, text, out);
   text.split(/\r?\n/).forEach((raw, i) => {
     const line = raw.replace(/#.*/, "").trim();
     if (!line) return;
@@ -142,25 +180,58 @@ function checkRequirements(file, text, out) {
         why: "It skips PyPI and its content can change.", fix: "Pin to a commit hash or use a published release." }), file.rel, i + 1, line));
       return;
     }
-    const name = line.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)/)?.[1];
+    // A requirement is a name, optional extras, version specifiers and markers; prose is not.
+    const spec = line.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:(?:[<>=!~]=?|===)\s*[^\s;,]+(?:\s*,\s*(?:[<>=!~]=?|===)\s*[^\s;,]+)*)?\s*(?:;.*)?$/);
+    const name = spec?.[1];
     if (!name) return;
-    const like = lookalike(name, POPULAR_PYPI);
+    const like = lookalike(name, TARGET_PYPI, POPULAR_SCOPES, KNOWN_PYPI);
     if (like) out.push(finding(TYPO, file.rel, i + 1, `"${name}" looks like "${like}"`));
   });
 }
 
 function checkPyproject(file, text, out) {
+  stealerKit(file, text, out);
   const names = new Set();
-  for (const m of text.matchAll(/^\s*dependencies\s*=\s*\[([\s\S]*?)\]/gm)) for (const d of m[1].matchAll(/["']([A-Za-z0-9][A-Za-z0-9._-]*)/g)) names.add(d[1]);
+  for (const m of text.matchAll(/^\s*(?:dependencies|[\w-]+)\s*=\s*\[([\s\S]*?)\]/gm)) {
+    if (!/^\s*dependencies|optional-dependencies/.test(text.slice(Math.max(0, m.index - 200), m.index + 20)) && !/^\s*dependencies/.test(m[0])) continue;
+    for (const d of m[1].matchAll(/"([^"]*)"|'([^']*)'/g)) { const name = (d[1] ?? d[2]).match(/^\s*([A-Za-z0-9][A-Za-z0-9._-]*)/)?.[1]; if (name) names.add(name); }
+  }
   for (const m of text.matchAll(/^\[tool\.poetry\.(?:dev-)?dependencies\]([\s\S]*?)(?=^\[)/gm)) for (const d of m[1].matchAll(/^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*=/gm)) names.add(d[1]);
-  for (const n of names) { const like = lookalike(n, POPULAR_PYPI); if (like && n.toLowerCase() !== "python") out.push(finding(TYPO, file.rel, lineIn(text, n), `"${n}" looks like "${like}"`)); }
+  for (const n of names) { const like = lookalike(n, TARGET_PYPI, POPULAR_SCOPES, KNOWN_PYPI); if (like && n.toLowerCase() !== "python") out.push(finding(TYPO, file.rel, lineIn(text, n), `"${n}" looks like "${like}"`)); }
+}
+
+const INSTALL_CMD = /class\s+\w+\s*\(\s*(?:\w+\.)?(?:install|develop|egg_info|build_py|build_ext|sdist|bdist_\w+)\s*\)/;
+// Libraries that turn up in stealers' dependency lists far more than anywhere else.
+const STEALER_KIT = /\b(?:browser[_-]?cookie3?|discord[_-]?webhook|discordwebhook|dhooks|robloxpy|pyautogui|pynput|pycryptodomex?|win32crypt|pypiwin32|pywin32|getmac|psutil|pyperclip)\b/gi;
+
+function stealerKit(file, text, out) {
+  const names = new Set((text.match(STEALER_KIT) || []).map(n => n.toLowerCase().replace(/[_-]/g, "")));
+  const core = [...names].filter(n => /browsercookie|discordwebhook|dhooks|robloxpy/.test(n));
+  if (!core.length || names.size < 2 && !/browsercookie/.test(core[0])) return;
+  const at = text.search(STEALER_KIT);
+  out.push(finding(rule({ id: "dep-stealer-kit", severity: "high", confidence: "high", title: "Depends on a credential-stealer toolkit",
+    why: `It pulls in ${[...names].join(", ")}: browser-cookie and chat-webhook libraries together are the building blocks of token and password stealers.`,
+    fix: "Unless the project is plainly a tool for your own browser data, do not install it." }), file.rel, lineOf(text, at), [...names].join(", ")));
 }
 
 function checkSetupPy(file, text, out) {
+  stealerKit(file, text, out);
+  if (INSTALL_CMD.test(text) && /cmdclass/.test(text)) {
+    // Compiling extensions with subprocess is normal; an install-time command that talks to the
+    // network, runs decoded code, posts to a webhook or starts an .exe is not.
+    const onInstall = /class\s+\w+\s*\(\s*(?:\w+\.)?(?:install|develop|egg_info)\s*\)/.test(text);
+    const acts = onInstall && /\b(?:requests\.|urllib|urlopen|urlretrieve|socket\.|exec\s*\(|eval\s*\(|startfile|Webhook|webhook|curl|wget|\.exe\b|powershell|Fernet|b64decode)/.exec(text);
+    out.push(finding(rule({ id: "setup-py-install-command", severity: acts ? "high" : "medium", confidence: acts ? "high" : "medium",
+      title: acts ? "setup.py overrides the install command to run code" : "setup.py overrides the install command",
+      why: "A custom install command runs during `pip install` with your rights; malicious packages use it to download, beacon or start a payload before any code is imported.",
+      fix: "Read the overridden run() method; install from a wheel or with --no-build-isolation in a throwaway environment if you must." }), file.rel, lineOf(text, text.search(INSTALL_CMD)), acts ? `install command + ${acts[0]}` : text.match(INSTALL_CMD)[0]));
+  }
   const m = /\b(?:urllib\.request|urlopen|requests\.(?:get|post)|httpx\.|subprocess\.|os\.system|os\.popen|exec\s*\(|eval\s*\(|socket\.|base64\.b64decode|__import__\()/.exec(text);
   if (!m) return;
   // Building C extensions or reading git tags needs subprocess; fetching or decoding code does not.
-  const strong = /\b(?:urllib\.request|urlopen|requests\.(?:get|post)|httpx\.|socket\.|base64\.b64decode|__import__\(|exec\s*\(|eval\s*\()|\b(?:curl|wget|powershell)\b/.test(text);
+  // exec(open("pkg/version.py").read()) and compile(open(...)) read the version; that is fine.
+  const runsDecoded = /\b(?:exec|eval)\s*\((?!\s*(?:compile\s*\()?\s*open\s*\()(?![^)\n]*\.read\(\))[^\n]*/.test(text) && /b64decode|decompress|marshal|fromhex|unhexlify|__import__/.test(text);
+  const strong = /\b(?:urllib\.request|urlopen|requests\.(?:get|post)|httpx\.(?:get|post)|socket\.socket|socket\.connect)\b|\b(?:curl|wget|powershell)\b/.test(text) || runsDecoded;
   out.push(finding(rule({ id: "setup-py-runs-code", severity: strong ? "high" : "low", title: strong ? "setup.py fetches, decodes or evaluates code" : "setup.py runs shell commands",
     why: "setup.py executes during `pip install`; downloading or launching programs there is a classic way to ship malware.",
     fix: "Read exactly what it runs. Prefer packages that ship wheels; install untrusted ones in a throwaway container." }), file.rel, lineOf(text, m.index), text.split("\n")[lineOf(text, m.index) - 1]));
@@ -287,14 +358,14 @@ function checkExtensionManifest(file, text, out) {
     why: "Pages can send it commands.", fix: "List the exact origins." }), file.rel, lineIn(text, "externally_connectable"), JSON.stringify(m.externally_connectable)));
 }
 
-const HOOKS = /(^|\/)(\.husky\/[^/_][^/]*|\.githooks\/[^/]+|lefthook\.ya?ml|\.pre-commit-config\.ya?ml)$/;
+const HOOKS = /(^|\/)(\.husky\/[^/_][^/]*|\.githooks\/[^/]+)$/;
 
-export function scanSupplyChain(file, text, out) {
+export function scanSupplyChain(file, text, out, root) {
   const base = path.basename(file.rel);
-  if (base === "package.json") checkPackageJson(file, text, out);
+  if (base === "package.json") checkPackageJson(file, text, out, { root });
   else if (base === "package-lock.json" || base === "npm-shrinkwrap.json") checkNpmLock(file, text, out);
   else if (base === "yarn.lock" || base === "pnpm-lock.yaml" || base === "bun.lock") checkOtherLocks(file, text, out);
-  else if (/^requirements[\w.-]*\.(txt|in)$/.test(base) || base === "constraints.txt") checkRequirements(file, text, out);
+  else if (/^requirements[\w.-]*\.(txt|in)$/.test(base) || (base === "constraints.txt" && /^(?:[^/]+\/)?(?:requirements\/)?constraints\.txt$/.test(file.rel) && !/(^|\/)(docs?|contrib|tests?)\//.test(file.rel))) checkRequirements(file, text, out);
   else if (base === "pyproject.toml") checkPyproject(file, text, out);
   else if (base === "setup.py") checkSetupPy(file, text, out);
   else if (/\.github\/workflows\/[^/]+\.ya?ml$/.test(file.rel)) checkWorkflow(file, text, out);
@@ -314,9 +385,23 @@ const hookScripts = pkg => Object.fromEntries(INSTALL_HOOKS.filter(h => typeof p
 export function scanInstalledPackage(dir, root, out) {
   const text = fs.readFileSync(path.join(dir, "package.json"), "utf8");
   checkPackageJson({ rel: relTo(root, path.join(dir, "package.json")) }, text, out, { installed: true });
-  const pkg = readJson(text), hooks = hookScripts(pkg);
-  for (const f of installEntryFiles(dir, hooks)) checkInstallEntry(f, relTo(root, f), out, true);
+  const pkg = readJson(text), hooks = Object.fromEntries(Object.entries(hookScripts(pkg)).filter(([h]) => !/prepare|prepublish/.test(h)));
+  for (const f of installEntryFiles(dir, hooks)) checkInstallEntry(f, relTo(root, f), out, true, "install", { popular: isKnownNpm(pkg?.name) });
   return Object.keys(hooks).length > 0;
+}
+
+/** Python code that runs on import: a package __init__.py that phones home with system details. */
+export function scanPythonImportTime(files, out) {
+  for (const f of files) {
+    if (!/(^|\/)__init__\.py$/.test(f.rel) || f.text.length > 40_000 || /(^|\/)(tests?|docs?|examples?)\//.test(f.rel)) continue;
+    const caps = capabilitiesOf(f.text);
+    // Running programs alone is common (setuptools, build helpers); a beacon collects identity or hides code.
+    const risky = caps.filter(c => ["collects user and host details", "decodes or builds code at runtime", "writes into home or startup folders"].includes(c));
+    if (!caps.includes("uses the network") || !risky.length) continue;
+    out.push(finding(rule({ id: "import-time-capabilities", severity: risky.length >= 2 ? "critical" : "high", title: "Package __init__.py reaches out on import",
+      why: `This runs as soon as anyone imports the package, and it ${caps.join(", ")}. Libraries rarely need that at import time; beacons and stealers do.`,
+      fix: "Read the whole file; pin a version you reviewed or remove the package." }), f.rel, 1, caps.join(" + ")));
+  }
 }
 
 /** The project's own install-time files (package.json hooks, setup.py). */
@@ -325,7 +410,8 @@ export function scanProjectInstallEntries(root, files, out) {
     if (!/(^|\/)package\.json$/.test(f.rel)) continue;
     const dir = path.join(root, path.dirname(f.rel)), pkg = readJson(f.text);
     const install = installEntryFiles(dir, hookScripts(pkg));
-    for (const abs of install) checkInstallEntry(abs, relTo(root, abs), out, false);
+    // A private package is the user's own app; its setup scripts are theirs to know.
+    for (const abs of install) checkInstallEntry(abs, relTo(root, abs), out, false, "install", { popular: isKnownNpm(pkg?.name), ownApp: !!pkg?.private });
     for (const abs of libraryEntryFiles(dir, pkg)) if (!install.includes(abs)) checkInstallEntry(abs, relTo(root, abs), out, false, "library");
   }
 }

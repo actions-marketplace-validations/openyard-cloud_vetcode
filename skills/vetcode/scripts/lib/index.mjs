@@ -2,18 +2,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { walk, loadIgnore, installedPackages, readText } from "./walk.mjs";
+import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
+import { profiles, purposeMismatches } from "./profile.mjs";
+import { npmHistory } from "./npmhistory.mjs";
 import { scanLines, scanFile, options, rank, SEVERITIES } from "./engine.mjs";
 import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
 import { MALWARE_RULES, MALWARE_FILE_RULES } from "./malware.mjs";
 import { WEB_RULES } from "./web.mjs";
 import { CONFIG_RULES, CONFIG_FILE_RULES, supabaseTablesWithoutRls } from "./config.mjs";
-import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, hardeningAdvice } from "./supply.mjs";
+import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, scanPythonImportTime, hardeningAdvice } from "./supply.mjs";
 import crypto from "node:crypto";
 import { scanAgentFiles } from "./agent.mjs";
 import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
+import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 
 export const VERSION = "0.2.0";
 
@@ -51,7 +54,7 @@ export async function vet(target, opts = {}) {
   const findings = [];
   const files = [];
   const partial = [];
-  for (const file of walk(root, { ignore, only: listed })) {
+  for (const file of walk(root, { ignore, only: listed, ...(listed ? {} : { skipDirs: SKIP_DIRS_NO_GIT }) })) {
     if (file.partial) {
       // Too big to read whole: secrets and malware checks on its first and last 256 KB.
       partial.push({ file: file.rel, bytes: file.partial });
@@ -61,6 +64,7 @@ export async function vet(target, opts = {}) {
       continue;
     }
     files.push(file);
+    const mark = findings.length;
     scanAgentFiles(file, file.text, findings);
     scanSecrets(file, file.text, findings);
     scanLines(file, file.text, MALWARE_RULES, findings);
@@ -68,11 +72,22 @@ export async function vet(target, opts = {}) {
     scanLines(file, file.text, WEB_RULES, findings);
     scanLines(file, file.text, CONFIG_RULES, findings);
     scanFile(file, file.text, CONFIG_FILE_RULES, findings);
-    scanSupplyChain(file, file.text, findings);
+    scanSupplyChain(file, file.text, findings, root);
+    scanFile(file, file.text, ANOMALY_FILE_RULES, findings);
+    // Bundled or minified output is full of patterns that mean nothing there; keep its findings
+    // visible but let only high-confidence ones decide.
+    // Only JavaScript ships that way on purpose: a one-line Python file or setup.py is itself
+    // suspicious (that is how obfuscated payloads look), so those keep their confidence.
+    if (/\.(c|m)?js$/.test(file.rel) && (/\.min\.|[-.]bundle\.|(^|\/)(dist|out)\//.test(file.rel) || file.text.length / (file.text.split("\n").length || 1) > 300))
+      for (let i = mark; i < findings.length; i++) if (findings[i].confidence === "medium") findings[i].confidence = "low";
   }
   log(`${files.length} files read`);
   supabaseTablesWithoutRls(files, findings);
+  scanBinaries(root, listed, findings);
+  const prof = profiles(files);
+  purposeMismatches(prof, findings);
   scanProjectInstallEntries(root, files, findings);
+  scanPythonImportTime(files, findings);
   if (!only) hardeningAdvice(root, files, findings);
   const mcpLock = opts.mcpLock ? checkMcpLock(opts.mcpLock, files, findings) : null;
   if (!only) scanSecretFiles(root, findings);
@@ -102,6 +117,7 @@ export async function vet(target, opts = {}) {
     const pkgs = lockedPackages(files);
     try { await queryOsv(pkgs, findings, log); osv = `${pkgs.length} packages`; }
     catch (e) { osv = `failed (${e.message})`; log(`OSV lookup failed: ${e.message}`); }
+    await npmHistory(files, findings, log);
   }
 
   // Same rule on the same line from two sources (e.g. built-in + gitleaks) is reported once.
@@ -121,6 +137,8 @@ export async function vet(target, opts = {}) {
     version: VERSION, target: root, mode: only ? `diff${opts.diff ? ` vs ${opts.diff}` : ""}` : "full",
     stats: { files: files.length, packages, ms: Date.now() - started, counts, tools, osv, history: !!opts.history,
       ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },
+    surprises: surprises(files, reported),
+    profiles: prof.map(({ kind, name, file, purpose, capabilities }) => ({ kind, name, file, purpose, capabilities })),
     findings: reported,
   };
 }

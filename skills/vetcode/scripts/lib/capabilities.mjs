@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { finding } from "./engine.mjs";
+import { expanded } from "./normalize.mjs";
 
 const CAPS = {
   "reads environment or credential files": /process\.env\b|os\.environ|os\.getenv|\.ssh[\\/]|\.npmrc|\.aws[\\/]|\.git-credentials|homedir\(\)|expanduser\(["']~/,
@@ -36,7 +37,7 @@ export function installEntryFiles(dir, scripts) {
 }
 
 export function checkInstallEntry(abs, rel, out, installed, where = "install", { popular = false, ownApp = false } = {}) {
-  let text; try { text = fs.readFileSync(abs, "utf8"); } catch { return; }
+  let text; try { text = expanded(fs.readFileSync(abs, "utf8")); } catch { return; }
   const caps = capabilitiesOf(text);
   const net = caps.includes("uses the network");
   const risky = caps.filter(c => c !== "uses the network");

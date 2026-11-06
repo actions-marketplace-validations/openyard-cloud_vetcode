@@ -73,9 +73,11 @@ function mutate(dir, name) {
   const files = walk(dir).filter(f => JS.test(f) || PY.test(f));
   if (name === "dist") {
     // Move every code file under dist/ next to its package root and point package.json at it.
+    // Relative to the package root (the folder with package.json, setup.py or pyproject.toml),
+    // so install scripts still point at the moved files and the package would still work.
+    const root = f => { for (let d = path.dirname(f); d.startsWith(dir); d = path.dirname(d)) if (["package.json", "setup.py", "pyproject.toml"].some(m => fs.existsSync(path.join(d, m)))) return d; return dir; };
     for (const f of files) {
-      const rel = path.relative(dir, f), parts = rel.split(path.sep);
-      const to = parts.length > 1 ? path.join(dir, parts[0], "dist", ...parts.slice(1)) : path.join(dir, "dist", rel);
+      const base = root(f), to = path.join(base, "dist", path.relative(base, f));
       fs.mkdirSync(path.dirname(to), { recursive: true });
       fs.renameSync(f, to);
     }

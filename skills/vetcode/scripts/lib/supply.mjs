@@ -7,6 +7,7 @@ import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
 import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
+import { expanded } from "./normalize.mjs";
 
 const rule = r => ({ category: "supply-chain", confidence: "medium", ...r });
 const readJson = text => { try { return JSON.parse(text.replace(/^\uFEFF/, "")); } catch { return null; } };
@@ -394,7 +395,7 @@ export function scanInstalledPackage(dir, root, out) {
 export function scanPythonImportTime(files, out) {
   for (const f of files) {
     if (!/(^|\/)__init__\.py$/.test(f.rel) || f.text.length > 40_000 || /(^|\/)(tests?|docs?|examples?)\//.test(f.rel)) continue;
-    const caps = capabilitiesOf(f.text);
+    const caps = capabilitiesOf(expanded(f.text));
     // Running programs alone is common (setuptools, build helpers); a beacon collects identity or hides code.
     const risky = caps.filter(c => ["collects user and host details", "decodes or builds code at runtime", "writes into home or startup folders"].includes(c));
     if (!caps.includes("uses the network") || !risky.length) continue;

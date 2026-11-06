@@ -20,6 +20,13 @@ import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 
 export const VERSION = "0.2.0";
 
+/** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
+ *  shallow clone without that history (a pull request checkout in CI), straight against base. */
+export function diffRange(root, base) {
+  const mb = spawnSync("git", ["merge-base", base, "HEAD"], { cwd: root, encoding: "utf8" });
+  return mb.status === 0 ? [`${base}...HEAD`] : [base, "HEAD"];
+}
+
 /** Files changed against `base` (committed, staged, unstaged and untracked). */
 export function changedFiles(root, base) {
   const git = args => spawnSync("git", args, { cwd: root, encoding: "utf8" });
@@ -27,7 +34,7 @@ export function changedFiles(root, base) {
   if (!top) throw new Error("--diff needs a git repository");
   const names = new Set();
   const add = r => r.stdout.split("\n").filter(Boolean).forEach(f => names.add(f));
-  if (base) add(git(["diff", "--name-only", "--diff-filter=ACMR", `${base}...HEAD`]));
+  if (base) add(git(["diff", "--name-only", "--diff-filter=ACMR", ...diffRange(root, base)]));
   add(git(["diff", "--name-only", "--diff-filter=ACMR", "HEAD"]));
   add(git(["ls-files", "--others", "--exclude-standard"]));
   const prefix = path.relative(top, root).split(path.sep).join("/");

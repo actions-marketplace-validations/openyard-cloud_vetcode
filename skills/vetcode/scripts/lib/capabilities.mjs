@@ -51,7 +51,7 @@ function withLocalDeps(abs, depth = 2, seen = new Set(), launchesOnly = false) {
   if (seen.has(abs) || seen.size > 12) return "";
   seen.add(abs);
   const root = seen.root ||= pkgRoot(abs);
-  let text; try { if (fs.statSync(abs).size > 2e6) return ""; text = fs.readFileSync(abs, "utf8"); } catch { return ""; }
+  let text; try { if (fs.statSync(abs).size > 10e6) return ""; text = fs.readFileSync(abs, "utf8"); } catch { return ""; }
   if (depth === 0) return text;
   const dir = path.dirname(abs), deps = [];
   const specs = [...text.matchAll(LAUNCH)].map(m => m[1] || m[2] || m[3]);
@@ -73,6 +73,14 @@ export function checkInstallEntry(abs, rel, out, installed, where = "install", {
   let text = withLocalDeps(abs, 2, new Set(), where === "library");
   try { text = expanded(text ?? fs.readFileSync(abs, "utf8")); } catch { return; }
   if (!text) return;
+  // Obfuscated code that runs at install. Obfuscators turn every constant into hex arithmetic
+  // (-0x49, 0x1f*-0x3); hand-written or minified install scripts do not look like that.
+  if (where !== "library") {
+    const hexOps = (text.match(/[-+*/<>=?:,(\[]\s*-?0x[0-9a-f]{1,8}\b/gi) || []).length;
+    if (hexOps >= 60 && hexOps * 1000 / text.length >= 4) out.push(finding({ id: "install-runs-obfuscated-code", category: "supply-chain", severity: "high", confidence: "high", title: "Install script is obfuscated",
+      why: "Code that runs on install has been put through an obfuscator (hex arithmetic everywhere, names that mean nothing). There is no honest reason to hide what an install step does.",
+      fix: "Do not install it. If it was installed, treat the machine as exposed." }, rel, 1, `${hexOps} hex expressions in ${Math.round(text.length / 1024)} KB`, RUN));
+  }
   // An install script that starts a Windows program shipped inside the package.
   const exe = where !== "library" && /(?:spawn|spawnSync|execFile|execFileSync|exec|execSync|startfile|Popen|call|run)\s*\([^\n;]{0,200}?["'][^"'\n]*\.(?:exe|scr|msi|com)["']/i.exec(text);
   if (exe) out.push(finding({ id: "install-runs-bundled-program", category: "supply-chain", severity: "critical", confidence: "high", title: "Install script starts a Windows program",

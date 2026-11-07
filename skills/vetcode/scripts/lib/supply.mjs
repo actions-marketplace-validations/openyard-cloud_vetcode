@@ -65,7 +65,9 @@ const INSTALL_ODDITIES = [
     title: "Install script installs other packages", why: "Dependencies belong in package.json, where they are visible and locked. Installing extra packages from a script hides what ends up on the machine." },
   { id: "install-runs-test-file", re: /\b(?:node|nodejs|python\d?|sh|bash)\s+(?:-\S+\s+)*["']?(?:\.\/)?(?:[\w.-]+\/)*(?:tests?|__tests__|spec|fixtures?|__fixtures__|__mocks__)\/[\w./-]+/i,
     title: "Install script runs a file from the tests or fixtures", why: "Tests and fixtures are not part of installing a package. Pointing an install hook at them hides the code that runs where reviewers and scanners treat it as test material." },
-  { id: "install-background", re: /\bnode\s[^&|;]*\s&\s*(?:$|;)/,
+  { id: "install-hook-exfil", re: /\b(?:ping|nslookup|dig|host|curl|wget|nc|ncat|Invoke-WebRequest|iwr)\b[^\n]*(?:\$\{?(?:USER|USERNAME|HOSTNAME|HOME|LOGNAME|PWD|npm_package_name)\}?|\$\((?:whoami|hostname|pwd|id|uname[^)]*)\)|`(?:whoami|hostname|pwd)`|%(?:USERNAME|COMPUTERNAME|USERDOMAIN)%)|\b(?:ping|nslookup|dig|host|curl|wget)\b[^\n]*\b(?:burpcollaborator\.net|oast\.\w+|interact\.sh|dnslog\.cn|ceye\.io|requestbin|pipedream\.net|webhook\.site|canarytokens)/i,
+    title: "Install script sends who you are to a server", why: "Putting the user name, host name or working folder into a ping, DNS lookup or web request at install time is how dependency-confusion probes report which machine installed them." },
+  { id: "install-background", re: /\bnode\s[^&|;]*\s&\s*(?:$|;)|\bstart\s+\/B\b/i,
     title: "Install script keeps running in the background", why: "Detaching a process from the install lets it outlive the install and keep working unnoticed." },
 ];
 

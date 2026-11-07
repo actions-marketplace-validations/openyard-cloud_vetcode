@@ -19,6 +19,7 @@ import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
+import { decoded, payloads } from "./normalize.mjs";
 
 export const VERSION = "0.2.0";
 
@@ -27,6 +28,28 @@ export const VERSION = "0.2.0";
 export function diffRange(root, base) {
   const mb = spawnSync("git", ["merge-base", base, "HEAD"], { cwd: root, encoding: "utf8" });
   return mb.status === 0 ? [`${base}...HEAD`] : [base, "HEAD"];
+}
+
+// Code hidden from patterns: run the malware rules again on the file with split strings
+// joined and escapes decoded, and on base64 payloads it hands to eval/exec. Only what the
+// plain text did not already show is added, at the line where the hiding happens.
+function scanHidden(file, findings) {
+  const views = [];
+  const alt = decoded(file.text);
+  if (alt) views.push({ text: alt, how: "once its split strings are joined and escapes decoded" });
+  for (const p of payloads(file.text)) views.push({ text: p.text, line: p.line, how: "inside a base64 payload it runs" });
+  if (!views.length) return;
+  const seen = new Set(findings.filter(f => f.file === file.rel).map(f => f.rule));
+  for (const v of views) {
+    const found = [];
+    scanLines(file, v.text, MALWARE_RULES, found);
+    scanFile(file, v.text, MALWARE_FILE_RULES, found);
+    for (const f of found) {
+      if (seen.has(f.rule)) continue;
+      seen.add(f.rule);
+      findings.push({ ...f, line: v.line || f.line, title: `${f.title} (hidden)`, evidence: `${v.how}: ${f.evidence}`.slice(0, 160) });
+    }
+  }
 }
 
 /** Files changed against `base` (committed, staged, unstaged and untracked). */
@@ -78,6 +101,7 @@ export async function vet(target, opts = {}) {
     scanSecrets(file, file.text, findings);
     scanLines(file, file.text, MALWARE_RULES, findings);
     scanFile(file, file.text, MALWARE_FILE_RULES, findings);
+    scanHidden(file, findings);
     scanLines(file, file.text, WEB_RULES, findings);
     scanLines(file, file.text, LANG_RULES, findings);
     scanFile(file, file.text, ECOSYSTEM_FILE_RULES, findings);

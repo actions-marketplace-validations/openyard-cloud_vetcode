@@ -58,6 +58,37 @@ Latest results on fresh samples (never used for tuning):
 Each rule change is tuned on one seed and confirmed on a new one; differences of one or two
 points between seeds are normal.
 
+## Evasion: does it still catch the sample once it is disguised?
+
+`mutate.mjs` rewrites malicious samples the way attackers do to get past scanners, without
+running anything: string literals split and glued with `+`, written as `\xNN` escapes, the
+whole file packed into base64 and passed to `eval`/`exec`, JavaScript pushed 400 spaces off
+screen, code moved under `dist/`. The same clean packages go into every set, so tools with
+several verdicts are judged on their best one. `robustness.mjs` reports, of the samples a tool
+caught as they were, how many it still catches after each rewrite.
+
+```bash
+node bench/mutate.mjs --cache /tmp/vetcode-bench --out /tmp/vetcode-mutated --n 150
+for m in none split hex pack offscreen dist; do node bench/run.mjs --cache /tmp/vetcode-mutated/$m --out /tmp/mv-$m; done
+node bench/robustness.mjs --mut /tmp/vetcode-mutated --tool vetcode=/tmp/mv
+```
+
+For other tools, score the untouched set first, then pass its best verdict to every rewritten
+set with `rivals.mjs --verdict <name>` so the comparison uses one verdict throughout.
+
+Latest (npm seed 18 and PyPI seed 19, 150 malicious + 150 clean each; share of caught samples
+still caught):
+
+| | dist/ | hex | off screen | packed | split |
+|---|---|---|---|---|---|
+| vetcode, npm | 99.2%¹ | 100% | 100% | 100% | 100% |
+| GuardDog, npm | 100% | 99.2% | 100% | 92.2% | 99.2% |
+| vetcode, PyPI | 100% | 100% | – | 100% | 100% |
+| GuardDog, PyPI | 99.2% | 93.4% | – | 100% | 95.9% |
+
+¹ The one sample was moved outside its package by an earlier version of `mutate.mjs` (its
+install script no longer pointed at the moved file); fixed since.
+
 ## Advanced techniques (red team)
 
 ```bash

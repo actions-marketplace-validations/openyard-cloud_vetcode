@@ -35,14 +35,14 @@ export function decoded(text) {
 
 // eval(Buffer.from("…", "base64").toString()), eval(atob("…")), exec(base64.b64decode("…")),
 // exec(__import__("base64").b64decode("…")), exec(codecs.decode("…", "base64")).
-const PACKED = /\b(?:eval|exec|Function|execSync)\s*\(\s*(?:Buffer\.from\(\s*|atob\(\s*|(?:__import__\(\s*["']base64["']\s*\)|base64)\.b64decode\(\s*|codecs\.decode\(\s*)(["'])([A-Za-z0-9+/=\s\\]{40,}?)\1/g;
+const PACKED = /\b(?:eval|exec|Function|execSync)\s*\(\s*(?:Buffer\.from\(\s*|atob\(\s*|(?:__import__\(\s*["']base64["']\s*\)|base64)\.b64decode\(\s*|codecs\.decode\(\s*|(?:zlib|lzma|bz2|gzip)\.(?:decompress|inflateSync|gunzipSync|brotliDecompressSync|unzipSync|inflateRawSync)\(\s*(?:base64\.b64decode\(\s*|Buffer\.from\(\s*))(["'])([A-Za-z0-9+/=\s\\]{40,}?)\1/g;
 
 export function payloads(text, depth = 0) {
   const out = [];
   for (const m of text.matchAll(PACKED)) {
     const b64 = m[2].replace(/\\n|\s/g, "");
     let body;
-    try { body = Buffer.from(b64, "base64").toString("utf8"); } catch { continue; }
+    try { const bytes = Buffer.from(b64, "base64"); body = bytes.toString("utf8"); if (!printable(body)) body = inflate(bytes) || body; } catch { continue; }
     // Only text that looks like code: mostly printable, not a binary blob.
     if (!body || /[\x00-\x08\x0e-\x1f]/.test(body.slice(0, 2000))) continue;
     const line = text.slice(0, m.index).split("\n").length;
@@ -51,6 +51,18 @@ export function payloads(text, depth = 0) {
     if (depth < 2) for (const inner of payloads(body, depth + 1)) out.push({ line, text: inner.text });
   }
   return out;
+}
+
+import zlib from "node:zlib";
+
+// Compressed bytes (gzip, zlib, raw deflate, brotli) inflated with a hard cap, so a crafted
+// "bomb" cannot use up memory. Returns text or null.
+const CAP = 2 << 20;
+function inflate(buf) {
+  for (const fn of [b => zlib.gunzipSync(b, { maxOutputLength: CAP }), b => zlib.inflateSync(b, { maxOutputLength: CAP }), b => zlib.brotliDecompressSync(b, { maxOutputLength: CAP }), b => zlib.inflateRawSync(b, { maxOutputLength: CAP })]) {
+    try { const out = fn(buf).toString("utf8"); if (printable(out)) return out; } catch {}
+  }
+  return null;
 }
 
 // Long hex or base64 literals that decode (one or two layers) to something that reads like
@@ -63,8 +75,9 @@ function unwrap(lit) {
   for (let layer = 0; layer < 2; layer++) {
     const hex = /^(?:[0-9a-fA-F]{2})+$/.test(v), b64 = !hex && /^[A-Za-z0-9+/]+={0,2}$/.test(v) && v.length % 4 === 0;
     if (!hex && !b64) return null;
-    v = Buffer.from(v, hex ? "hex" : "base64").toString("utf8");
-    if (!printable(v)) return null;
+    const bytes = Buffer.from(v, hex ? "hex" : "base64");
+    v = bytes.toString("utf8");
+    if (!printable(v)) { v = inflate(bytes); if (v == null) return null; }
     if (CODELIKE.test(v)) return v;
     v = v.trim();
   }
@@ -72,7 +85,10 @@ function unwrap(lit) {
 }
 export function stashed(text) {
   const out = [];
-  for (const m of text.matchAll(/(["'`])([0-9a-fA-F]{200,}|[A-Za-z0-9+/]{200,}={0,2})\1/g)) {
+  let tries = 0;
+  // Compressed payloads are short, so the floor is low; the number of attempts per file is capped.
+  for (const m of text.matchAll(/(["'`])([0-9a-fA-F]{100,}|[A-Za-z0-9+/]{100,}={0,2})\1/g)) {
+    if (++tries > 200) break;
     const body = unwrap(m[2]);
     if (body) out.push({ line: text.slice(0, m.index).split("\n").length, text: body });
     if (out.length >= 5) break;

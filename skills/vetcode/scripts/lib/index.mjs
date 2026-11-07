@@ -37,8 +37,15 @@ function scanHidden(file, findings) {
   const views = [];
   const alt = decoded(file.text);
   if (alt) views.push({ text: alt, how: "once its split strings are joined and escapes decoded" });
-  for (const p of payloads(file.text)) views.push({ text: p.text, line: p.line, how: "inside a base64 payload it runs" });
-  for (const p of stashed(file.text)) views.push({ text: p.text, line: p.line, how: "inside an encoded string that decodes to code" });
+  // Payloads inside payloads (packed, then packed again): unwrap up to three layers.
+  const unwrapFrom = (text, line, depth) => {
+    for (const p of [...payloads(text).map(x => ({ ...x, how: "inside a base64 payload it runs" })), ...stashed(text).map(x => ({ ...x, how: "inside an encoded string that decodes to code" }))]) {
+      if (views.length > 20) return;
+      views.push({ text: p.text, line: line ?? p.line, how: p.how });
+      if (depth < 3) unwrapFrom(p.text, line ?? p.line, depth + 1);
+    }
+  };
+  unwrapFrom(file.text, undefined, 1);
   if (!views.length) return;
   const seen = new Set(findings.filter(f => f.file === file.rel).map(f => f.rule));
   for (const v of views) {

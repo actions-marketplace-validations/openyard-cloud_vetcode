@@ -13,12 +13,14 @@
 //   split     string literals cut in two and glued with +      ("child_" + "process")
 //   hex       string literals written as \xNN escapes          ("\x63\x68\x69...")
 //   pack      the whole file base64-encoded and run by eval/exec
+//   zpack     the same, compressed first (gzip / zlib)
 //   offscreen JavaScript lines pushed 400 spaces to the right  (rand-user-agent style)
 //   dist      code moved under dist/, where bundles live
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import zlib from "node:zlib";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const CACHE = path.resolve(arg("--cache", path.join(os.tmpdir(), "vetcode-bench")));
@@ -41,6 +43,11 @@ const MUTATIONS = {
     const b64 = Buffer.from(text).toString("base64");
     if (JS.test(rel)) return `eval(Buffer.from("${b64}", "base64").toString());\n`;
     return `exec(__import__("base64").b64decode("${b64}"))\n`;
+  },
+  zpack: (text, rel) => {
+    const gz = zlib.gzipSync(Buffer.from(text)).toString("base64");
+    if (JS.test(rel)) return `eval(require("zlib").gunzipSync(Buffer.from("${gz}", "base64")).toString());\n`;
+    return `exec(__import__("zlib").decompress(__import__("base64").b64decode("${zlib.deflateSync(Buffer.from(text)).toString("base64")}")))\n`;
   },
   offscreen: (text, rel) => JS.test(rel) ? text.split("\n").map(l => l.trim() ? " ".repeat(400) + l : l).join("\n") : text,
   dist: "move",

@@ -13,6 +13,7 @@ for (const p of parts) for (const r of p.results) {
   for (const t of Object.keys(r.metrics)) for (const k of ["tp", "fn", "fp", "tn"]) m.counts[t][k] += r.metrics[t][k];
   for (const key of ["rulesOnMalicious", "rulesOnBenign"]) for (const [id, n] of r[key]) m[key][id] = (m[key][id] || 0) + n;
   m.missed.push(...r.missed); m.falseAlarms.push(...r.falseAlarms);
+  (m.verdicts ||= new Set()).add(r.metrics.high?.verdict);
   merged.set(r.name, m);
 }
 const results = [...merged.values()].map(m => {
@@ -22,9 +23,12 @@ const results = [...merged.values()].map(m => {
     metrics[t] = { ...c, precision: p, recall: r, f1: 2 * p * r / (p + r || 1), accuracy: (c.tp + c.tn) / n, fpr: c.fp / (c.fp + c.tn || 1) };
   }
   const sort = o => Object.entries(o).sort((a, b) => b[1] - a[1]);
-  // Rival runs pick their best verdict after merging, so per-shard choices do not leak in.
+  // Rival runs pick their best verdict after merging, so per-shard choices do not leak in;
+  // when every shard used the same verdict (rivals.mjs --verdict), it stays.
   const named = Object.entries(metrics).filter(([k]) => k !== "high");
-  if (named.length > 1 && !metrics.critical) { const best = named.sort((a, b) => b[1].f1 - a[1].f1)[0]; metrics.high = { ...best[1], verdict: best[0] }; }
+  const fixed = m.verdicts.size === 1 && [...m.verdicts][0];
+  if (fixed && metrics[fixed]) metrics.high = { ...metrics[fixed], verdict: fixed };
+  else if (named.length > 1 && !metrics.critical) { const best = named.sort((a, b) => b[1].f1 - a[1].f1)[0]; metrics.high = { ...best[1], verdict: best[0] }; }
   return { name: m.name, samples: m.samples, metrics, rulesOnMalicious: sort(m.rulesOnMalicious), rulesOnBenign: sort(m.rulesOnBenign), missed: m.missed, falseAlarms: m.falseAlarms };
 });
 const order = ["npm", "pypi", "skills"];

@@ -19,6 +19,8 @@ const CACHE = path.resolve(arg("--cache", path.join(os.tmpdir(), "vetcode-bench"
 const OUT = path.resolve(arg("--out", "bench/results-rivals"));
 const ONLY = arg("--only", "npm,pypi").split(",");
 const [SHARD, SHARDS] = arg("--shard", "0/1").split("/").map(Number);
+// --verdict keeps one verdict across several runs (the evasion benchmark) instead of the best per run.
+const VERDICT = arg("--verdict", null);
 
 function unpack(file, into) {
   fs.mkdirSync(into, { recursive: true });
@@ -104,7 +106,7 @@ for (const eco of ["npm", "pypi"].filter(e => ONLY.includes(e) && TOOL === "guar
     const p = c.tp / (c.tp + c.fp || 1), rc = c.tp / (c.tp + c.fn || 1);
     metrics[v] = { ...c, precision: p, recall: rc, f1: 2 * p * rc / (p + rc || 1), accuracy: (c.tp + c.tn) / (rows.length || 1), fpr: c.fp / (c.fp + c.tn || 1) };
   }
-  const best = Object.entries(metrics).sort((a, b) => b[1].f1 - a[1].f1)[0];
+  const best = VERDICT && metrics[VERDICT] ? [VERDICT, metrics[VERDICT]] : Object.entries(metrics).sort((a, b) => b[1].f1 - a[1].f1)[0];
   metrics.high = { ...best[1], verdict: best[0] };
   for (const r of rows) r.flagged = r.verdicts[best[0]];
   const count = label => Object.entries(rows.filter(r => r.label === label).flatMap(r => r.rules).reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);

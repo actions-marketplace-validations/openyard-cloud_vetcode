@@ -2,3 +2,5 @@
 skills/vetcode/scripts/lib/
 tests/
 bench/redteam.mjs
+# Writes disguised copies of malware samples (eval of base64, hex escapes) to measure evasion.
+bench/mutate.mjs

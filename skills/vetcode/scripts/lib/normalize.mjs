@@ -53,8 +53,35 @@ export function payloads(text, depth = 0) {
   return out;
 }
 
+// Long hex or base64 literals that decode (one or two layers) to something that reads like
+// code: a payload kept aside to be run later, even when no eval sits next to it. Images,
+// fonts and wasm decode to binary and are skipped.
+const CODELIKE = /\brequire\s*\(|\bimport\s+[\w{*]|child_process|\bexec(?:Sync)?\s*\(|\beval\s*\(|\bsubprocess\b|\bos\.system\b|https?:\/\/|process\.env|\bsocket\b/;
+const printable = s => { if (!s) return false; let bad = 0; for (let i = 0; i < Math.min(s.length, 4000); i++) { const c = s.charCodeAt(i); if (c < 9 || (c > 13 && c < 32) || c === 0xfffd) bad++; } return bad / Math.min(s.length, 4000) < 0.02; };
+function unwrap(lit) {
+  let v = lit;
+  for (let layer = 0; layer < 2; layer++) {
+    const hex = /^(?:[0-9a-fA-F]{2})+$/.test(v), b64 = !hex && /^[A-Za-z0-9+/]+={0,2}$/.test(v) && v.length % 4 === 0;
+    if (!hex && !b64) return null;
+    v = Buffer.from(v, hex ? "hex" : "base64").toString("utf8");
+    if (!printable(v)) return null;
+    if (CODELIKE.test(v)) return v;
+    v = v.trim();
+  }
+  return null;
+}
+export function stashed(text) {
+  const out = [];
+  for (const m of text.matchAll(/(["'`])([0-9a-fA-F]{200,}|[A-Za-z0-9+/]{200,}={0,2})\1/g)) {
+    const body = unwrap(m[2]);
+    if (body) out.push({ line: text.slice(0, m.index).split("\n").length, text: body });
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
 /** The text plus its decoded view and any packed payloads, for checks that ask what a file can do. */
 export function expanded(text) {
-  const alt = decoded(text), packed = payloads(text);
+  const alt = decoded(text), packed = [...payloads(text), ...stashed(text)];
   return alt || packed.length ? [text, alt || "", ...packed.map(p => p.text)].join("\n") : text;
 }

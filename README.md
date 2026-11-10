@@ -2,9 +2,28 @@
 
 <h1 align="center">vetcode</h1>
 
-**A security check you can run before you trust code: your own app before it ships, or someone else's repo, package, extension or MCP server before you install it.**
+<p align="center"><b>Catch malicious packages, supply-chain attacks and leaked secrets before they reach your machine.</b><br>Zero dependencies. One command. Built for AI coding agents, works without one.</p>
 
-vetcode is an [Agent Skill](https://agentskills.io), an MCP server and a CLI, for Claude, Codex, Gemini, Copilot, Cursor and any other AI coding agent. A zero-dependency scanner finds candidates in seconds; then your agent reads the code around each one, traces where the data comes from, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, concrete attack scenarios and fixes.
+<p align="center">
+  <a href="https://github.com/openyard-cloud/vetcode/releases"><img alt="release" src="https://img.shields.io/github/v/release/openyard-cloud/vetcode?color=14665f"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-14665f"></a>
+  <img alt="zero dependencies" src="https://img.shields.io/badge/dependencies-0-14665f">
+  <a href="bench/README.md"><img alt="npm F1 96.1 vs GuardDog 93.0" src="https://img.shields.io/badge/npm%20malware%20F1-96.1%20(GuardDog%2093.0)-2dd4bf"></a>
+</p>
+
+<p align="center"><img src="assets/demo.svg" width="760" alt="vetcode scanning a credential-stealing npm package: 2 critical and 3 high findings"></p>
+
+```bash
+npx @openyard/vetcode .               # scan a project, a package or a cloned repo
+npx skills add openyard-cloud/vetcode # or give it to your AI agent as a skill
+```
+
+- **More accurate than GuardDog on fresh malware samples.** On 1,000 npm packages it never saw: F1 96.1 vs 93.0, with a quarter of the false alarms (1.6% vs 6.4%). On PyPI the gap is wider: 88–89 vs 80, with 4% false alarms vs 20%.
+- **Hard to fool.** It still catches 99–100% of the malware it caught after 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`). GuardDog loses up to 10%.
+- **One run, everything.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, and AI agent setups (skills, MCP servers, `CLAUDE.md`), in 8 languages.
+- **Reads, never runs.** Nothing from the target is installed, built or executed. Node 18+ and nothing else.
+
+vetcode is an [Agent Skill](https://agentskills.io), an MCP server, a CLI and a GitHub Action. A zero-dependency scanner finds candidates in seconds; then your agent (Claude, Codex, Gemini, Copilot, Cursor…) reads the code around each one, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, attack scenarios and fixes.
 
 Free and open source (MIT), from the [OpenYard](https://openyard.cloud) community.
 
@@ -16,12 +35,12 @@ Measured head to head: each tool scans exactly the same packages, drawn at rando
 
 | | Samples | F1 | Precision | Recall | False alarms |
 |---|---|---|---|---|---|
-| **npm**, vetcode | 500 malicious + 500 clean | **94.4** | **97.6** | **91.4** | **2.2%** |
-| npm, GuardDog | same | 93.3 | 95.4 | 91.2 | 4.4% |
-| **PyPI**, vetcode | 300 malicious + 216 clean | **86.4** | **93.4** | **80.3** | **7.9%** |
-| PyPI, GuardDog | same | 78.3 | 78.5 | 78.0 | 29.6% |
+| **npm**, vetcode | 500 malicious + 499 clean | **96.1** | **98.3** | **94.0** | **1.6%** |
+| npm, GuardDog | same | 93.0 | 93.5 | 92.4 | 6.4% |
+| **PyPI**, vetcode | 300 malicious + 152 clean | **89.2** | **96.5** | **83.0** | **5.9%** |
+| PyPI, GuardDog | same | 85.0 | 87.9 | 82.3 | 22.4% |
 
-npm samples come from [NPMAnalysis](https://github.com/lxyeternal/NPMAnalysis), the dataset whose paper ranks GuardDog first among 13 detectors. PyPI malware comes from the [Datadog dataset](https://github.com/DataDog/malicious-software-packages-dataset); the clean side is popular packages from pypi.org. On npm the two are close: a one-point gap is within the variation between samples. On PyPI vetcode is clearly ahead, mostly because it raises a quarter as many false alarms.
+npm samples come from [NPMAnalysis](https://github.com/lxyeternal/NPMAnalysis), the dataset whose paper ranks GuardDog first among 13 detectors. PyPI malware comes from the [Datadog dataset](https://github.com/DataDog/malicious-software-packages-dataset); the clean side is popular packages from pypi.org. On PyPI vetcode has led on every fresh sample, mostly because it raises a quarter as many false alarms. On npm it is closer: vetcode led on most fresh samples, but GuardDog came out ahead on three smaller ones by up to 1.1 F1 points. The [full history](bench/README.md) lists every run, including those.
 
 **Malicious agent skills, vetcode vs [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner)**, both without an LLM, on 204 malicious skills (Datadog) and 132 clean ones (Anthropic, Trail of Bits, obra/superpowers):
 
@@ -34,7 +53,7 @@ Rules alone catch a minority of malicious skills for every tool; most of them ar
 
 **Also measured**
 
-- **Disguised malware:** once samples are rewritten the way attackers dodge scanners (split strings, `\xNN` escapes, base64-packed `eval`/`exec`, code pushed off screen or moved into `dist/`), vetcode still catches 99–100% of what it caught before; GuardDog drops to 92% on packed npm samples and 93% on hex-escaped PyPI ones (`bench/mutate.mjs`).
+- **Disguised malware:** once samples are rewritten the way attackers dodge scanners (split strings, `\xNN` escapes, `String.fromCharCode`/`chr()` building, reversed strings, base64- or gzip-packed `eval`/`exec`, code pushed off screen or moved into `dist/`), vetcode still catches 99–100% of what it caught before; GuardDog drops to 90–92% on several of them (`bench/mutate.mjs`).
 - **Speed:** on the same 30 PyPI packages (659 MB), GuardDog took 1,104 s and vetcode 299 s; vetcode has since become another third faster.
 - **Techniques the datasets barely contain:** 15 of 15 caught from 2021–2026 campaigns, each next to a clean look-alike that is not flagged (`bench/redteam.mjs`): code pushed off-screen in `dist/`, GlassWorm Unicode payloads, payloads in images, protestware, time bombs, sandbox evasion, homoglyphs, disguised executables, recon beacons, ClawHavoc-style skills, a Visual Studio project that runs encoded PowerShell at build, a Rust build script that steals SSH keys, a Go module whose init() opens a shell.
 - **Breadth:** one run covers malware, supply chain, secrets, web and API code, server and cloud configuration, CI/CD and AI agent setups. GuardDog covers malicious packages; Cisco skill-scanner covers skills.
@@ -169,7 +188,8 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-node skills/vetcode/scripts/vet.mjs [path] [options]
+npx @openyard/vetcode [path] [options]             # from npm (installed, the command is `vetcode`)
+node skills/vetcode/scripts/vet.mjs [path] [options] # from a clone
 ```
 
 | Option | |

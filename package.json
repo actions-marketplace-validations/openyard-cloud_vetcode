@@ -1,20 +1,51 @@
 {
-  "name": "vetcode",
+  "name": "@openyard/vetcode",
   "version": "0.3.0",
-  "private": true,
-  "description": "Security check for apps, websites and servers, for any AI coding agent: Agent Skill, MCP server and CLI.",
-  "type": "module",
+  "description": "Catch malicious packages, supply-chain attacks and leaked secrets before they reach your machine. Zero dependencies. CLI, MCP server, Agent Skill and GitHub Action.",
+  "keywords": [
+    "security",
+    "malware",
+    "malware-detection",
+    "supply-chain-security",
+    "npm-security",
+    "pypi",
+    "secret-scanning",
+    "sast",
+    "mcp",
+    "agent-skills",
+    "claude",
+    "guarddog-alternative"
+  ],
+  "homepage": "https://openyard.cloud/p/vetcode",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openyard-cloud/vetcode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/openyard-cloud/vetcode/issues"
+  },
   "license": "MIT",
+  "type": "module",
   "engines": {
     "node": ">=18"
   },
+  "bin": {
+    "vetcode": "skills/vetcode/scripts/vet.mjs",
+    "vetcode-mcp": "mcp/server.mjs"
+  },
+  "files": [
+    "skills/",
+    "mcp/",
+    "assets/demo.svg",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "scan": "node skills/vetcode/scripts/vet.mjs",
     "zip": "cd skills && rm -f ../vetcode-skill.zip && zip -qr ../vetcode-skill.zip vetcode"
   },
-  "bin": {
-    "vetcode": "skills/vetcode/scripts/vet.mjs",
-    "vetcode-mcp": "mcp/server.mjs"
+  "publishConfig": {
+    "access": "public"
   }
 }

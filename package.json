@@ -1,6 +1,6 @@
 {
   "name": "vetcode",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Security check for apps, websites and servers, for any AI coding agent: Agent Skill, MCP server and CLI.",
   "type": "module",

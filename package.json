@@ -1,5 +1,5 @@
 {
-  "name": "vetcode",
+  "name": "@openyard/vetcode",
   "version": "0.3.0",
   "description": "Catch malicious packages, supply-chain attacks and leaked secrets before they reach your machine. Zero dependencies. CLI, MCP server, Agent Skill and GitHub Action.",
   "keywords": [
@@ -44,5 +44,8 @@
     "test": "node --test tests/*.test.mjs",
     "scan": "node skills/vetcode/scripts/vet.mjs",
     "zip": "cd skills && rm -f ../vetcode-skill.zip && zip -qr ../vetcode-skill.zip vetcode"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

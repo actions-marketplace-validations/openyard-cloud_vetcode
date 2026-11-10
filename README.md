@@ -14,7 +14,7 @@
 <p align="center"><img src="assets/demo.svg" width="760" alt="vetcode scanning a credential-stealing npm package: 2 critical and 3 high findings"></p>
 
 ```bash
-npx vetcode .                         # scan a project, a package or a cloned repo
+npx @openyard/vetcode .               # scan a project, a package or a cloned repo
 npx skills add openyard-cloud/vetcode # or give it to your AI agent as a skill
 ```
 
@@ -188,7 +188,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx vetcode [path] [options]                       # from npm
+npx @openyard/vetcode [path] [options]             # from npm (installed, the command is `vetcode`)
 node skills/vetcode/scripts/vet.mjs [path] [options] # from a clone
 ```
 

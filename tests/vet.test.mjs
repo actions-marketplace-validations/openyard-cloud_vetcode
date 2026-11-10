@@ -619,7 +619,7 @@ test("MCP server: initialize, list tools, scan, guide, errors", async () => {
 
 test("MCP configs pinned to a git tag or commit are not reported as unpinned", async () => {
   const dir = project({ ".mcp.json": JSON.stringify({ mcpServers: {
-    a: { command: "npx", args: ["-y", "-p", "github:openyard-cloud/vetcode#v0.2.0", "vetcode-mcp"] },
+    a: { command: "npx", args: ["-y", "-p", "github:openyard-cloud/vetcode#v0.3.0", "vetcode-mcp"] },
     b: { command: "npx", args: ["-y", "github:someone/tool#3f2a9c1"] },
     c: { command: "npx", args: ["-y", "github:someone/tool"] },
   } }) });

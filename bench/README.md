@@ -120,3 +120,43 @@ PowerShell build event, a Rust build script that steals SSH keys, a Go init() re
 each next to a clean look-alike.
 Samples are generated at run time and carry no working payload. The set was built
 alongside the rules, so it measures coverage, not an independent detection rate.
+
+## The agent step: authorization and business logic
+
+```bash
+node bench/agent.mjs --scanner-only               # free: the scanner alone
+node bench/agent.mjs --runs 2 --jobs 4 --out bench/results/<date>-agent.json   # + Claude Code
+node bench/agent.mjs --rescore bench/results/<date>-agent.json                   # score saved runs again
+```
+
+Ten small Express and Flask apps, each with one planted bug that patterns cannot see:
+
+- IDOR on an invoice;
+- an admin route without the admin check;
+- mass assignment of `role`;
+- a price taken from the client;
+- a negative transfer amount;
+- a single-use coupon that can be redeemed again;
+- a reset token that is not tied to its account;
+- a tenant chosen by a header;
+- IDOR in Flask;
+- a refund on an order in any state.
+
+Each app sits next to a fixed look-alike that differs only in the fix.
+
+The agent gets a neutral temp folder and is told only to do a vetcode review of its own app. It never learns which bug class to look for. A finding counts when it meets all of these:
+- it is in the right file;
+- it has a matching class;
+- its title names the planted bug;
+- it is reported at medium or above.
+
+Results from 2026-11-10, Claude Code with its default model, 2 runs per app:
+
+| | Caught (vulnerable apps) | Same bug reported on the fix |
+|---|---|---|
+| Scanner alone | 1/10 | 0/10 |
+| Scanner + agent | **20/20** | **0/20** |
+
+The agent also reported one further real weakness on a fixed app: a password reset that leaves existing sessions valid. In the first run, it showed that the first "fixed" checkout still let a negative quantity lower the total. The case was corrected so that each app has exactly one bug, and that case was run again. The cost was about $0.33 per review.
+
+**Read this as a check that the review step works, not as a detection rate.** We wrote these apps ourselves. Each holds one bug in about 20 lines, which is far easier than a real codebase, and the model may have seen similar textbook examples. The independent measure is real advisories with their fix commits, published after the model's training cutoff. That is the next step.

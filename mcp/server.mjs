@@ -39,19 +39,19 @@ const TOOLS = [
       required: ["path"],
       additionalProperties: false,
     },
-    annotations: { title: "vetcode scan", readOnlyHint: true, openWorldHint: false },
+    annotations: { title: "vetcode scan", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   },
   {
     name: "vetcode_guide",
     description: "How to do a vetcode security review: pick the scan mode, confirm each candidate with an exploit scenario, review what patterns cannot see, and write the report. Read this before reporting findings.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
-    annotations: { title: "vetcode review guide", readOnlyHint: true },
+    annotations: { title: "vetcode review guide", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "vetcode_reference",
     description: "A manual-review checklist: malware (how attacks hide and how to analyse them safely), web (auth, IDOR, input handling, payments, LLM features), server (deployment, containers, cloud and BaaS), secrets (where they leak, how to rotate).",
     inputSchema: { type: "object", properties: { topic: { type: "string", enum: TOPICS } }, required: ["topic"], additionalProperties: false },
-    annotations: { title: "vetcode checklist", readOnlyHint: true },
+    annotations: { title: "vetcode checklist", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
 ];
 

@@ -1,6 +1,6 @@
 {
   "name": "vetcode",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Security check for apps, websites and servers: malware and supply-chain attacks, leaked secrets, web/API vulnerabilities and server misconfiguration, confirmed by reading the code.",
   "author": {
     "name": "OpenYard",

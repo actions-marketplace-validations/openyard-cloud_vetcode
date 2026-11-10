@@ -610,6 +610,9 @@ test("MCP server: initialize, list tools, scan, guide, errors", async () => {
   const out = Object.fromEntries(r.stdout.trim().split("\n").map(l => JSON.parse(l)).map(m => [m.id, m]));
   assert.equal(out[1].result.serverInfo.name, "vetcode");
   assert.deepEqual(out[2].result.tools.map(t => t.name), ["vetcode_scan", "vetcode_guide", "vetcode_reference"]);
+  for (const t of out[2].result.tools)
+    for (const h of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"])
+      assert.equal(typeof t.annotations[h], "boolean", `${t.name} declares ${h}`);
   assert.ok(out[3].result.structuredContent.findings.some(f => f.rule === "mal-eval-decoded"));
   assert.match(out[4].result.content[0].text, /Malware and supply-chain attacks/);
   assert.equal(out[5].result.isError, true);

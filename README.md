@@ -270,7 +270,9 @@ The scanner is regex and heuristics: fast, offline, explainable, and noisy on pu
 
 It is not a guarantee. New malware, logic bugs and infrastructure outside the repository can still slip through. Treat a clean report as "nothing obvious found".
 
-**Privacy:** everything runs locally. Only with `--online` are package names and versions sent to OSV.dev. Secrets are redacted in every report.
+**Privacy:** the scanner runs locally and sends no code anywhere. Only with `--online` does it reach the network: package names and versions go to OSV.dev, and installed semgrep, osv-scanner and trivy run with their own network access (semgrep downloads its rules). Secrets are redacted in every report. The review step is different: your agent reads the code, so that code goes to whichever model provider the agent uses (Anthropic, OpenAI, Google…), under that provider's terms. For code that must not leave the machine, run the scanner alone, or use an agent backed by a local model.
+
+**What runs when.** Built in, always: every check listed above, including secrets, containers and infrastructure files. Automatically when installed: gitleaks and zizmor (`--no-tools` turns them off). Only with `--online`: OSV.dev, semgrep, osv-scanner and trivy.
 
 ## Learning from others
 

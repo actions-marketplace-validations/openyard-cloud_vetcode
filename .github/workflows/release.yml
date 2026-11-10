@@ -79,4 +79,13 @@ jobs:
           v="$(node -p 'require("./package.json").version')"
           if npm view "$name@$v" version >/dev/null 2>&1; then echo "$name@$v is already on npm"; exit 0; fi
           npm install -g npm@latest
+          set +e
           npm publish --provenance --access public
+          code=$?
+          set -e
+          if [ $code -ne 0 ]; then
+            # A registry refusal (for example while npm holds the package for review) shows as a
+            # warning, not a failed release: the tag and the GitHub release above are done.
+            # Run this workflow again by hand once npm accepts the package.
+            echo "::warning title=npm publish refused::$name@$v was not published to npm (exit $code). The GitHub release is done; run Release again by hand once npm accepts the package."
+          fi

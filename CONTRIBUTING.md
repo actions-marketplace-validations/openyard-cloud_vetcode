@@ -23,3 +23,7 @@ A rule is plain data: `id`, `category`, `severity`, `title`, a regex `re` (or a 
 - Before opening a pull request: `npm test` and `node skills/vetcode/scripts/vet.mjs . --fail-on high`.
 
 Changes go through pull requests; `main` is protected.
+
+## Releasing
+
+Raise the version in all five places (`package.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `skills/vetcode/SKILL.md`, `skills/vetcode/scripts/lib/index.mjs`) and the `#vX.Y.Z` pins in the README, then merge to main. The Release workflow tags the version, publishes the GitHub release with `vetcode-skill.zip`, and publishes `@openyard/vetcode` to npm. Pushes that keep the same version do nothing.

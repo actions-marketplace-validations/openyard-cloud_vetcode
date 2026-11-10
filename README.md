@@ -9,6 +9,7 @@
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-14665f"></a>
   <img alt="zero dependencies" src="https://img.shields.io/badge/dependencies-0-14665f">
   <a href="bench/README.md"><img alt="npm F1 96.1 vs GuardDog 93.0" src="https://img.shields.io/badge/npm%20malware%20F1-96.1%20(GuardDog%2093.0)-2dd4bf"></a>
+  <a href="https://openyard.cloud/p/vetcode#check"><img alt="OpenYard code check" src="https://openyard.cloud/badge/vetcode.svg"></a>
 </p>
 
 <p align="center"><img src="assets/demo.svg" width="760" alt="vetcode scanning a credential-stealing npm package: 2 critical and 3 high findings"></p>

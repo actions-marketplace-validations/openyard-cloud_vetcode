@@ -1,0 +1,951 @@
+[
+ {
+  "ghsa": "GHSA-22jm-h49p-29qw",
+  "eco": "npm",
+  "published": "2026-10-20",
+  "fixed": "2026-10-02",
+  "severity": "high",
+  "cwes": [
+   "CWE-639",
+   "CWE-862"
+  ],
+  "summary": "MCP TypeScript SDK: Experimental tasks were not tied to the session that created them",
+  "repo": "modelcontextprotocol/typescript-sdk",
+  "fix": "727075b5bbeb77fbea22041b36b72a73042160fa",
+  "vulnerable": "0ff63772dae796f41578ace47f7c814f4d86fa24",
+  "files": [
+   "src/experimental/tasks/interfaces.ts",
+   "src/experimental/tasks/stores/in-memory.ts",
+   "src/shared/protocol.ts"
+  ],
+  "scope": "src"
+ },
+ {
+  "ghsa": "GHSA-26r5-4mm2-px5c",
+  "eco": "go",
+  "published": "2026-09-23",
+  "fixed": "2026-07-13",
+  "severity": "high",
+  "cwes": [
+   "CWE-841"
+  ],
+  "summary": "Klever-Go: Zombie-order theft: `Buy` missing `IsClaimed` guard in native marketplace",
+  "repo": "klever-io/klever-go",
+  "fix": "063bb3ed98f9a84a4b1f7286680613a5fc3c91b2",
+  "vulnerable": "f54ea730cc80a3ba4f906586a7d221b281548190",
+  "files": [
+   "core/kapp/market/market.go"
+  ],
+  "scope": "core/kapp/market"
+ },
+ {
+  "ghsa": "GHSA-2724-6cpj-gf3v",
+  "eco": "pip",
+  "published": "2026-09-10",
+  "fixed": "2026-08-24",
+  "severity": "high",
+  "cwes": [
+   "CWE-269",
+   "CWE-863"
+  ],
+  "summary": "Open WebUI: Non-admin users can delete admin-owned external knowledge connections via knowledge base deletion",
+  "repo": "open-webui/open-webui",
+  "fix": "dc03e7e595d61be97b25a1dd7bb99ad264f73199",
+  "vulnerable": "6b438f1a79716048f81659f175891ff06ec77e0d",
+  "files": [
+   "backend/open_webui/routers/knowledge.py"
+  ],
+  "scope": "backend/open_webui/routers"
+ },
+ {
+  "ghsa": "GHSA-2phh-27fw-q4gc",
+  "eco": "composer",
+  "published": "2026-10-27",
+  "fixed": "2026-09-16",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863",
+   "CWE-918"
+  ],
+  "summary": "PhpSpreadsheet: SSRF whitelist bypass via unre-validated HTTP redirect in Drawing::setPath external image loading",
+  "repo": "PHPOffice/PhpSpreadsheet",
+  "fix": "299993894dce37aa3b64aa23e9a3f4bb77ab0e66",
+  "vulnerable": "3d5637a6964aff5be3dcf9bf6f7c3308c780f62a",
+  "files": [
+   "src/PhpSpreadsheet/Reader/Ods.php",
+   "src/PhpSpreadsheet/Reader/Security/XmlScanner.php",
+   "src/PhpSpreadsheet/Worksheet/Drawing.php"
+  ],
+  "scope": "src/PhpSpreadsheet"
+ },
+ {
+  "ghsa": "GHSA-4825-p4xm-pcf2",
+  "eco": "rubygems",
+  "published": "2026-09-22",
+  "fixed": "2026-07-20",
+  "severity": "high",
+  "cwes": [
+   "CWE-639"
+  ],
+  "summary": "Spree: Broken Access Control in `PATCH /api/v3/store/carts/:id/associate` (IDOR)",
+  "repo": "spree/spree",
+  "fix": "8834230a1f47bb5988f23f45dbd162776cf592bd",
+  "vulnerable": "c281af5b7978cee49157b994cc60b195529875b2",
+  "files": [
+   "spree/api/app/controllers/spree/api/v3/store/carts_controller.rb"
+  ],
+  "scope": "spree/api/app/controllers/spree/api/v3/store"
+ },
+ {
+  "ghsa": "GHSA-5f42-97gr-vfhq",
+  "eco": "maven",
+  "published": "2026-09-23",
+  "fixed": "2026-08-01",
+  "severity": "critical",
+  "cwes": [
+   "CWE-155",
+   "CWE-863"
+  ],
+  "summary": "Moquette: Pattern-ACL wildcard injection (cross-tenant authorization bypass) plus a remote-unauthenticated DoS cluster, a Will-message authorization bypass, and a cross-session durable-corruption bug",
+  "repo": "moquette-io/moquette",
+  "fix": "14a2f4fd280c8f6a791600c306cbccecb7c67007",
+  "vulnerable": "2482cadfba44e615be704b892009a57ce06a1aba",
+  "files": [
+   "broker/src/main/java/io/moquette/broker/Server.java"
+  ],
+  "scope": "broker/src/main/java/io/moquette/broker"
+ },
+ {
+  "ghsa": "GHSA-848m-r628-vrxw",
+  "eco": "rust",
+  "published": "2026-09-04",
+  "fixed": "2026-07-01",
+  "severity": "high",
+  "cwes": [
+   "CWE-639",
+   "CWE-862"
+  ],
+  "summary": "SurrealDB: Custom API route lets authenticated callers override namespace/database scope via URL path",
+  "repo": "surrealdb/surrealdb",
+  "fix": "0938f88d196dc4eb11a82af343df3fffe9c195e2",
+  "vulnerable": "ff8a86ffff2e2b7d74089c1aa41669535e111c72",
+  "files": [
+   "surrealdb/core/src/api/invocation.rs",
+   "surrealdb/core/src/iam/auth.rs",
+   "surrealdb/core/src/kvs/ds.rs"
+  ],
+  "scope": "surrealdb/core/src"
+ },
+ {
+  "ghsa": "GHSA-wr57-hqmp-fgvh",
+  "eco": "nuget",
+  "published": "2026-09-17",
+  "fixed": "2026-07-07",
+  "severity": "high",
+  "cwes": [
+   "CWE-200",
+   "CWE-862"
+  ],
+  "summary": "Umbraco: Delivery API leaks protected (Public Access) content through Content Picker / Multi-Node Tree Picker expansion",
+  "repo": "umbraco/Umbraco-CMS",
+  "fix": "26312a3f717a0f33bb3d7d28b14bef3592bdb0fe",
+  "vulnerable": "e6ce8bb562f34323a044ffc6eb3d12e82c303356",
+  "files": [
+   "src/Umbraco.Cms.Api.Common/Rendering/ElementOnlyOutputExpansionStrategy.cs",
+   "src/Umbraco.Cms.Api.Delivery/Rendering/RequestContextOutputExpansionStrategyV2.cs"
+  ],
+  "scope": "src"
+ },
+ {
+  "ghsa": "GHSA-3p64-6gvh-82v5",
+  "eco": "npm",
+  "published": "2026-08-17",
+  "fixed": "2026-07-06",
+  "severity": "medium",
+  "cwes": [
+   "CWE-862"
+  ],
+  "summary": "MLflow: LogInputs endpoint bypasses per-run UPDATE authorization in basic-auth",
+  "repo": "mlflow/mlflow",
+  "fix": "5c34aec5669e2386b38b5ee0855cd61174e27693",
+  "vulnerable": "4a5b53a2cb0a91432714a7909dbc1c0b8eb8a51d",
+  "files": [
+   "mlflow/server/auth/__init__.py"
+  ],
+  "scope": "mlflow/server/auth"
+ },
+ {
+  "ghsa": "GHSA-32r8-5843-4qw2",
+  "eco": "go",
+  "published": "2026-10-09",
+  "fixed": "2026-08-04",
+  "severity": "high",
+  "cwes": [
+   "CWE-639",
+   "CWE-843",
+   "CWE-863"
+  ],
+  "summary": "Vikunja: Link-share principal-type confusion enables cross-account team removal, bot takeover, and roster disclosure",
+  "repo": "go-vikunja/vikunja",
+  "fix": "a717d64d5658708ba390f18dd697f5e567e68aac",
+  "vulnerable": "6ffe265efa60aa450f5ed98e817a2529241bd59e",
+  "files": [
+   "pkg/models/bot_users.go",
+   "pkg/models/bot_users_permissions.go",
+   "pkg/models/team_members_permissions.go",
+   "pkg/models/teams_permissions.go",
+   "pkg/models/webhooks_permissions.go"
+  ],
+  "scope": "pkg/models"
+ },
+ {
+  "ghsa": "GHSA-2phq-3phc-84px",
+  "eco": "pip",
+  "published": "2026-10-05",
+  "fixed": "2026-09-03",
+  "severity": "medium",
+  "cwes": [
+   "CWE-639"
+  ],
+  "summary": "vLLM: Flash late-interaction scoring caches query embeddings under a caller-controlled request id — cross-request integrity break and induced errors on `/score` and `/rerank`",
+  "repo": "vllm-project/vllm",
+  "fix": "ee17d0d869203ef9a35ad73358a4987bba14b1fc",
+  "vulnerable": "3f1af35e012a283a58caf17216c108d8fca9e6c5",
+  "files": [
+   "vllm/entrypoints/pooling/scoring/serving.py",
+   "vllm/entrypoints/pooling/typing.py"
+  ],
+  "scope": "vllm/entrypoints/pooling"
+ },
+ {
+  "ghsa": "GHSA-44r8-3p76-84mw",
+  "eco": "composer",
+  "published": "2026-11-09",
+  "fixed": "2026-08-13",
+  "severity": "medium",
+  "cwes": [
+   "CWE-862"
+  ],
+  "summary": "FileGator: Missing authorization in POST /upload allows cross-user read and deletion of temporary files",
+  "repo": "filegator/filegator",
+  "fix": "cae442a8323fddae7c8cee0924cdbb1aa6eea702",
+  "vulnerable": "d876ac382530ece4efaddd5c1257ae6858f2b376",
+  "files": [
+   "backend/Controllers/UploadController.php"
+  ],
+  "scope": "backend/Controllers"
+ },
+ {
+  "ghsa": "GHSA-5p9g-j988-pcwv",
+  "eco": "rubygems",
+  "published": "2026-07-30",
+  "fixed": "2026-07-07",
+  "severity": "high",
+  "cwes": [
+   "CWE-284"
+  ],
+  "summary": "MCP Ruby SDK: Ruby SSE Session Poisoning",
+  "repo": "modelcontextprotocol/ruby-sdk",
+  "fix": "35466605319a34e4c7808712ae9bb1ca1afb2356",
+  "vulnerable": "4b400be6ed0327dcec1f4563fb661edf3c585e30",
+  "files": [
+   "lib/mcp/server/transports/streamable_http_transport.rb"
+  ],
+  "scope": "lib/mcp/server/transports"
+ },
+ {
+  "ghsa": "GHSA-8xjq-pr36-ccgf",
+  "eco": "maven",
+  "published": "2026-08-28",
+  "fixed": "2026-07-13",
+  "severity": "medium",
+  "cwes": [
+   "CWE-284",
+   "CWE-862"
+  ],
+  "summary": "Yamcs: Insecure Direct Object Reference (IDOR) in PacketsApi allows unprivileged users to dump all telemetry packets",
+  "repo": "yamcs/yamcs",
+  "fix": "b566beceba98cc35514b0e1519be126b8c5a0438",
+  "vulnerable": "b65a3d78178ba99a58b753feda6ecc3b5a694f13",
+  "files": [
+   "yamcs-core/src/main/java/org/yamcs/http/api/PacketsApi.java"
+  ],
+  "scope": "yamcs-core/src/main/java/org/yamcs/http/api"
+ },
+ {
+  "ghsa": "GHSA-g74g-rg72-j2p3",
+  "eco": "rust",
+  "published": "2026-10-15",
+  "fixed": "2026-07-25",
+  "severity": "high",
+  "cwes": [
+   "CWE-78",
+   "CWE-284"
+  ],
+  "summary": "mise permits untrusted local configuration to override default shell arguments",
+  "repo": "jdx/mise",
+  "fix": "c6cd7a9a2ca580918562566126646e5d04317895",
+  "vulnerable": "0e19415015caf3629636f1fe214af31e395462f4",
+  "files": [
+   "src/config/settings.rs"
+  ],
+  "scope": "src/config"
+ },
+ {
+  "ghsa": "GHSA-43r2-c7g8-prc8",
+  "eco": "npm",
+  "published": "2026-10-23",
+  "fixed": "2026-07-01",
+  "severity": "medium",
+  "cwes": [
+   "CWE-200",
+   "CWE-863"
+  ],
+  "summary": "obsidian-tc Bridge tools leak denied-note data via unfiltered sibling fields",
+  "repo": "The-40-Thieves/obsidian-tc",
+  "fix": "5ab2109274acf0070601fa71a62b14ddc9652309",
+  "vulnerable": "6428bfe6fdfd43aa7b4b369be3aecd6a268fb928",
+  "files": [
+   "packages/server/src/tools/m4/makemd-tools.ts",
+   "packages/server/src/tools/m4/tasks-tools.ts",
+   "packages/server/src/tools/m4/templater-tools.ts"
+  ],
+  "scope": "packages/server/src/tools/m4"
+ },
+ {
+  "ghsa": "GHSA-36v8-mpjm-8j5r",
+  "eco": "go",
+  "published": "2026-09-03",
+  "fixed": "2026-07-21",
+  "severity": "high",
+  "cwes": [
+   "CWE-862"
+  ],
+  "summary": "SiYuan: Cross-boundary content disclosure via getBacklinkDoc/getBackmentionDoc (publish mode): reader-reachable rendered DOM of publish-forbidden docs; sibling list endpoints are filtered",
+  "repo": "siyuan-note/siyuan",
+  "fix": "f45749a7ef6e385f6e2af6b7dd12429d56d46f32",
+  "vulnerable": "69db783b782aea865ea70a1c5ab656e5c0f3dadb",
+  "files": [
+   "kernel/api/ref.go",
+   "kernel/model/publish_access.go"
+  ],
+  "scope": "kernel"
+ },
+ {
+  "ghsa": "GHSA-3cg5-48j3-v4gv",
+  "eco": "pip",
+  "published": "2026-08-04",
+  "fixed": "2026-07-27",
+  "severity": "high",
+  "cwes": [
+   "CWE-862",
+   "CWE-863"
+  ],
+  "summary": "Open WebUI: A folder write-collaborator can permanently delete the owner's chats by deleting a shared subfolder",
+  "repo": "open-webui/open-webui",
+  "fix": "915ef7d0798d3175819cedbb2f62d7bf0db78c98",
+  "vulnerable": "305880f2e2aeb2dda2f4b2a18a20bdcd558f7134",
+  "files": [
+   "backend/open_webui/routers/folders.py"
+  ],
+  "scope": "backend/open_webui/routers"
+ },
+ {
+  "ghsa": "GHSA-584p-f93j-wpgc",
+  "eco": "composer",
+  "published": "2026-09-23",
+  "fixed": "2026-07-09",
+  "severity": "high",
+  "cwes": [
+   "CWE-639",
+   "CWE-862"
+  ],
+  "summary": "Formie: Unauthenticated users can overwrite incomplete submissions via submit action",
+  "repo": "verbb/formie",
+  "fix": "323c2fe647a76fbccadf749728ee4ad9420efee1",
+  "vulnerable": "9f4e23c36b907ed7677563231eaba373fdb8b84b",
+  "files": [
+   "src/controllers/SubmissionsController.php"
+  ],
+  "scope": "src/controllers"
+ },
+ {
+  "ghsa": "GHSA-9jjc-fw8x-fmwx",
+  "eco": "maven",
+  "published": "2026-09-18",
+  "fixed": "2026-07-17",
+  "severity": "high",
+  "cwes": [
+   "CWE-862"
+  ],
+  "summary": "io.moquette:moquette-broker has a Missing Authorization issue",
+  "repo": "moquette-io/moquette",
+  "fix": "e23df019f6a11e22c7d2047d4f86d07095466c97",
+  "vulnerable": "3f2e023913f0febc72181ffd39aa46fbaa15d47b",
+  "files": [
+   "broker/src/main/java/io/moquette/broker/PostOffice.java"
+  ],
+  "scope": "broker/src/main/java/io/moquette/broker"
+ },
+ {
+  "ghsa": "GHSA-m65r-rprj-r5rg",
+  "eco": "rust",
+  "published": "2026-08-03",
+  "fixed": "2026-07-31",
+  "severity": "medium",
+  "cwes": [
+   "CWE-666",
+   "CWE-696",
+   "CWE-863"
+  ],
+  "summary": "Russh: Channel-scoped server callbacks can be reached without an open channel",
+  "repo": "Eugeny/russh",
+  "fix": "7c5659f8cf6f6f2f9989d12dba0ebf49dc50a171",
+  "vulnerable": "de96ad1ecb1f6658b78e14ac54c15bca155f61c6",
+  "files": [
+   "russh/src/server/encrypted.rs"
+  ],
+  "scope": "russh/src/server"
+ },
+ {
+  "ghsa": "GHSA-472h-9c5j-prrr",
+  "eco": "npm",
+  "published": "2026-10-07",
+  "fixed": "2026-09-15",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863"
+  ],
+  "summary": "Backstage: Inconsistent credential enforcement for overlapping proxy routes",
+  "repo": "backstage/backstage",
+  "fix": "9df92923ac32558bb80edeceafd8de780c44e218",
+  "vulnerable": "989db63b6f87c8fc04d440f296ad89e10c79b363",
+  "files": [
+   "plugins/proxy-backend/src/plugin.ts",
+   "plugins/proxy-backend/src/service/router.ts"
+  ],
+  "scope": "plugins/proxy-backend/src"
+ },
+ {
+  "ghsa": "GHSA-3cm4-ccvw-6xr6",
+  "eco": "go",
+  "published": "2026-10-05",
+  "fixed": "2026-08-16",
+  "severity": "medium",
+  "cwes": [
+   "CWE-200",
+   "CWE-862"
+  ],
+  "summary": "SiYuan: /history/*path and /repo/diff/*path potentially exposing historical snapshots of data/.siyuan/publishAccess.json and data/templates/*",
+  "repo": "siyuan-note/siyuan",
+  "fix": "035bf9a8c311c6f8468f2f1054b4d5e1711787e2",
+  "vulnerable": "ae20c0a9fe5d5c9e54e532db4c1e12cbb1406e56",
+  "files": [
+   "kernel/server/serve.go",
+   "kernel/util/path_guard.go"
+  ],
+  "scope": "kernel"
+ },
+ {
+  "ghsa": "GHSA-3w57-8xmc-8v26",
+  "eco": "pip",
+  "published": "2026-09-18",
+  "fixed": "2026-07-08",
+  "severity": "high",
+  "cwes": [
+   "CWE-266",
+   "CWE-269"
+  ],
+  "summary": "AnyIO run_process/open_process ignores extra_groups and can retain parent supplementary groups",
+  "repo": "agronholm/anyio",
+  "fix": "eb562e6462ee46b1904e50b02ce00a858cdeb200",
+  "vulnerable": "85b8b6eb2e213c0fc7cbc1c29f71e3d487393bab",
+  "files": [
+   "src/anyio/_core/_subprocesses.py"
+  ],
+  "scope": "src/anyio/_core"
+ },
+ {
+  "ghsa": "GHSA-5974-gfqc-wrcm",
+  "eco": "composer",
+  "published": "2026-10-09",
+  "fixed": "2026-08-25",
+  "severity": "medium",
+  "cwes": [
+   "CWE-524",
+   "CWE-863"
+  ],
+  "summary": "Contao: Improper access control in the table access voter",
+  "repo": "contao/contao",
+  "fix": "9d6f582a4cc6a758ce11d1043fc9c0ba62c5f4c9",
+  "vulnerable": "34dd27ee6739f10568d3d95d8784862255c925b4",
+  "files": [
+   "core-bundle/src/Security/Voter/DataContainer/TableAccessVoter.php"
+  ],
+  "scope": "core-bundle/src/Security/Voter/DataContainer"
+ },
+ {
+  "ghsa": "GHSA-cvw4-55pp-3hfq",
+  "eco": "maven",
+  "published": "2026-08-28",
+  "fixed": "2026-07-13",
+  "severity": "medium",
+  "cwes": [
+   "CWE-285",
+   "CWE-862"
+  ],
+  "summary": "Yamcs's Missing Authorization on Role and Privilege Enumeration Endpoints Allows Any Authenticated User to Disclose Full Security Configuration",
+  "repo": "yamcs/yamcs",
+  "fix": "c2aec1c242e656e48b52c7f87deea88183bb592d",
+  "vulnerable": "640e1598b7097b521692e89dd47a39b6cb1fc663",
+  "files": [
+   "yamcs-core/src/main/java/org/yamcs/http/api/IamApi.java"
+  ],
+  "scope": "yamcs-core/src/main/java/org/yamcs/http/api"
+ },
+ {
+  "ghsa": "GHSA-4pvx-fwjj-8gpc",
+  "eco": "npm",
+  "published": "2026-10-07",
+  "fixed": "2026-09-14",
+  "severity": "medium",
+  "cwes": [
+   "CWE-269",
+   "CWE-863"
+  ],
+  "summary": "Ghost: Editors Could Promote Staff Users to Their Own Role",
+  "repo": "TryGhost/Ghost",
+  "fix": "99c5642b9bb481df4811a004a6f19d6143ed9aaf",
+  "vulnerable": "d23d552e257e2696c60293bc5cd7898a49d6bd1f",
+  "files": [
+   "ghost/core/core/server/models/user.js"
+  ],
+  "scope": "ghost/core/core/server/models"
+ },
+ {
+  "ghsa": "GHSA-3hc7-r24j-rpwc",
+  "eco": "go",
+  "published": "2026-10-09",
+  "fixed": "2026-08-31",
+  "severity": "medium",
+  "cwes": [
+   "CWE-200",
+   "CWE-862"
+  ],
+  "summary": "Vikunja: Cross-project task disclosure through subtask expansion",
+  "repo": "go-vikunja/vikunja",
+  "fix": "077dc4de79ce6f1ab59215a2c7bf9b30423685f2",
+  "vulnerable": "e34314f605617fc316c6737b1a56539836482fce",
+  "files": [
+   "pkg/modules/migration/migration_status.go"
+  ],
+  "scope": "pkg/modules/migration"
+ },
+ {
+  "ghsa": "GHSA-4h97-p9wq-chqj",
+  "eco": "pip",
+  "published": "2026-08-18",
+  "fixed": "2026-07-02",
+  "severity": "medium",
+  "cwes": [
+   "CWE-862"
+  ],
+  "summary": "Lemur: Missing authorization check on POST /certificates/<id>/export for plugins with requires_key = False",
+  "repo": "Netflix/lemur",
+  "fix": "5683bbea8b10cce07f9a8abf1e4a7d3b2031c585",
+  "vulnerable": "e9ade7dad5c9bc1369a831554ed6df3277c9cbae",
+  "files": [
+   "lemur/certificates/views.py"
+  ],
+  "scope": "lemur/certificates"
+ },
+ {
+  "ghsa": "GHSA-5mmc-8pc9-wggg",
+  "eco": "composer",
+  "published": "2026-09-23",
+  "fixed": "2026-09-04",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863"
+  ],
+  "summary": "WPGraphQL: Contributor can publish and modify posts without the required capabilities via updatePost",
+  "repo": "wp-graphql/wp-graphql",
+  "fix": "55441663eaa33c3f2e05de038c8286c845916461",
+  "vulnerable": "d53b0e566f20a8df0664559cb6432d52a7cd285c",
+  "files": [
+   "plugins/wp-graphql/src/Model/Model.php",
+   "plugins/wp-graphql/src/Mutation/PostObjectUpdate.php"
+  ],
+  "scope": "plugins/wp-graphql/src"
+ },
+ {
+  "ghsa": "GHSA-gx83-3vf8-gh7j",
+  "eco": "maven",
+  "published": "2026-09-28",
+  "fixed": "2026-08-11",
+  "severity": "medium",
+  "cwes": [
+   "CWE-502",
+   "CWE-915"
+  ],
+  "summary": "jackson-databind: Comparable missing from DefaultBaseTypeLimitingValidator's unsafe base types (incomplete PolymorphicTypeValidator denylist)",
+  "repo": "FasterXML/jackson-databind",
+  "fix": "eb3b7fc0f9c0d27f471550ac3316b17d1987388f",
+  "vulnerable": "65947556b62ee935a85aa5edaebf409813fd2456",
+  "files": [
+   "src/main/java/com/fasterxml/jackson/databind/jsontype/DefaultBaseTypeLimitingValidator.java"
+  ],
+  "scope": "src/main/java/com/fasterxml/jackson/databind/jsontype"
+ },
+ {
+  "ghsa": "GHSA-4ww4-68q3-h7g5",
+  "eco": "npm",
+  "published": "2026-10-07",
+  "fixed": "2026-07-15",
+  "severity": "high",
+  "cwes": [
+   "CWE-639",
+   "CWE-915"
+  ],
+  "summary": "Payload: Field-level write access bypass in Payload on MongoDB",
+  "repo": "payloadcms/payload",
+  "fix": "2a69863deb0e3c87e36c1b3b17ab2d5b02fcb941",
+  "vulnerable": "3c00a397e4c61331cc55cb6c20013d10df9389f3",
+  "files": [
+   "packages/payload/src/fields/hooks/beforeValidate/promise.ts",
+   "packages/payload/src/fields/hooks/beforeValidate/stripNullRows.ts"
+  ],
+  "scope": "packages/payload/src/fields/hooks/beforeValidate"
+ },
+ {
+  "ghsa": "GHSA-42cj-m3vj-89wv",
+  "eco": "go",
+  "published": "2026-08-05",
+  "fixed": "2026-07-06",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863"
+  ],
+  "summary": "Traefik CRD IngressRouteTCP ServersTransport Cross-Provider Namespace Bypass",
+  "repo": "traefik/traefik",
+  "fix": "67501cbe7bc7774e26ecbd1c29af97f098e14b0b",
+  "vulnerable": "18fbd82afa6215c602e1e3e2a6f8091ff505a732",
+  "files": [
+   "pkg/provider/kubernetes/crd/kubernetes_tcp.go"
+  ],
+  "scope": "pkg/provider/kubernetes/crd"
+ },
+ {
+  "ghsa": "GHSA-5247-m8w9-2v4m",
+  "eco": "pip",
+  "published": "2026-08-12",
+  "fixed": "2026-08-05",
+  "severity": "medium",
+  "cwes": [
+   "CWE-862"
+  ],
+  "summary": "Apache Airflow missing team context permits cross-team Dag actions and XCom reads",
+  "repo": "apache/airflow",
+  "fix": "0940c4b66c270d929e9f59914c65e15bd4734680",
+  "vulnerable": "5292c51c3fc8ae258852ee840f0344d1d529b491",
+  "files": [
+   "airflow-core/src/airflow/api_fastapi/core_api/routes/public/assets.py",
+   "airflow-core/src/airflow/api_fastapi/core_api/routes/public/dag_run.py"
+  ],
+  "scope": "airflow-core/src/airflow/api_fastapi/core_api/routes/public"
+ },
+ {
+  "ghsa": "GHSA-65cv-w493-7vhq",
+  "eco": "composer",
+  "published": "2026-09-02",
+  "fixed": "2026-07-16",
+  "severity": "medium",
+  "cwes": [
+   "CWE-862",
+   "CWE-863"
+  ],
+  "summary": "Sulu: Fix authorization bypass when creating preview links",
+  "repo": "sulu/sulu",
+  "fix": "44d8844c3514a70b769ab791b9530df806240fab",
+  "vulnerable": "2b959de75d61b98433e42db462c246ed9e4ce793",
+  "files": [
+   "src/Sulu/Bundle/PreviewBundle/Application/Manager/PreviewLinkManager.php",
+   "src/Sulu/Bundle/PreviewBundle/Resources/config/services.php"
+  ],
+  "scope": "src/Sulu/Bundle/PreviewBundle"
+ },
+ {
+  "ghsa": "GHSA-mhm7-754m-9p8w",
+  "eco": "maven",
+  "published": "2026-07-21",
+  "fixed": "2026-07-05",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863"
+  ],
+  "summary": "jackson-databind: `@JsonView` bypass for creator properties with `@JsonTypeInfo(include=As.EXTERNAL_PROPERTY)`",
+  "repo": "FasterXML/jackson-databind",
+  "fix": "c628b357ed143d8492756d5c1458cfb9fbeb29ed",
+  "vulnerable": "d627a8a86fcb062429282f79f3f256f181ed2c7b",
+  "files": [
+   "src/main/java/com/fasterxml/jackson/databind/deser/impl/ExternalTypeHandler.java"
+  ],
+  "scope": "src/main/java/com/fasterxml/jackson/databind/deser/impl"
+ },
+ {
+  "ghsa": "GHSA-5324-3w58-qpp2",
+  "eco": "npm",
+  "published": "2026-10-28",
+  "fixed": "2026-08-11",
+  "severity": "medium",
+  "cwes": [
+   "CWE-200",
+   "CWE-863"
+  ],
+  "summary": "Mem0: Cross-tenant conversation leak via unescaped delimiter collision in session-scope key (_build_session_scope)",
+  "repo": "mem0ai/mem0",
+  "fix": "71f2ebefa3494da21550fb525216818776cde67f",
+  "vulnerable": "35a125585e5e9ec31ee60094a08ae92337cff75a",
+  "files": [
+   "mem0-ts/src/oss/src/memory/index.ts",
+   "mem0/memory/main.py"
+  ],
+  "scope": "."
+ },
+ {
+  "ghsa": "GHSA-46r4-q7wv-32fc",
+  "eco": "go",
+  "published": "2026-10-21",
+  "fixed": "2026-09-01",
+  "severity": "high",
+  "cwes": [
+   "CWE-639"
+  ],
+  "summary": "OpenChoreo: Authorization bypass on WorkflowRun update allows cross-project takeover of workflow runs",
+  "repo": "openchoreo/openchoreo",
+  "fix": "0e311468bb704b0dce7753b89c9d0204009285ca",
+  "vulnerable": "c841b75c82156532c921e1ff55520d40504c1049",
+  "files": [
+   "internal/openchoreo-api/services/workflowrun/service.go",
+   "internal/openchoreo-api/services/workflowrun/service_authz.go"
+  ],
+  "scope": "internal/openchoreo-api/services/workflowrun"
+ },
+ {
+  "ghsa": "GHSA-9rg8-2wvr-fgjh",
+  "eco": "composer",
+  "published": "2026-09-23",
+  "fixed": "2026-07-09",
+  "severity": "high",
+  "cwes": [
+   "CWE-200",
+   "CWE-639",
+   "CWE-862"
+  ],
+  "summary": "Formie: Missing authorization on sent notification resend modal exposes submission PII",
+  "repo": "verbb/formie",
+  "fix": "9f4e23c36b907ed7677563231eaba373fdb8b84b",
+  "vulnerable": "7c26b34e195ff765e6a2e3799582e066488dad3f",
+  "files": [
+   "src/controllers/SentNotificationsController.php"
+  ],
+  "scope": "src/controllers"
+ },
+ {
+  "ghsa": "GHSA-p279-2cqp-84jg",
+  "eco": "maven",
+  "published": "2026-07-24",
+  "fixed": "2026-07-17",
+  "severity": "critical",
+  "cwes": [
+   "CWE-285",
+   "CWE-639"
+  ],
+  "summary": "OpenDJ SASL PLAIN authzid bypassing the proxy ACI scope check",
+  "repo": "OpenIdentityPlatform/OpenDJ",
+  "fix": "5c326850f1ab945cfca7ac9c5aaf77d1052c6bed",
+  "vulnerable": "131e8576dcf3613f944c3e02527959bbf52370c3",
+  "files": [
+   "opendj-server-legacy/src/main/java/org/opends/server/extensions/PlainSASLMechanismHandler.java",
+   "opendj-server-legacy/src/main/java/org/opends/server/extensions/SASLContext.java"
+  ],
+  "scope": "opendj-server-legacy/src/main/java/org/opends/server/extensions"
+ },
+ {
+  "ghsa": "GHSA-5ffh-6f9q-5hhr",
+  "eco": "npm",
+  "published": "2026-09-22",
+  "fixed": "2026-07-06",
+  "severity": "medium",
+  "cwes": [
+   "CWE-639",
+   "CWE-863"
+  ],
+  "summary": "Unleash: A project member can reorder activation strategies belonging to any other project / environment (cross-project integrity write), bypassing project RBAC and the audit log",
+  "repo": "Unleash/unleash",
+  "fix": "43e8db37b846921c8a94db58b44935ecbd15d9d1",
+  "vulnerable": "b38bf1ec4b8c6fd8d82396fa73e7086ad1815826",
+  "files": [
+   "src/lib/features/feature-toggle/feature-toggle-service.ts"
+  ],
+  "scope": "src/lib/features/feature-toggle"
+ },
+ {
+  "ghsa": "GHSA-52gf-6rpq-fgmx",
+  "eco": "go",
+  "published": "2026-09-02",
+  "fixed": "2026-08-19",
+  "severity": "high",
+  "cwes": [
+   "CWE-639",
+   "CWE-863"
+  ],
+  "summary": "OpenChoreo: Cross-project command execution and wirelog view access via OpenChoreo openchoreo-api exec and wirelogs endpoints",
+  "repo": "openchoreo/openchoreo",
+  "fix": "4d372eaf1f07525663dcca5257062f4b051b9820",
+  "vulnerable": "361007ba9ff738ffef4bb2bf56904aa880de9ded",
+  "files": [
+   "internal/openchoreo-api/api/handlers/exec.go",
+   "internal/openchoreo-api/api/handlers/wirelogs.go"
+  ],
+  "scope": "internal/openchoreo-api/api/handlers"
+ },
+ {
+  "ghsa": "GHSA-5j9r-fx4x-rpvg",
+  "eco": "pip",
+  "published": "2026-10-28",
+  "fixed": "2026-07-09",
+  "severity": "high",
+  "cwes": [
+   "CWE-639"
+  ],
+  "summary": "rucio has an Authorization Bypass on REST API endpoint for signing URLs",
+  "repo": "rucio/rucio",
+  "fix": "64c0e6a6a93ae88427ff3b7d77532ce08c8a69ec",
+  "vulnerable": "e1aca4f47021b7ed5b647e37e11c1816e2b56777",
+  "files": [
+   "lib/rucio/web/rest/flaskapi/v1/credentials.py"
+  ],
+  "scope": "lib/rucio/web/rest/flaskapi/v1"
+ },
+ {
+  "ghsa": "GHSA-f74m-x83r-c4v4",
+  "eco": "composer",
+  "published": "2026-11-09",
+  "fixed": "2026-08-12",
+  "severity": "medium",
+  "cwes": [
+   "CWE-330",
+   "CWE-862"
+  ],
+  "summary": "FileGator: Missing authorization in GET /batchdownload allows cross-user retrieval of another user's archive",
+  "repo": "filegator/filegator",
+  "fix": "638737e560cbf20cbeb5da4e4e6c974f8a080531",
+  "vulnerable": "c6715ff7897c7ffeb6f46f91d06adb5feebc76ed",
+  "files": [
+   "backend/Controllers/DownloadController.php",
+   "backend/Services/Archiver/Adapters/ZipArchiver.php"
+  ],
+  "scope": "backend"
+ },
+ {
+  "ghsa": "GHSA-5h3f-q97h-ccvc",
+  "eco": "npm",
+  "published": "2026-10-05",
+  "fixed": "2026-08-22",
+  "severity": "critical",
+  "cwes": [
+   "CWE-863"
+  ],
+  "summary": "vm2: NodeVM custom resolution bypasses external path boundaries",
+  "repo": "patriksimek/vm2",
+  "fix": "6ac3916da84e060c403e407b6b6318fcc66b0e72",
+  "vulnerable": "ab4ee7d803e8c80155e9eb3672226bddbca4aa9c",
+  "files": [
+   "lib/resolver-compat.js"
+  ],
+  "scope": "lib"
+ },
+ {
+  "ghsa": "GHSA-5cp7-fp4j-wwcv",
+  "eco": "go",
+  "published": "2026-10-27",
+  "fixed": "2026-08-05",
+  "severity": "medium",
+  "cwes": [
+   "CWE-863"
+  ],
+  "summary": "Neko: Authorization bypass in legacy WebRTC input handling",
+  "repo": "m1k1o/neko",
+  "fix": "395ca1a6f62b7b0e270e654d366a2d57b8042efd",
+  "vulnerable": "bce6c57b6ac8adb5466d42663ec0b889e657d5c2",
+  "files": [
+   "server/internal/session/session.go"
+  ],
+  "scope": "server/internal/session"
+ },
+ {
+  "ghsa": "GHSA-6hmw-9432-67qq",
+  "eco": "pip",
+  "published": "2026-10-23",
+  "fixed": "2026-10-08",
+  "severity": "medium",
+  "cwes": [
+   "CWE-20",
+   "CWE-863"
+  ],
+  "summary": "LangGraph: Namespace labels containing `.` reach other namespaces in Postgres and SQLite stores",
+  "repo": "langchain-ai/langgraph",
+  "fix": "bfcfea554ed5c7f7be562cebf8825e911b493ab1",
+  "vulnerable": "93f5eaff21bcc183044b0980a8844b9b7a1275a8",
+  "files": [
+   "libs/checkpoint-postgres/langgraph/store/postgres/base.py",
+   "libs/checkpoint-sqlite/langgraph/store/sqlite/base.py",
+   "libs/checkpoint/langgraph/store/base/__init__.py",
+   "libs/checkpoint/langgraph/store/base/batch.py"
+  ],
+  "scope": "libs"
+ },
+ {
+  "ghsa": "GHSA-fm29-4mq3-phg6",
+  "eco": "composer",
+  "published": "2026-08-20",
+  "fixed": "2026-08-12",
+  "severity": "high",
+  "cwes": [
+   "CWE-862",
+   "CWE-863"
+  ],
+  "summary": "Winter: ImportExportController AJAX handlers bypass granular import/export permission gate",
+  "repo": "wintercms/winter",
+  "fix": "84c81f153f2dc3e2c7b03ab14a4a3ca8456d0e4f",
+  "vulnerable": "1b6397654124fb44a6abf6f3782b6a1d746cef14",
+  "files": [
+   "modules/backend/behaviors/ImportExportController.php"
+  ],
+  "scope": "modules/backend/behaviors"
+ },
+ {
+  "ghsa": "GHSA-66wr-7vmr-p5jq",
+  "eco": "npm",
+  "published": "2026-10-07",
+  "fixed": "2026-09-17",
+  "severity": "critical",
+  "cwes": [
+   "CWE-290",
+   "CWE-915"
+  ],
+  "summary": "Payload authentication token field handling issue",
+  "repo": "payloadcms/payload",
+  "fix": "56cd5cd050a57daebf33159e41e5ff9d4a45239c",
+  "vulnerable": "099ef12e2682f076aa8e8d0ccb790536b4e1027f",
+  "files": [
+   "packages/payload/src/auth/getFieldsToSign.ts",
+   "packages/payload/src/auth/jwt.ts",
+   "packages/payload/src/auth/jwtAuth.ts",
+   "packages/payload/src/auth/strategies/jwt.ts",
+   "packages/payload/src/index.ts"
+  ],
+  "scope": "packages/payload/src"
+ }
+]

@@ -1,0 +1,1 @@
+{"backend/Controllers/DownloadController.php":{"old":[[24,29],[122,127],[139,147],[186,189]],"neu":[[24,37],[130,139],[151,167],[206,233]]},"backend/Services/Archiver/Adapters/ZipArchiver.php":{"old":[[41,47]],"neu":[[41,50]]}}

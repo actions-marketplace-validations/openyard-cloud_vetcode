@@ -4,3 +4,5 @@ tests/
 bench/redteam.mjs
 # Writes disguised copies of malware samples (eval of base64, hex escapes) to measure evasion.
 bench/mutate.mjs
+# Small apps with planted authorization and business-logic bugs, to score the agent step.
+bench/agent.mjs

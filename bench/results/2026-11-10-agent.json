@@ -1,0 +1,713 @@
+{
+  "date": "2026-11-10",
+  "agent": "claude -p",
+  "runs": 2,
+  "results": [
+    {
+      "id": "idor-invoice",
+      "title": "Invoice readable by any logged-in user (IDOR)",
+      "file": "src/routes/invoices.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/invoices.js",
+                "line": 10,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "GET /api/invoices/:id returns any user's invoice without an ownership check"
+              }
+            ],
+            "cost": 0.3242162
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.31723159999999995
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/invoices.js",
+                "line": 10,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "GET /api/invoices/:id returns any user's invoice without an ownership check"
+              }
+            ],
+            "cost": 0.32557519999999995
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.32052340000000007
+          }
+        }
+      ]
+    },
+    {
+      "id": "admin-route-unguarded",
+      "title": "One admin route forgets the admin check",
+      "file": "src/routes/users.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/users.js",
+                "line": 14,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "missing-authz",
+                "title": "DELETE /api/users/:id lacks admin/ownership check; any user can delete any account"
+              }
+            ],
+            "cost": 0.3214048
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3241574
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/users.js",
+                "line": 14,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "missing-authz",
+                "title": "DELETE /api/users/:id lacks requireAdmin/ownership check; any user can delete any account"
+              }
+            ],
+            "cost": 0.318788
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3225136
+          }
+        }
+      ]
+    },
+    {
+      "id": "mass-assignment-role",
+      "title": "Profile update lets users set their own role",
+      "file": "src/routes/me.js",
+      "scanner": {
+        "caught": true,
+        "falseAlarm": false,
+        "bad": [
+          {
+            "file": "src/routes/me.js",
+            "severity": "medium",
+            "rule": "mass-assignment",
+            "title": "Whole request body written to the database",
+            "inFile": true
+          }
+        ],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/me.js",
+                "line": 11,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "mass-assignment",
+                "title": "PATCH /api/me writes req.body to users row, allowing self-promotion to admin via role field"
+              }
+            ],
+            "cost": 0.32766700000000004
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3257336
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/me.js",
+                "line": 11,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "mass-assignment",
+                "title": "PATCH /api/me writes the whole request body to users, so any user can set role=admin"
+              }
+            ],
+            "cost": 0.3332942
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3194798
+          }
+        }
+      ]
+    },
+    {
+      "id": "client-price",
+      "title": "Checkout trusts the price sent by the browser",
+      "file": "src/routes/checkout.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/checkout.js",
+                "line": 12,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Order total computed from client-supplied item price"
+              }
+            ],
+            "cost": 0.3214528
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/checkout.js",
+                "line": 11,
+                "severity": "low",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Stock check is per line item; repeating a productId bypasses it"
+              }
+            ],
+            "cost": 0.3399642
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/checkout.js",
+                "line": 12,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Order total computed from client-supplied item price"
+              }
+            ],
+            "cost": 0.32800739999999995
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/checkout.js",
+                "line": 11,
+                "severity": "low",
+                "status": "likely",
+                "class": "business-logic",
+                "title": "Stock check per line item can be bypassed by repeating the same productId"
+              }
+            ],
+            "cost": 0.33725700000000003
+          }
+        }
+      ]
+    },
+    {
+      "id": "negative-transfer",
+      "title": "Credit transfer accepts a negative amount",
+      "file": "src/routes/credits.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/credits.js",
+                "line": 6,
+                "severity": "critical",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Negative transfer amount lets any user take credits from any other user"
+              }
+            ],
+            "cost": 0.299953
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3415676
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/credits.js",
+                "line": 6,
+                "severity": "critical",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Negative transfer amount lets any user drain credit from any other user"
+              }
+            ],
+            "cost": 0.33114340000000003
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3287704
+          }
+        }
+      ]
+    },
+    {
+      "id": "coupon-reuse",
+      "title": "Single-use coupon can be applied again and again",
+      "file": "src/routes/coupons.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/coupons.js",
+                "line": 9,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Single-use coupons can be redeemed unlimited times (no redemption record), giving unlimited store credit"
+              }
+            ],
+            "cost": 0.3292542
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3501122
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/coupons.js",
+                "line": 9,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Single-use coupons are never recorded as redeemed, so repeated redemption gives unlimited credit"
+              }
+            ],
+            "cost": 0.3015772
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.329196
+          }
+        }
+      ]
+    },
+    {
+      "id": "reset-any-account",
+      "title": "Password reset token is not tied to the account it resets",
+      "file": "src/routes/password.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/password.js",
+                "line": 10,
+                "severity": "critical",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Password reset token not bound to account; attacker-supplied email lets any valid token reset any user's password (account takeover)"
+              }
+            ],
+            "cost": 0.3293702
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 1,
+            "findings": [
+              {
+                "file": "src/routes/password.js",
+                "line": 10,
+                "severity": "medium",
+                "status": "confirmed",
+                "class": "auth",
+                "title": "Password reset does not invalidate existing JWT sessions"
+              },
+              {
+                "file": "src/routes/password.js",
+                "line": 8,
+                "severity": "low",
+                "status": "confirmed",
+                "class": "auth",
+                "title": "Password reset tokens stored and compared in plaintext"
+              },
+              {
+                "file": "src/routes/password.js",
+                "line": 11,
+                "severity": "low",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Other outstanding reset tokens for the user remain valid after reset"
+              }
+            ],
+            "cost": 0.3481728
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/password.js",
+                "line": 10,
+                "severity": "critical",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Password reset token not bound to the account: any valid token resets any user's password via the email field"
+              }
+            ],
+            "cost": 0.32673820000000003
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/password.js",
+                "line": 10,
+                "severity": "low",
+                "status": "likely",
+                "class": "auth",
+                "title": "Password reset does not invalidate existing JWT sessions or other outstanding reset tokens"
+              }
+            ],
+            "cost": 0.35211159999999997
+          }
+        }
+      ]
+    },
+    {
+      "id": "tenant-from-header",
+      "title": "Tenant chosen by a request header instead of the session",
+      "file": "src/routes/projects.js",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/projects.js",
+                "line": 7,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "Client-controlled X-Org-Id header lets any user list other organisations' projects"
+              }
+            ],
+            "cost": 0.32161619999999996
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.31811520000000004
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "src/routes/projects.js",
+                "line": 7,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "Client-controlled X-Org-Id header lets any authenticated user list another organisation's projects"
+              }
+            ],
+            "cost": 0.3232598
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.2883908
+          }
+        }
+      ]
+    },
+    {
+      "id": "flask-idor-address",
+      "title": "Order (with address) readable and editable by anyone logged in (Flask)",
+      "file": "orders.py",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "orders.py",
+                "line": 12,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "Any authenticated user can read any order (status, total, delivery address) by ID"
+              },
+              {
+                "file": "orders.py",
+                "line": 19,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "Any authenticated user can change the delivery address of another user's pending order"
+              }
+            ],
+            "cost": 0.3404388
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.2984144
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "orders.py",
+                "line": 19,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "Any authenticated user can change the shipping address of any pending order"
+              },
+              {
+                "file": "orders.py",
+                "line": 12,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "idor",
+                "title": "Any authenticated user can read any order including delivery address"
+              }
+            ],
+            "cost": 0.301219
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3264556
+          }
+        }
+      ]
+    },
+    {
+      "id": "flask-refund-after-delivery",
+      "title": "Cancel refunds an order in any state, again and again (Flask)",
+      "file": "orders.py",
+      "scanner": {
+        "caught": false,
+        "falseAlarm": false,
+        "bad": [],
+        "good": []
+      },
+      "agent": [
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "orders.py",
+                "line": 13,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Order cancel has no status check: repeated or post-shipment cancels refund store credit without limit"
+              }
+            ],
+            "cost": 0.325822
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.304062
+          }
+        },
+        {
+          "bad": {
+            "ok": true,
+            "hit": true,
+            "other": 0,
+            "findings": [
+              {
+                "file": "orders.py",
+                "line": 14,
+                "severity": "high",
+                "status": "confirmed",
+                "class": "business-logic",
+                "title": "Cancel endpoint ignores order status; repeated or post-shipment cancels mint unlimited store credit"
+              }
+            ],
+            "cost": 0.3299144
+          },
+          "good": {
+            "ok": true,
+            "hit": false,
+            "other": 0,
+            "findings": [],
+            "cost": 0.3313924
+          }
+        }
+      ]
+    }
+  ]
+}

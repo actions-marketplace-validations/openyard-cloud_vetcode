@@ -1,0 +1,56 @@
+name: Release
+# Push a tag like v0.3.1 and this workflow checks the version, runs the tests, publishes the
+# GitHub release with vetcode-skill.zip, and publishes the npm package with provenance.
+# npm uses trusted publishing (no token): on npmjs.com, @openyard/vetcode → Settings →
+# Trusted publisher → GitHub Actions, repository openyard-cloud/vetcode, workflow release.yml.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub release
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Tag matches every version field
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          bad=0
+          check() { if [ "$2" != "$v" ]; then echo "::error file=$1::version $2, tag says $v"; bad=1; fi; }
+          check package.json "$(node -p 'require("./package.json").version')"
+          check .claude-plugin/plugin.json "$(node -p 'require("./.claude-plugin/plugin.json").version')"
+          check .claude-plugin/marketplace.json "$(node -p 'require("./.claude-plugin/marketplace.json").plugins[0].version')"
+          check skills/vetcode/SKILL.md "$(sed -n 's/^ *version: "\(.*\)"/\1/p' skills/vetcode/SKILL.md)"
+          check skills/vetcode/scripts/lib/index.mjs "$(sed -n 's/^export const VERSION = "\(.*\)";/\1/p' skills/vetcode/scripts/lib/index.mjs)"
+          exit $bad
+      - run: npm test
+      - name: Scan this repository with itself
+        run: node skills/vetcode/scripts/vet.mjs . --no-tools --fail-on high
+      - name: Build the skill zip
+        run: npm run zip
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" vetcode-skill.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" vetcode-skill.zip --title "vetcode ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
+          fi
+      - name: npm publish
+        run: |
+          name="$(node -p 'require("./package.json").name')"
+          v="$(node -p 'require("./package.json").version')"
+          if npm view "$name@$v" version >/dev/null 2>&1; then echo "$name@$v is already on npm"; exit 0; fi
+          npm install -g npm@latest
+          npm publish --provenance --access public

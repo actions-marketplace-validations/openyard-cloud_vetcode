@@ -21,7 +21,7 @@ import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 import { decoded, payloads, stashed } from "./normalize.mjs";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.3.1";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */

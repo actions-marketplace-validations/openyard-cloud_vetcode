@@ -1,6 +1,6 @@
 {
   "name": "@openyard/vetcode",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Catch malicious packages, supply-chain attacks and leaked secrets before they reach your machine. Zero dependencies. CLI, MCP server, Agent Skill and GitHub Action.",
   "keywords": [
     "security",

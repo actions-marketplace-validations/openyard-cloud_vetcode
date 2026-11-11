@@ -95,10 +95,20 @@ function checkInstructions(file, text, out) {
   checkDestinations(file, text, out);
   // Front matter opened with `---js` is not data: the front-matter parser most tools use (gray-matter)
   // evaluates it as JavaScript the moment the file is loaded, before any agent reads a word.
-  if (/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?\n/i.test(text)) {
+  if (/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?$/im.test(text)) {
     out.push(finding(rule({ id: "agent-frontmatter-code", severity: "critical", confidence: "high", title: "Front matter that is code, run when the file is parsed",
       why: "A file that opens with `---js` has its front matter executed by the parser that loads skills and instruction files. Nothing has to follow the instructions: listing or loading the skill is enough.",
-      fix: "Do not load this file with any tool. Front matter is YAML; code there has no honest use." }), file.rel, 1, text.split("\n").slice(0, 3).join(" ⏎ ")));
+      fix: "Do not load this file with any tool. Front matter is YAML; code there has no honest use." }), file.rel, lineOf(text, text.search(/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?$/im)), text.split("\n").slice(0, 3).join(" ⏎ ")));
+  }
+  // A command that sends a local file to a server: `curl … --data-binary @notes https://…`.
+  // Not a table row that lists the pattern, and not a server on this machine.
+  for (const m of text.matchAll(/^(?![ \t]*\|)[^\n]*\bcurl\b[^|\n]*(?:--data-binary|--upload-file|\s-T|\s-F|--form|\s-d|--data)[ \t]+["']?[^"'\s]*@(?![{<])[~.\/$\w][^\s"']*[^|\n]*$/gm)) {
+    const url = /https?:\/\/[^\s"'`)>]+/.exec(m[0]);
+    if (!url || /^https?:\/\/(?:localhost|127\.0\.0\.1|\[?::1\]?|0\.0\.0\.0|\$|\{|<)/i.test(url[0])) continue;
+    out.push(finding(rule({ id: "agent-upload-file", severity: "high", title: "Agent instruction file has a command that uploads a local file",
+      why: "Following the instruction sends a file from this machine to someone's server. In a skill that is how notes, source code or credentials leave without anyone deciding to share them.",
+      fix: "Find out which file it is and who runs the server. Remove the instruction unless sending that file there is the whole point of the skill and you chose it." }), file.rel, lineOf(text, m.index), m[0].trim()));
+    break;
   }
   for (const [re, what, negatable] of INJECTION) {
     const m = re.exec(text);

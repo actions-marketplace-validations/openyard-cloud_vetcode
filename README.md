@@ -2,7 +2,7 @@
 
 <h1 align="center">vetcode</h1>
 
-<p align="center"><b>Catch malicious packages, supply-chain attacks and leaked secrets before they reach your machine.</b><br>Zero dependencies. One command. Built for AI coding agents, works without one.</p>
+<p align="center"><b>The security check your AI coding agent runs before it acts.</b><br>Before it installs a package, after it clones a repository, before your code ships.<br>Zero dependencies. Reads, never runs. Works without an agent too.</p>
 
 <p align="center">
   <a href="https://github.com/openyard-cloud/vetcode/releases"><img alt="release" src="https://img.shields.io/github/v/release/openyard-cloud/vetcode?color=14665f"></a>
@@ -15,16 +15,23 @@
 <p align="center"><img src="assets/demo.svg" width="760" alt="vetcode scanning a credential-stealing npm package: 2 critical and 3 high findings"></p>
 
 ```bash
-npx @openyard/vetcode .               # scan a project, a package or a cloned repo
-npx skills add openyard-cloud/vetcode # or give it to your AI agent as a skill
+# Claude Code: the skill plus the guard that checks installs and clones
+claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
+
+npx skills add openyard-cloud/vetcode            # any other agent, as a skill
+npx github:openyard-cloud/vetcode#v0.6.0 .       # no agent: scan a project, a package or a cloned repo
 ```
 
-- **More accurate than GuardDog on fresh malware samples.** On 1,000 npm packages it never saw: F1 96.1 vs 93.0, with a quarter of the false alarms (1.6% vs 6.4%). On PyPI the gap is wider: 88–89 vs 80, with 4% false alarms vs 20%.
-- **Hard to fool.** It still catches 99–100% of the malware it caught after 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`). GuardDog loses up to 10%.
-- **One run, everything.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, and AI agent setups (skills, MCP servers, `CLAUDE.md`), in 8 languages.
+An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between, and every claim below is measured ([how](bench/README.md)):
+
+- **It steps in before the damage.** In Claude Code a [guard](#the-guard-checked-before-your-agent-installs) looks at every install command before it runs and at every repository right after it is cloned. Asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3; with the guard it installed the previous settled version every time. Shown malware as if nobody had reported it yet, the guard blocked or questioned 95% of 1,000 malicious npm packages and 88% of 300 PyPI ones.
+- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps that no rule was tuned on (33,000 files) it reports 9 findings per thousand files and calls one of them dangerous, the one that does ship agent hooks. On malware benchmarks it raises 2 to 5 times fewer false alarms than GuardDog and Cisco skill-scanner.
+- **Catches as much malware as the best open-source detector, and is harder to fool.** On npm it is level with GuardDog or slightly ahead; on PyPI it leads by 7 F1 points. After 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`) it still catches 99–100% of what it caught; GuardDog loses up to 10%.
+- **Knows what attacks on agents look like.** Poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders, a "required" tool to install from a throwaway host.
+- **One run, everything else too.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, in 8 languages.
 - **Reads, never runs.** Nothing from the target is installed, built or executed. Node 18+ and nothing else.
 
-vetcode is an [Agent Skill](https://agentskills.io), an MCP server, a CLI, a GitHub Action and, in Claude Code, a [guard](#the-guard-checked-before-your-agent-installs) that checks packages before your agent installs them. A zero-dependency scanner finds candidates in seconds; then your agent (Claude, Codex, Gemini, Copilot, Cursor…) reads the code around each one, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, attack scenarios and fixes.
+vetcode is an [Agent Skill](https://agentskills.io), an MCP server, a CLI, a GitHub Action and, in Claude Code, the guard. A zero-dependency scanner finds candidates in seconds; then your agent (Claude, Codex, Gemini, Copilot, Cursor…) reads the code around each one and throws out false positives. Finding logic bugs such as missing authorization is your agent's own ability, and we measured that vetcode [does not raise it](#how-it-works-and-its-limits); what it adds is what an agent does not have by itself: every file read, measured patterns, registry and advisory data newer than the model, and a check that runs whether or not the model remembers to ask.
 
 Free and open source (MIT), from the [OpenYard](https://openyard.cloud) community.
 
@@ -150,7 +157,7 @@ Download `vetcode-skill.zip` from [Releases](https://github.com/openyard-cloud/v
 
 ### MCP server
 
-The server runs `npx` straight from this repository, pinned to a release. It offers three tools (`vetcode_scan`, `vetcode_guide`, `vetcode_reference`) and a `security_review` prompt.
+The server runs `npx` straight from this repository, pinned to a release. It offers four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference`) and a `security_review` prompt.
 
 Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settings.json`, Windsurf `mcp_config.json`):
 
@@ -246,7 +253,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx @openyard/vetcode [path] [options]             # from npm (installed, the command is `vetcode`)
+npx github:openyard-cloud/vetcode#v0.6.0 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options] # from a clone
 ```
 

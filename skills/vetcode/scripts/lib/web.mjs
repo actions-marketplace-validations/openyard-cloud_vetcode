@@ -60,6 +60,9 @@ export const WEB_RULES = [
   rule({ id: "sql-go-sprintf", severity: "high", title: "SQL built with fmt.Sprintf", files: GO,
     // The formatted string has to be the query itself, not one of its bound arguments.
     re: /\.(?:Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext|Raw|Where)\s*\(\s*(?:ctx\s*,\s*)?fmt\.Sprintf\(/,
+    // Names of tables and columns cannot be bound: a statement that only formats quoted identifiers
+    // and numbers, or that changes the schema, has no value to pass as an argument.
+    unless: /fmt\.Sprintf\(\s*"(?:`%s`|\[%s\]|%[dt]|%%|[^"%\n])*"|fmt\.Sprintf\(\s*["`]\s*(?:ALTER|DROP|CREATE|TRUNCATE|RENAME|SET\s+IDENTITY_INSERT|VACUUM|ANALYZE|REINDEX)\b/i,
     why: "Formatted SQL is injectable.", fix: "Pass values as query arguments (`db.Query(sql, a, b)`)." }),
   rule({ id: "nosql-injection", severity: "high", title: "Request object used directly as a database filter", files: JS,
     // A method called deleteMany on a service class is not a MongoDB filter.
@@ -105,7 +108,7 @@ export const WEB_RULES = [
     // inject into; a comment used as a separator line is not markup.
     // In Blade, a raw variable or request data is the case to read; a helper call is the rule below.
     requires: /<[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>/i,
-    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[\w>\[\]'"-]+\s*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
+    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$(?!slot\b|attributes\b)[\w>\[\]'"-]+\s*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`{{ }}`, `<%=`), or sanitise before marking safe." }),
   // `<%-` prints raw HTML in EJS; in ERB it only trims whitespace.
   rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: /\.ejs$/i, re: /<%-(?!-)/,

@@ -1,0 +1,62 @@
+[
+  {
+    "repo": "go-gitea/gitea",
+    "sha": "6eb5efb6bb4dc7caeec60099050431f19b7c27b3",
+    "about": "Go + Vue; Git hosting with tokens, OAuth, webhooks and LFS"
+  },
+  {
+    "repo": "netbox-community/netbox",
+    "sha": "5a3029a4cb0e076f425e04d4e0cc5e7183b8e0de",
+    "about": "Python (Django); network inventory with API tokens and secrets"
+  },
+  {
+    "repo": "saleor/saleor",
+    "sha": "ea4a69fa6faa22de77a30eaee0447dd7dacaadb3",
+    "about": "Python (Django, GraphQL); commerce API with payment plugins and webhooks"
+  },
+  {
+    "repo": "snipe/snipe-it",
+    "sha": "947ac808c7205367b21c9474f0a0de91ee560751",
+    "about": "PHP (Laravel); asset management with LDAP, SAML and API tokens"
+  },
+  {
+    "repo": "pterodactyl/panel",
+    "sha": "90b2aa87469da4fffd941b3c99f3c1ca48a01b78",
+    "about": "PHP (Laravel) + React; game server panel with API keys and daemon tokens"
+  },
+  {
+    "repo": "jellyfin/jellyfin",
+    "sha": "8466670e95b5f4f0b55d6353cf9fb3d6123217e3",
+    "about": "C# (.NET); media server with API keys and user authentication"
+  },
+  {
+    "repo": "DependencyTrack/dependency-track",
+    "sha": "2d088c276264518c6c83cffa71ec994be6d36cf5",
+    "about": "Java; supply-chain analysis platform with API keys and LDAP/OIDC"
+  },
+  {
+    "repo": "lldap/lldap",
+    "sha": "99c510a7a603df1cdaca00a9ffff95ec73b296eb",
+    "about": "Rust + WebAssembly; light LDAP server, passwords and JWT by design"
+  },
+  {
+    "repo": "binwiederhier/ntfy",
+    "sha": "a331a5c8db86d8e0fa743de5af98be586afe3b0a",
+    "about": "Go + React; push notification server with access tokens"
+  },
+  {
+    "repo": "formbricks/formbricks",
+    "sha": "c4cfe979c7f800cef24b2fbae634d40f7f8fc608",
+    "about": "TypeScript (Next.js); survey platform with API keys and webhooks"
+  },
+  {
+    "repo": "karakeep-app/karakeep",
+    "sha": "88a9ff9cfdfa2b99da4d6a700ea2d0055bd3639d",
+    "about": "TypeScript (Next.js, tRPC); bookmark manager with API keys and AI provider keys"
+  },
+  {
+    "repo": "lobsters/lobsters",
+    "sha": "ccc6610e097d43c2254b359d7c25fecd34b54fc2",
+    "about": "Ruby (Rails); link aggregator with sessions, invitations and 2FA"
+  }
+]

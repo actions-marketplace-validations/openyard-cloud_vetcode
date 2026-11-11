@@ -16,13 +16,15 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { analyzeHistory } from "./npmhistory.mjs";
-import { lookalike } from "./supply.mjs";
+import { lookalike, weeklyDownloads, WIDELY_USED } from "./supply.mjs";
 import { lockedPackages } from "./osv.mjs";
 import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 
 const HOUR = 3600000;
 const RANK = { allow: 0, ask: 1, deny: 2 };
 const VERDICT_CATS = new Set(["malware", "supply-chain", "agent"]);
+// Go modules from the language's own project and from organisations whose modules half the ecosystem imports.
+const KNOWN_GO = /^(?:golang\.org\/x\/|google\.golang\.org\/|k8s\.io\/|sigs\.k8s\.io\/|go\.uber\.org\/|go\.opentelemetry\.io\/|gopkg\.in\/yaml\.|github\.com\/(?:golang|google|stretchr|spf13|gin-gonic|gorilla|sirupsen|prometheus|aws|Azure|hashicorp|kubernetes|grpc|grpc-ecosystem|etcd-io|go-chi|labstack|urfave|go-sql-driver|jackc|redis|mattn|pkg|cenkalti|golang-jwt|gofiber|go-playground|docker|moby|containerd|cli|charmbracelet|rs|uber-go|fsnotify|go-redis|jmoiron|lib)\/)/;
 // Installers the big toolchains publish; piping them to a shell is how they are meant to be used.
 const INSTALLER = /^https:\/\/(?:(?:deb|rpm)\.nodesource\.com|get\.docker\.com|sh\.rustup\.rs|install\.python-poetry\.org|bun\.sh\/install|get\.pnpm\.io|astral\.sh\/|deno\.land\/install|get\.helm\.sh|raw\.githubusercontent\.com\/(?:nvm-sh\/nvm|Homebrew\/install)\/|claude\.ai\/install)/i;
 
@@ -117,6 +119,8 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
     if (bin === "uvx") return pyRunner(w.slice(1), "uvx");
     if (bin === "pipx" && /^(install|run)$/.test(w[1])) return pyRunner(w.slice(2), `pipx ${w[1]}`);
     if (bin === "poetry" && w[1] === "add") return pip(w.slice(2), "poetry add");
+    if (bin === "cargo" && /^(add|install)$/.test(w[1])) return crates(w.slice(2), `cargo ${w[1]}`);
+    if (bin === "go" && /^(get|install|run)$/.test(w[1])) return goModules(w.slice(2), `go ${w[1]}`, w[1] === "run");
   });
   return out;
 
@@ -160,6 +164,32 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
     }
     if (url) { const why = remoteServer(url); if (why) out.push({ server: url, why, via }); return; }
     if (cmd?.length) for (const it of parseInstalls(cmd.map(quote).join(" "), { cwd, exists })) out.push({ ...it, via: `${via}: ${it.via}`, mcp: true });
+  }
+  // cargo add serde tokio@1 --features full · cargo install ripgrep --version 14
+  function crates(list, via) {
+    const names = []; let version = null, local = false;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (a === "--git") { out.push({ eco: "cargo", remote: list[++i], via }); local = true; continue; }
+      if (a === "--path") { i++; local = true; continue; }
+      if (/^(--registry|--index)$/.test(a)) { out.push({ eco: "cargo", index: list[++i], via }); continue; }
+      if (/^(--version|--vers)$/.test(a)) { version = list[++i]; continue; }
+      if (/^(--features|-F|--rename|-p|--package|--manifest-path|--target-dir|--root|--branch|--tag|--rev|--profile|--target|-j|--jobs|--bin|--example|--config|-Z)$/.test(a)) { i++; continue; }
+      if (!a.startsWith("-")) names.push(a);
+    }
+    if (local) return; // the source is a repository or a folder: said above, or nothing to fetch
+    for (const n of names) { const m = /^([A-Za-z0-9][\w-]*)(?:@(.+))?$/.exec(n); if (m) out.push({ eco: "cargo", name: m[1].toLowerCase(), want: m[2] || (names.length === 1 ? version : null), via }); }
+  }
+  // go get github.com/a/b@v1.2.3 · go install example.com/tool/cmd/x@latest · go run host/mod@v1 (a local file or ./pkg fetches nothing)
+  function goModules(list, via, run) {
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (/^(-tags|-mod|-ldflags|-gcflags|-o|-C|-modfile|-overlay|-pkgdir|-exec)$/.test(a)) { i++; continue; }
+      if (a.startsWith("-")) continue;
+      const m = /^([a-z0-9][a-z0-9.-]*\.[a-z]{2,}\/[^\s@]+)(?:@(.+))?$/i.exec(a);
+      if (m && !(run && !m[2])) out.push({ eco: "go", name: m[1], want: m[2] || null, via });
+      if (run) break; // what follows the package belongs to the program
+    }
   }
   function pyRunner(list, via) {
     const from = list.findIndex(x => /^(--from|--with|--spec)$/.test(x));
@@ -275,13 +305,40 @@ export async function checkPackage(pkg, deps = {}) {
   let decision = "allow", version = pkg.want;
   const raise = (d, why) => { if (RANK[d] > RANK[decision]) decision = d; reasons.push(why); };
   const done = () => ({ name: pkg.name, eco: pkg.eco, version, decision, reasons, notes });
-  const npm = pkg.eco === "npm";
-  const known = (npm ? KNOWN_NPM : KNOWN_PYPI).has(pkg.name);
+  const npm = pkg.eco === "npm", cargo = pkg.eco === "cargo", go = pkg.eco === "go";
+  const where = npm ? "npm" : cargo ? "crates.io" : go ? "the Go module proxy" : "PyPI", at = pkg.eco === "pypi" ? "==" : "@";
+  let known = npm ? KNOWN_NPM.has(pkg.name) : go ? KNOWN_GO.test(pkg.name) : cargo ? false : KNOWN_PYPI.has(pkg.name);
   // A package that comes from a private registry is not looked up anywhere else: its name is not ours to send.
   if (deps.isPrivate?.(pkg)) { notes.push("comes from a private registry: not checked"); return done(); }
 
   let doc, archive, size, published, times = {};
-  try {
+  if (cargo) try {
+    const r = await json(fetchFn, `https://crates.io/api/v1/crates/${encodeURIComponent(pkg.name)}`);
+    if (r.status === 404) { raise("deny", `${pkg.name} does not exist on crates.io. Check the name: a made-up name is one an attacker can register.`); return done(); }
+    const vs = r.body?.versions || [], crate = r.body?.crate || {};
+    if (r.body) {
+      version = pkg.want ? (vs.find(v => v.num === pkg.want || v.num.startsWith(pkg.want + "."))?.num ?? pkg.want) : crate.max_stable_version || crate.newest_version || vs[0]?.num;
+      const v = vs.find(x => x.num === version);
+      if (!v) { raise("deny", `${pkg.name}@${pkg.want} is not a published version.`); return done(); }
+      archive = v.dl_path ? `https://crates.io${v.dl_path}` : null; size = v.crate_size; published = Date.parse(v.created_at || "");
+      times = Object.fromEntries(vs.filter(x => !x.yanked).map(x => [x.num, x.created_at]));
+      if (v.yanked) raise("ask", `${pkg.name} ${version} was yanked by its maintainers.`);
+      if ((crate.downloads || 0) > 2_000_000) known = true; // a crate used this widely has a reputation of its own
+    }
+  } catch { /* registry unreachable: decide on what we have */ }
+  else if (go) try {
+    // The module can be a parent of the path asked for (…/cmd/tool): walk up until the proxy knows it.
+    let mod = pkg.name, info = null, esc = "";
+    for (let i = 0; i < 4 && mod.includes("/"); i++, mod = mod.slice(0, mod.lastIndexOf("/"))) {
+      esc = mod.replace(/[A-Z]/g, c => "!" + c.toLowerCase());
+      const r = await json(fetchFn, pkg.want && !/^(latest|upgrade|patch)$/.test(pkg.want) ? `https://proxy.golang.org/${esc}/@v/${pkg.want}.info` : `https://proxy.golang.org/${esc}/@latest`);
+      if (r.body?.Version) { info = r.body; pkg = { ...pkg, name: mod }; break; }
+    }
+    // A module the proxy has never seen is private or misspelt; go itself will say which. Nothing of ours to add.
+    if (!info) { notes.push("the Go module proxy does not know this module: not checked"); return done(); }
+    version = info.Version; published = Date.parse(info.Time || ""); archive = `https://proxy.golang.org/${esc}/@v/${version}.zip`;
+  } catch { /* proxy unreachable */ }
+  else try {
     const r = npm ? await json(fetchFn, `https://registry.npmjs.org/${pkg.name.replace("/", "%2F")}`)
       : await json(fetchFn, `https://pypi.org/pypi/${pkg.name}${pkg.want ? "/" + pkg.want : ""}/json`);
     if (r.status === 404) { raise("deny", `${pkg.name} does not exist on ${npm ? "npm" : "PyPI"}${pkg.want ? " at that version" : ""}. Check the name: a made-up name is one an attacker can register.`); return done(); }
@@ -308,17 +365,19 @@ export async function checkPackage(pkg, deps = {}) {
     if (doc.info?.yanked) raise("ask", `${pkg.name} ${version} was yanked by its maintainers${doc.info.yanked_reason ? `: ${doc.info.yanked_reason}` : ""}.`);
   }
 
-  const mal = await malwareAdvisories(fetchFn, npm ? "npm" : "PyPI", pkg.name, version);
+  const mal = await malwareAdvisories(fetchFn, npm ? "npm" : cargo ? "crates.io" : go ? "Go" : "PyPI", pkg.name, version);
   if (mal?.length) { raise("deny", `${pkg.name}${version ? "@" + version : ""} is reported as malware (${mal.slice(0, 3).join(", ")}).`); return done(); }
   if (mal === null) notes.push("the advisory database could not be reached");
 
-  const like = known ? null : lookalike(pkg.name, npm ? TARGET_NPM : TARGET_PYPI, POPULAR_SCOPES, npm ? KNOWN_NPM : KNOWN_PYPI);
+  let like = known || cargo || go ? null : lookalike(pkg.name, npm ? TARGET_NPM : TARGET_PYPI, POPULAR_SCOPES, npm ? KNOWN_NPM : KNOWN_PYPI);
+  // One letter from a popular name, but installed tens of thousands of times a week itself: a package of its own (graphiql, react-rnd).
+  if (like && (await weeklyDownloads(fetchFn, pkg.eco, pkg.name)) >= WIDELY_USED) { like = null; known = true; }
   if (like) raise("ask", `${pkg.name} looks like the popular package ${like}. If ${like} was meant, install that instead.`);
 
   if (Number.isFinite(published) && now - published < minAge * HOUR) {
     // Say what to install instead, so an agent can carry on without the new release.
-    const old = settledVersion(times, version, now, minAge), at = npm ? "@" : "==";
-    raise("ask", `${pkg.name}@${version} was published ${Math.max(1, Math.round((now - published) / HOUR))} hours ago, and most malicious releases are removed within a few days. ${old ? `The newest settled version is ${old.version} (${old.days} days old): install ${pkg.name}${at}${old.version} instead, or let the user accept the new release.` : "There is no older release to fall back on: let the user decide."}`);
+    const old = settledVersion(times, version, now, minAge);
+    raise("ask", `${pkg.name}@${version} was published ${Math.max(1, Math.round((now - published) / HOUR))} hours ago, and most malicious releases are removed within a few days. ${old ? `The newest settled version is ${old.version} (${old.days} days old): install ${pkg.name}${at}${old.version} instead, or let the user accept the new release.` : go ? "Pin an older version, or let the user accept the new release." : "There is no older release to fall back on: let the user decide."}`);
   }
 
   // Read the code when the name carries no reputation or something above already looks off.
@@ -457,7 +516,7 @@ export async function guard(line, deps = {}) {
   let skipped = 0;
   for (const it of items) {
     if (it.pipe) { results.push({ decision: "ask", reasons: [`This pipes ${it.pipe} straight into a shell: whatever that address serves runs with your rights. Download it, read it, then run it.`] }); raise("ask"); continue; }
-    if (it.index) { results.push({ decision: "ask", reasons: [`This installs from another package index (${it.index}). A package there can shadow one of the same name on PyPI.`] }); raise("ask"); continue; }
+    if (it.index) { results.push({ decision: "ask", reasons: [`This installs from another package index (${it.index}). A package there can shadow one of the same name on the public registry.`] }); raise("ask"); continue; }
     if (it.server) { results.push({ decision: "ask", reasons: [`This adds an MCP server at an address that needs a look. ${it.why}`] }); raise("ask"); continue; }
     if (it.remote) { results.push({ decision: "ask", reasons: [`${it.remote} is fetched from a repository or URL, not from the registry, so it cannot be checked before it runs. Clone it and scan it with vetcode first.`] }); raise("ask"); continue; }
     const key = `${it.eco}:${it.name}@${it.want || ""}`;
@@ -516,6 +575,8 @@ export function privateRegistries({ cwd = process.cwd(), home = os.homedir(), en
   if (env.npm_config_registry && !PUBLIC_NPM.test(env.npm_config_registry)) allNpm = true;
   for (const k of ["PIP_INDEX_URL", "UV_INDEX_URL", "UV_DEFAULT_INDEX", "PIP_EXTRA_INDEX_URL", "UV_EXTRA_INDEX_URL"]) if (env[k] && !PUBLIC_PY.test(env[k])) allPy = true;
   for (const f of [path.join(cwd, "pip.conf"), path.join(home, ".pip", "pip.conf"), path.join(home, ".config", "pip", "pip.conf")]) if (/^\s*(?:extra-)?index-url\s*=\s*(?!https:\/\/pypi\.org\/)\S+/m.test(read(f))) allPy = true;
-  return pkg => pkg.eco === "npm" ? allNpm || scopes.has((pkg.name.match(/^(@[^/]+)\//) || [])[1]) : allPy;
+  // GOPRIVATE / GONOPROXY: comma-separated path prefixes (globs) that never go to the public proxy.
+  const goPrivate = `${env.GOPRIVATE || ""},${env.GONOPROXY || ""}`.split(",").map(x => x.trim()).filter(Boolean).map(g => new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "(?:/|$)"));
+  return pkg => pkg.eco === "npm" ? allNpm || scopes.has((pkg.name.match(/^(@[^/]+)\//) || [])[1]) : pkg.eco === "go" ? goPrivate.some(r => r.test(pkg.name)) : pkg.eco === "cargo" ? false : allPy;
 }
 

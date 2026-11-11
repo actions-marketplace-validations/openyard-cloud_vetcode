@@ -68,10 +68,10 @@ versions on fresh samples, oldest first:
 
 | Data | vetcode | GuardDog (best verdict) |
 |---|---|---|
-| **npm seed 31, 1,000 + 1,000, vetcode 0.6.0, GuardDog 3.2.0** | 95.8 · 96.6 · 94.9 · 3.3% | 92.8 · 95.5 · 90.3 · 4.3% |
-| **PyPI seed 31, 300 + 210, same versions** | 90.5 · 93.9 · 87.3 · 8.1% | 81.8 · 83.4 · 80.3 · 22.9% |
-| npm seed 7, 1,000 + 999, same versions, **in-sample for vetcode** | 94.3 · 96.2 · 92.6 · 3.7% | 92.5 · 94.6 · 90.6 · 5.2% |
-| PyPI seed 7, 300 + 210, same versions, **in-sample for vetcode** | 90.7 · 93.9 · 87.7 · 8.1% | 79.6 · 82.7 · 76.7 · 22.9% |
+| **npm seed 31, 1,000 + 1,000, vetcode 0.7.1, GuardDog 3.2.0** | 96.0 · 97.1 · 94.9 · 2.8% | 92.8 · 95.5 · 90.3 · 4.3% |
+| **PyPI seed 31, 300 + 210, same versions** | 90.7 · 94.2 · 87.3 · 7.6% | 81.8 · 83.4 · 80.3 · 22.9% |
+| npm seed 7, 1,000 + 999, same versions, **in-sample for vetcode** | 94.6 · 96.8 · 92.5 · 3.1% | 92.5 · 94.6 · 90.6 · 5.2% |
+| PyPI seed 7, 300 + 210, same versions, **in-sample for vetcode** | 90.8 · 94.3 · 87.7 · 7.6% | 79.6 · 82.7 · 76.7 · 22.9% |
 | npm seed 14, 500 + 500 | 93.3 · 96.4 · 90.4 · 3.4% | 92.8 · 95.7 · 90.0 · 4.0% |
 | npm seed 16, 500 + 500 | 94.4 · 97.6 · 91.4 · 2.2% | 93.3 · 95.4 · 91.2 · 4.4% |
 | npm seed 18, 150 + 150 | 92.6 · 97.8 · 88.0 · 2.0% | **93.2** · 94.5 · 92.0 · 5.3% |
@@ -95,7 +95,7 @@ points between seeds are normal.
 
 **Skills nobody has looked at.** Every rule for skills so far was written from the Datadog set, so its 49% is in-sample. `skills-heldout` is a second set from other marketplaces and other benign collections. It exists to stay unseen: `--explain` refuses to describe its misses, and no rule may be written from it. First look, vetcode 0.7.0: **94 of 157 caught (59.9%), 27 of 1,029 clean skills flagged (2.6%), F1 67.6**. Almost every catch (91 of 94) came from one rule, instructions that tell the agent to act against its user, which is also where the false alarms were (23 of 27).
 
-The clean collections are public, so those 27 were read; the malicious side was not. What they showed: advice about what to ask of the user ("never tell the user to run commands by hand") is not concealment; a quoted "ignore previous instructions" in a file that warns about it is not an injection; lower-case `<instructions>` is a section of a prompt and `<secret>` in a code sample is a placeholder; reading a setting from `.env` is not pointing at credentials; a negated rule ("do not copy `.env` into the response") is a safety rule. With those changes: 91 of 157 caught and 4 of 1,029 flagged. Three of those four had one reason, "the skill does more than its description says", which on 361 malicious skills across both sets decided a single catch; for a skill it is now a question for the reader (medium), not a verdict. Final: **91 of 157 caught (58.0%), 1 of 1,029 flagged (0.1%), F1 73.1**. Three catches were lost and cannot be looked at; on the Datadog set the same changes moved 100 · 4 to 98 · 2. Two more rules written from the Datadog misses (a second front matter opened with `---js`, which the parser runs when it loads the file; a command that uploads a local file) bring that set to 102 · 1 and catch nothing new on the held-out set, which is what an honest check looks like: rules written from one set's misses mostly help that set.
+The clean collections are public, so those 27 were read; the malicious side was not. What they showed: advice about what to ask of the user ("never tell the user to run commands by hand") is not concealment; a quoted "ignore previous instructions" in a file that warns about it is not an injection; lower-case `<instructions>` is a section of a prompt and `<secret>` in a code sample is a placeholder; reading a setting from `.env` is not pointing at credentials; a negated rule ("do not copy `.env` into the response") is a safety rule. With those changes: 91 of 157 caught and 4 of 1,029 flagged. Three of those four had one reason, "the skill does more than its description says", which on 361 malicious skills across both sets decided a single catch; for a skill it is now a question for the reader (medium), not a verdict. Final: **91 of 157 caught (58.0%), 1 of 1,029 flagged (0.1%), F1 73.1**. Three catches were lost and cannot be looked at; on the Datadog set the same changes moved 100 · 4 to 98 · 2. Two more rules written from the Datadog misses (a second front matter opened with `---js`, which the parser runs when it loads the file; a command that uploads a local file) bring that set to 102 · 1 (four more in 0.7.1: a password given for an archive, a throwaway-host link in the skill's README, secrets dumped from the environment, an API pointed at a plain-HTTP address; the fourth-corpus changes to look-alike names and download-and-run gave three back, so 0.7.1 stands at 103 · 1) and catch nothing new on the held-out set, which is what an honest check looks like: rules written from one set's misses mostly help that set.
 
 Cisco skill-scanner 2.3.2 on the same set (static and behavioural analysers, no LLM; Actions → Rivals with skills = true, run 42997010304), credited with its best verdict: **101 of 157 caught (64.3%), 56 of 1,029 flagged (5.4%), F1 64.3**. It catches ten more than vetcode and flags 56 clean skills where vetcode flags one. vetcode's false-alarm number is after reading the clean side; at first look it was 27, about half of Cisco's.
 
@@ -113,7 +113,7 @@ so seed 7 is in-sample and seed 31, which nobody looked at, is the check. Caught
 | PyPI, seed 31, 300 + 210 | 247 · 17 | **262 · 17** |
 | AI skills, 204 + 133 (in-sample since 0.4.1) | 99 · 4 | 100 · 4 |
 
-0.7.0 changes no malware rule and gives the same numbers on both seeds (runs 43006844091 and 43006849813, on the release commit).
+0.7.0 changes no malware rule and gives the same numbers on both seeds (runs 43006844091 and 43006849813). 0.7.1 trades one catch for thirteen false alarms: npm 925 · 31 (seed 7) and 949 · 28 (seed 31), PyPI 263 · 16 and 262 · 16 (runs 43016355379 and 43016360725). The catch lost and ten of the false alarms gone are look-alike dependency names, which no longer decide a verdict offline.
 
 On the unseen sample that is F1 95.5 → 95.8 on npm and 87.6 → 90.5 on PyPI, with no new false
 alarm. A first run of 0.6.0 did raise one: psutil ships a maintenance script that downloads
@@ -213,6 +213,24 @@ The other changes are general rules too: a text template whose only tag is a sep
 
 **What the agent has to read.** Findings are counted above; the cost to an agent is the length of the report. Size of the Markdown report, 0.3.1 against 0.7.0: first corpus 131,460 → 44,659 characters in total (median per app 11,149 → 3,904), third corpus 147,164 → 78,770 (median 11,882 → 7,384). At about four characters to a token that is roughly 1,000 to 1,800 tokens for a typical app instead of 3,000. In 0.7.0 low and informational findings take one line per rule (title, rule, count, first three places); the JSON report still has every one with its why and fix.
 
+**A fourth corpus.** [Twelve more](noise-fourth.json) (40,493 files: Gitea, NetBox, Saleor, Snipe-IT, Pterodactyl, Jellyfin, Dependency-Track, lldap, ntfy, Formbricks, Karakeep, Lobsters), first scanned with 0.7.0.
+
+| Fourth corpus, findings at medium or above | 0.7.0, first look | 0.7.1 |
+|---|---|---|
+| All categories | 380 | **296** |
+| Secrets · web · malware · supply chain · config | 36 · 282 · 41 · 12 · 9 | 15 · 242 · 20 · 10 · 9 |
+| Apps wrongly flagged as dangerous | 4 of 12 | **0 of 12** |
+
+The first look is again about 9 findings per thousand files (9.4), and four wrong verdicts is the worst of the four sets. So the general rules written after the second and third corpus did not make a new corpus quieter: each set of apps brings its own shapes. What this one showed:
+
+- **Look-alike dependency names** decided two of the four wrong verdicts (`graphiql` next to `graphql`, `list.js` next to `listr`), after `react-rnd` in the third corpus. On the malware benchmark the same rule fires on 2 to 5 malicious npm packages per thousand and on 5 to 8 clean ones. Offline it is now a question (medium). With `--online`, and in the guard before an install, the registry's weekly install count settles it: 20,000 or more and the name is a package of its own, under 2,000 and the finding is high.
+- **Text passed through `env:`** in a workflow is the safe form the rule's own advice recommends; the rule took the `env:` lines under a one-line `run:` for script.
+- **`uname -m` in a download address** picks the build for the machine, as every installer does; it is not a report of the host.
+- **`transfer.show`**, a route name, matched the paste host `transfer.sh` (21 findings).
+- Download, chmod and run now have to sit within a screen of each other; a key that starts with digits (a migration id next to its checksum) is not the name of a secret; SQL that only formats quoted identifiers or changes the schema has no value to bind; a Blade component's `$slot` is markup already rendered.
+
+The other three corpora with the same rules: 96, 285 and 247.
+
 "Wrongly flagged" is the verdict of a pre-install check: a high or critical finding in the malware, supply-chain or agent categories. On 0.3.1 that happened to uptime-kuma and linkwarden (a dependency one letter from a popular name; a `pull_request_target` workflow that only compares branch names) and healthchecks (a sign-up form that reads the time zone).
 
 What changed, in three passes:
@@ -274,12 +292,12 @@ cover this, so it is measured on the malware datasets instead (`bench/run.mjs --
 the throwaway runner). Each sample is put to the guard as if an agent were installing it
 before any advisory existed: the stand-in registry lists the package, the advisory database
 knows nothing, and the release is past the waiting period. What is left is the name and the
-code in the archive. Seed 31, vetcode 0.6.0:
+code in the archive. Seed 31, vetcode 0.7.1 (the malicious rows are the same as for 0.6.0):
 
 | Package | Blocked | Agent told to ask the user | Let through |
 |---|---|---|---|
 | npm, 1,000 malicious | 587 | 361 | 52 |
-| npm, 1,000 clean | 2 | 30 | 968 |
+| npm, 1,000 clean | 2 | 26 | 972 |
 | PyPI, 300 malicious | 126 | 137 | 37 |
 
 So about 95% of unreported malicious npm packages and 88% of PyPI ones do not install

@@ -53,6 +53,34 @@ export function lookalike(name, popular, scopes = POPULAR_SCOPES, known = popula
   return null;
 }
 
+/** How many times a package was installed last week, from the registry's public counters. null when unknown. */
+export async function weeklyDownloads(fetchFn, eco, name) {
+  try {
+    const url = eco === "npm" ? `https://api.npmjs.org/downloads/point/last-week/${String(name).replace("/", "%2F")}` : `https://pypistats.org/api/packages/${String(name).toLowerCase()}/recent`;
+    const r = await fetchFn(url, { headers: { "user-agent": "vetcode", accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const j = await r.json(), n = eco === "npm" ? j.downloads : j.data?.last_week;
+    return Number.isFinite(n) ? n : null;
+  } catch { return null; }
+}
+// A name installed tens of thousands of times a week is a package in its own right; one installed
+// a few hundred times next to a name installed millions of times is what a typosquat looks like.
+export const WIDELY_USED = 20000, BARELY_USED = 2000;
+
+/** With --online: settle each look-alike dependency by asking the registry how much the name is used. */
+export async function settleLookalikes(findings, log = () => {}, fetchFn = fetch) {
+  const drop = new Set();
+  for (const f of findings.filter(x => x.rule === "dep-typosquat").slice(0, 25)) {
+    const name = (/^"([^"]+)"/.exec(f.evidence) || [])[1];
+    if (!name) continue;
+    const n = await weeklyDownloads(fetchFn, /\.json$/.test(f.file) ? "npm" : "pypi", name);
+    if (n === null) continue;
+    if (n >= WIDELY_USED) { drop.add(f); log(`${name}: ${n} installs last week, a package of its own`); }
+    else if (n < BARELY_USED) { f.severity = "high"; f.confidence = "high"; f.title = "Dependency name is one letter from a popular package, and almost nobody installs it"; f.evidence += ` · ${n} installs last week`; }
+  }
+  for (let i = findings.length - 1; i >= 0; i--) if (drop.has(findings[i])) findings.splice(i, 1);
+}
+
 // `node -e "console.log('Thanks for installing, see https://…')"`: a notice, nothing runs.
 const PRINT_ONLY = /^\s*node\s+-e\s+(["'])\s*console\.(?:log|info|warn)\((?:(?!require|import|process|eval|Function|fetch|child_process|Buffer|\$\{).)*\)\s*;?\s*\1\s*$/s;
 const isKnownNpm = name => KNOWN_NPM.has(String(name).toLowerCase().replace(/[_.]+/g, "-"));
@@ -71,8 +99,11 @@ const INSTALL_ODDITIES = [
     title: "Install script keeps running in the background", why: "Detaching a process from the install lets it outlive the install and keep working unnoticed." },
 ];
 
-const TYPO = rule({ id: "dep-typosquat", severity: "high", title: "Dependency name looks like a popular package",
-  why: "Typosquats copy a popular name with one letter changed so a typo installs malware.",
+// Medium: among the dependencies of real projects this is right about as often as it is wrong
+// (react-rnd, graphiql and list.js are packages of their own), and only the registry can tell: how
+// old the name is and how many people install it. The guard asks exactly that before an install.
+const TYPO = rule({ id: "dep-typosquat", severity: "medium", title: "Dependency name is one letter from a popular package: check it on the registry",
+  why: "Typosquats copy a popular name with one letter changed so a typo installs malware. Many real packages also sit one letter from a popular one.",
   fix: "Check the exact name on the registry (owner, downloads, age, repository link). If it was a typo, remove it and treat the machine as exposed if it was installed." });
 
 const LOCKS = ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"];
@@ -281,7 +312,10 @@ function checkWorkflow(file, text, out) {
   let inRun = false, runIndent = -1;
   lines.forEach((line, i) => {
     const indent = line.search(/\S/);
-    if (/^\s*-?\s*run\s*:/.test(line)) { inRun = true; runIndent = indent; }
+    // A script is the text under `run: |`; a one-line `run: cmd` has none below it, and the keys
+    // beside it (`env:`, `with:`) are where untrusted text is supposed to go.
+    const runKey = /^(\s*)(-\s+)?run\s*:\s*(.*)$/.exec(line);
+    if (runKey) { inRun = /^[|>][+-]?\d*\s*(?:#.*)?$/.test(runKey[3].trim()); runIndent = runKey[1].length + (runKey[2]?.length || 0); }
     else if (inRun && indent >= 0 && indent <= runIndent && line.trim()) inRun = false;
     if ((inRun || /^\s*-?\s*run\s*:/.test(line) || /script\s*:/.test(line)) && GH_INPUT.test(line)) {
       out.push(finding(rule({ id: "gha-script-injection", severity: "high", confidence: "high", title: "Untrusted event text inside a workflow script",

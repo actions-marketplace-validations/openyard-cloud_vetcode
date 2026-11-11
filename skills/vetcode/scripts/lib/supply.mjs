@@ -490,14 +490,16 @@ export function scanPythonImportTime(files, out) {
 
 /** The project's own install-time files (package.json hooks, setup.py). */
 export function scanProjectInstallEntries(root, files, out) {
+  const atInstall = new Set(); // the files an install script starts: what runs before anyone decides to run anything
   for (const f of files) {
     if (!/(^|\/)package\.json$/.test(f.rel)) continue;
     const dir = path.join(root, path.dirname(f.rel)), pkg = readJson(f.text);
     const install = installEntryFiles(dir, hookScripts(pkg), pkg);
     // A private package is the user's own app; its setup scripts are theirs to know.
-    for (const abs of install) checkInstallEntry(abs, relTo(root, abs), out, false, "install", { popular: isKnownNpm(pkg?.name), ownApp: !!pkg?.private });
+    for (const abs of install) { atInstall.add(relTo(root, abs)); checkInstallEntry(abs, relTo(root, abs), out, false, "install", { popular: isKnownNpm(pkg?.name), ownApp: !!pkg?.private }); }
     for (const abs of libraryEntryFiles(dir, pkg)) if (!install.includes(abs)) checkInstallEntry(abs, relTo(root, abs), out, false, "library");
   }
+  return atInstall;
 }
 
 // Install-script defences a project may already have: lower the noise and say what is missing.

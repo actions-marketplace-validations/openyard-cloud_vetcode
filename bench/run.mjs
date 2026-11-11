@@ -108,8 +108,8 @@ async function score(name, items) {
     const worst = hits.reduce((m, f) => Math.min(m, RANK[f.severity]), 9);
     const decision = GUARD && !name.startsWith("skills") ? await guardDecision(name, it, res).catch(() => "error") : undefined;
     // Three ways to call a sample: any sign (the broad tier), a verdict (a trusted rule, or two rules on one file), and a verdict where the two rules may sit anywhere in the sample.
-    const strict = verdict(res.findings).level, loose = verdict(res.findings, { anywhere: true }).level;
-    rows.push({ id: it.id, label: it.label, worst, decision, strict, loose, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
+    const strict = verdict(res.findings).level, loose = verdict(res.findings, { anywhere: true }).level, placed = verdict(res.findings, { install: true }).level;
+    rows.push({ id: it.id, label: it.label, worst, decision, strict, loose, placed, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
     // The held-out set stays unseen: no description of its misses is ever written.
     if (EXPLAIN && name !== "skills-heldout" && it.label === "malicious" && worst > 1) (explained[name] ||= []).push({ id: it.id, ...explain(it.dir, res) });
     if (it.cleanup) remove(it.dir);
@@ -121,7 +121,7 @@ async function score(name, items) {
     const p = tp / (tp + fp || 1), rcl = tp / (tp + fn || 1);
     metrics[t] = { tp, fn, fp, tn, precision: p, recall: rcl, f1: 2 * p * rcl / (p + rcl || 1), accuracy: (tp + tn) / rows.length, fpr: fp / (fp + tn || 1) };
   }
-  for (const [t, key] of [["verdict", "strict"], ["verdictAnywhere", "loose"]]) {
+  for (const [t, key] of [["verdict", "strict"], ["verdictAnywhere", "loose"], ["verdictInstall", "placed"]]) {
     const tp = rows.filter(r => r.label === "malicious" && r[key]).length, fn = rows.filter(r => r.label === "malicious" && !r[key]).length;
     const fp = rows.filter(r => r.label === "benign" && r[key]).length, tn = rows.filter(r => r.label === "benign" && !r[key]).length;
     const p = tp / (tp + fp || 1), rcl = tp / (tp + fn || 1);

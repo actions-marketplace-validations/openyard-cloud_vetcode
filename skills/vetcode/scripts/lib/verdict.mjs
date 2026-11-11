@@ -16,14 +16,15 @@ try { trusted = new Set(JSON.parse(fs.readFileSync(new URL("./data/rule-trust.js
 const CATEGORIES = new Set(["malware", "supply-chain", "agent"]);
 
 /** { level: "critical" | "high" | null, decided: findings behind the verdict, leads: signs that did not make one, signs }. */
-export function verdict(findings, { anywhere = false } = {}) {
+export function verdict(findings, { anywhere = false, install = false } = {}) {
   const signs = findings.filter(f => CATEGORIES.has(f.category) && f.confidence !== "low" && (f.severity === "critical" || f.severity === "high"));
   let decided = signs.filter(f => trusted.has(f.rule));
   if (!decided.length) {
     // Two different rules about one file corroborate each other (anywhere: about one target, for measuring).
     const rulesAt = new Map();
     for (const f of signs) { const k = anywhere ? "" : f.file; if (!rulesAt.has(k)) rulesAt.set(k, new Set()); rulesAt.get(k).add(f.rule); }
-    decided = signs.filter(f => rulesAt.get(anywhere ? "" : f.file).size >= 2);
+    // install (being measured): a sign in a file that an install script starts counts as corroborated by where it is.
+    decided = signs.filter(f => rulesAt.get(anywhere ? "" : f.file).size >= 2 || (install && f.atInstall));
   }
   const level = decided.some(f => f.severity === "critical") ? "critical" : decided.length ? "high" : null;
   return { level, decided, leads: signs.filter(f => !decided.includes(f)), signs };

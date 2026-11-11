@@ -20,6 +20,7 @@ import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 import { decoded, payloads, stashed } from "./normalize.mjs";
+import { verdict } from "./verdict.mjs";
 
 const YARN_COPY = { id: "committed-package-manager", category: "supply-chain", severity: "low", confidence: "high", title: "The project runs a committed copy of Yarn",
   why: "With yarnPath set, every yarn command runs this file, on each developer's machine and in CI. It is far too large to review by eye, so a changed copy would go unnoticed.",
@@ -176,7 +177,10 @@ export async function vet(target, opts = {}) {
   scanBinaries(root, listed, findings);
   const prof = profiles(files);
   purposeMismatches(prof, findings);
-  scanProjectInstallEntries(root, files, findings);
+  const atInstall = scanProjectInstallEntries(root, files, findings);
+  // Where a finding sits matters as much as what it is: code an install script starts runs
+  // before anyone chose to run it. The verdict counts that as evidence of its own.
+  for (const f of findings) if (atInstall.has(f.file) || f.file === "setup.py") f.atInstall = true;
   scanPythonImportTime(files, findings);
   if (!only) hardeningAdvice(root, files, findings);
   const mcpLock = opts.mcpLock ? checkMcpLock(opts.mcpLock, files, findings) : null;
@@ -226,7 +230,10 @@ export async function vet(target, opts = {}) {
     baselined = unique.length - reported.length;
   }
   const counts = Object.fromEntries(SEVERITIES.map(s => [s, reported.filter(f => f.severity === s).length]));
+  // The answer to "is this safe to install or run": a verdict, or the places to read when there is none.
+  const v = verdict(reported), brief = f => ({ rule: f.rule, severity: f.severity, file: f.file, line: f.line, title: f.title });
   return {
+    verdict: { level: v.level, decided: v.decided.map(brief), leads: v.leads.map(brief) },
     version: VERSION, target: root, mode: only ? `diff${opts.diff ? ` vs ${opts.diff}` : ""}` : "full",
     stats: { files: files.length, packages, ms: Date.now() - started, counts, tools, osv, history: !!opts.history,
       ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },

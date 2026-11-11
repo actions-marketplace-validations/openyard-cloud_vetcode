@@ -1,0 +1,62 @@
+[
+  {
+    "repo": "zulip/zulip",
+    "sha": "4a7fbdea0fa8b3425acdf3ad8590656c32053649",
+    "about": "Python (Django) + TypeScript; team chat with bots, API keys and many auth backends"
+  },
+  {
+    "repo": "pretix/pretix",
+    "sha": "137059dd4e7a7f4643199323b69a85824bffc28e",
+    "about": "Python (Django); ticket sales with payment plugins and API tokens"
+  },
+  {
+    "repo": "wger-project/wger",
+    "sha": "c6ee8a740137c498ee7221e6cd3d8ad84b4a9304",
+    "about": "Python (Django); workout manager with API tokens"
+  },
+  {
+    "repo": "redmine/redmine",
+    "sha": "3805a1dd05e44b135ee761026756a421f96c8828",
+    "about": "Ruby (Rails); project management with API keys, LDAP and repositories"
+  },
+  {
+    "repo": "solidusio/solidus",
+    "sha": "e8dc054235483d11bf37b82391ccf641d6b82c1d",
+    "about": "Ruby (Rails); commerce framework with payment methods and API keys"
+  },
+  {
+    "repo": "Chocobozzz/PeerTube",
+    "sha": "53928dd6242afb8f0d5cdd48ac20b3608342ab24",
+    "about": "TypeScript (Node + Angular); video platform with OAuth, federation keys and plugins"
+  },
+  {
+    "repo": "TryGhost/Ghost",
+    "sha": "801ec9741cc65d6ba529913cf2e4409a8f36cbeb",
+    "about": "JavaScript/TypeScript; publishing platform with admin API keys, members and webhooks"
+  },
+  {
+    "repo": "woodpecker-ci/woodpecker",
+    "sha": "80dd6753508eae1d53d0a48b1ec84c39b5026c6b",
+    "about": "Go + Vue; CI server with secrets, agents tokens and forge OAuth"
+  },
+  {
+    "repo": "halo-dev/halo",
+    "sha": "c47762117e36006e5a3f2067c5bf0f52e5e998a9",
+    "about": "Java (Spring) + Vue; site builder with plugins, tokens and OAuth"
+  },
+  {
+    "repo": "kanboard/kanboard",
+    "sha": "37ef9101bf45ac7b963d79fe0c117729a891cfdb",
+    "about": "PHP; project board with API tokens, LDAP and plugins"
+  },
+  {
+    "repo": "Leantime/leantime",
+    "sha": "bbba712e69e43971cb103033ac6048bd073d1e63",
+    "about": "PHP (Laravel components); project management with API keys and OIDC"
+  },
+  {
+    "repo": "Radarr/Radarr",
+    "sha": "7e3f80c98d01481430ab356f6d7322fc5dc381ee",
+    "about": "C# + React; media manager with API keys and download-client credentials"
+  }
+]

@@ -3,14 +3,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { DOC, TEST, finding, suppressedHere, presentIn } from "./engine.mjs";
+import { DOC, TEST, LOCALE, finding, suppressedHere, presentIn } from "./engine.mjs";
 
 const ROTATE = "Revoke and rotate it at the provider first (assume it is already copied), then move it to an environment variable or secret store and remove it from the code and git history.";
 
 export const SECRET_RULES = [
   { id: "secret-private-key", severity: "critical", title: "Private key in the repository", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/,
     // A header named in docs, or matched against (`starts_with("-----BEGIN …-----")`), holds no key.
-    unless: /^\s*(?:\/\/[/!]?|\*|#|--)\s|-----BEGIN[^"'`\n]*-----["'`]\s*[,;)\]]/ },
+    unless: /^\s*(?:\/\/[/!]?|\*|#|--)\s|-----BEGIN[^"'`\n]*-----["'`]\s*[,;)\]]|\bplaceholder\s*=/i },
   { id: "secret-aws-key", severity: "critical", title: "AWS access key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, unless: /EXAMPLE/ },
   { id: "secret-github-token", severity: "critical", title: "GitHub token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/ },
   { id: "secret-gitlab-token", severity: "critical", title: "GitLab token", re: /\bglpat-[A-Za-z0-9_-]{20,}\b/ },
@@ -33,10 +33,10 @@ export const SECRET_RULES = [
   { id: "secret-saas-token", severity: "high", title: "SaaS API token", re: /\b(?:shp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}|EAAA[A-Za-z0-9_-]{60}|sq0csp-[A-Za-z0-9_-]{43}|lin_api_[A-Za-z0-9]{40}|ntn_[A-Za-z0-9]{40,}|secret_[A-Za-z0-9]{43}(?=[^\n]*notion)|PMAK-[a-f0-9]{24}-[a-f0-9]{34}|re_[A-Za-z0-9]{8}_[A-Za-z0-9]{24}|key-[0-9a-z]{32}(?=[^\n]*mailgun))\b/i },
   { id: "secret-azure-storage", severity: "critical", title: "Azure storage account key", re: /AccountKey=[A-Za-z0-9+/]{86}==/ },
   { id: "secret-npmrc-token", severity: "critical", title: "Registry auth token in .npmrc", re: /_authToken\s*=\s*(?!\$\{)[A-Za-z0-9_\-.]{20,}/ },
-  { id: "secret-slack-webhook", severity: "medium", title: "Slack incoming webhook URL", re: /https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[A-Za-z0-9]{20,}/ },
+  { id: "secret-slack-webhook", severity: "medium", title: "Slack incoming webhook URL", re: /https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[A-Za-z0-9]{20,}/, unless: /\bplaceholder\s*=/i },
   { id: "secret-gcp-service-account", severity: "critical", title: "Google service account key", re: /"private_key_id"\s*:\s*"[a-f0-9]{40}"/ },
   { id: "secret-db-url", severity: "high", title: "Database URL with a password", re: /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|amqps?|mssql):\/\/[^\s:@/'"`]+:([^\s@/'"`]{3,})@[^\s'"`]+/i,
-    unless: /:\/\/[^\s:@/]+:(?:\$\{?|<|\{\{|%\(|password|passw(or)?d|pass|pwd|secret|changeme|example|xxx+|\*{3,}|user|test|postgres|root)[^@]*@/i },
+    unless: /:\/\/[^\s:@/]+:(?:\$\{?|<|\{\{|%\(|password|passw(or)?d|pass|pwd|secret|changeme|example|xxx+|\*{3,}|user|test|postgres|root|my[_-]?\w*|your[_-]?\w*|replace[\w-]*|invalid)[^@]*@|:\/\/(?<same>[^\s:@/]+):\k<same>@/i },
 ].map(r => ({ category: "secrets", confidence: "high", why: "Anyone who can read this code (or a copy of it, a build, a log) can use the credential.", fix: ROTATE, ...r }));
 
 // Values that are clearly not real secrets.
@@ -68,7 +68,6 @@ const neverIssued = (rule, value) => {
 
 // Where a "secret-looking assignment" is not a secret. These files and names hold words about
 // secrets (labels, column names, test values), which is most of what a real application has.
-const LOCALE = /(^|\/)(locales?|i18n|l10n|lang|langs|languages|translations?)\/|\.(po|pot|arb|xlf|xliff|strings|resx)$|(^|\/)(messages|strings|translations?)[._-][\w-]+\.(json|ya?ml|properties)$/i;
 // The key says what a field is called or what state it is in, not what its value is.
 const NAME_KEY = /(?:column|field|name|label|header|param(?:eter)?|path|prop|attr(?:ibute)?|selector|placeholder|title|type|status|state|hint|help|text|message|description|prefix|suffix|env|var(?:iable)?|regex|pattern|format|url|uri|endpoint|file(?:name)?|dir|length|size|count|ttl|expir\w*|algo(?:rithm)?|scheme|mode|kind|event|action|error|required|enabled|visible|strength|policy|rules?|min|max)$/i;
 // A name, not a value: words joined by . _ - : or / (api_key_encrypted, backend-api-key).
@@ -102,7 +101,7 @@ export function scanSecrets(file, text, out) {
       const m = r.re.exec(line);
       if (!m || (r.unless && r.unless.test(line)) || neverIssued(r, m[0]) || suppressedHere(lines, i, file.rel, r.id)) continue;
       hit = true;
-      out.push(finding(r, file.rel, i + 1, line.replace(m[1] ?? m[0], redact(m[1] ?? m[0])), doc ? { confidence: "low" } : {}));
+      out.push(finding(r, file.rel, i + 1, line.replace(m[1] ?? m[0], redact(m[1] ?? m[0])), doc ? { confidence: "low" } : test && r.id === "secret-private-key" ? { severity: "low", title: "Private key among the tests (a fixture, unless it is used anywhere real)" } : {}));
     }
     for (const m of jwt ? line.matchAll(JWT) : []) {
       hit = true;
@@ -137,7 +136,12 @@ export function scanSecretFiles(root, out) {
     for (const rel of git.stdout.split("\0").filter(Boolean)) {
       if (!SECRET_FILE.test(rel) || SAMPLE.test(rel)) continue;
       if (/\.npmrc$/.test(rel) && !/_authToken|_auth\s*=|_password/.test(safeRead(path.join(root, rel)))) continue;
-      out.push(finding({ id: "secret-file-committed", category: "secrets", severity: "high", title: "Secret file tracked by git", confidence: "high",
+      // An env file kept in git on purpose (CI, tests, public build settings) holds no secret when
+      // none of its values looks like one; a key or certificate among the tests is a fixture.
+      const body = /\.env/i.test(rel) ? safeRead(path.join(root, rel)) : null, inside = [];
+      if (body !== null) scanSecrets({ rel: "env" }, body, inside);
+      const plain = (body !== null && !inside.some(f => f.severity !== "info")) || TEST.test(rel);
+      out.push(finding({ id: "secret-file-committed", category: "secrets", severity: plain ? "low" : "high", title: plain ? "Env or key file tracked by git (no secret-looking value found in it)" : "Secret file tracked by git", confidence: "high",
         why: "Everything in this file is in the repository and its history, for anyone with access to it.",
         fix: "Rotate what is inside, `git rm --cached` the file, add it to .gitignore, and purge it from history (git filter-repo) if the repository was ever shared." }, rel, 1, rel));
     }

@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
 import { profiles, purposeMismatches } from "./profile.mjs";
 import { npmHistory } from "./npmhistory.mjs";
-import { scanLines, scanFile, options, rank, SEVERITIES, TEST, VENDORED } from "./engine.mjs";
+import { scanLines, scanFile, options, rank, SEVERITIES, TEST, VENDORED, LOCALE, DEVTOOL, DEVSTACK } from "./engine.mjs";
 import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
 import { MALWARE_RULES, MALWARE_FILE_RULES } from "./malware.mjs";
 import { WEB_RULES } from "./web.mjs";
@@ -21,7 +21,7 @@ import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 import { decoded, payloads, stashed } from "./normalize.mjs";
 
-export const VERSION = "0.3.1";
+export const VERSION = "0.4.0";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -119,7 +119,13 @@ export async function vet(target, opts = {}) {
     scanFile(file, file.text, ANOMALY_FILE_RULES, findings);
     // A vulnerability pattern in a test, a fixture or a vendored library is not in the app's own
     // request path. Malware, secrets and supply-chain findings there still count.
-    if (TEST.test(file.rel) || VENDORED.test(file.rel)) for (let k = findings.length - 1; k >= mark; k--) if (findings[k].category === "web") findings.splice(k, 1);
+    if (TEST.test(file.rel) || VENDORED.test(file.rel) || LOCALE.test(file.rel)) for (let k = findings.length - 1; k >= mark; k--) if (findings[k].category === "web") findings.splice(k, 1);
+    // Maintainer scripts and development containers: kept, but as low. Secrets and malware there keep their severity.
+    const dev = DEVTOOL.test(file.rel), stack = DEVSTACK.test(file.rel);
+    if (dev || stack) for (let k = mark; k < findings.length; k++) {
+      const f = findings[k];
+      if (((dev && f.category === "web") || (stack && f.category === "config")) && rank(f.severity) < rank("low")) findings[k] = { ...f, severity: "low" };
+    }
     // Bundled or minified output is full of patterns that mean nothing there; keep its findings
     // visible but let only high-confidence ones decide.
     // Only JavaScript ships that way on purpose: a one-line Python file or setup.py is itself

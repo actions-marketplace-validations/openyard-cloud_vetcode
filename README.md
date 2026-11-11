@@ -59,6 +59,15 @@ Rules alone catch a minority of malicious skills for every tool; most of them ar
 - **Techniques the datasets barely contain:** 15 of 15 caught from 2021–2026 campaigns, each next to a clean look-alike that is not flagged (`bench/redteam.mjs`): code pushed off-screen in `dist/`, GlassWorm Unicode payloads, payloads in images, protestware, time bombs, sandbox evasion, homoglyphs, disguised executables, recon beacons, ClawHavoc-style skills, a Visual Studio project that runs encoded PowerShell at build, a Rust build script that steals SSH keys, a Go module whose init() opens a shell.
 - **Breadth:** one run covers malware, supply chain, secrets, web and API code, server and cloud configuration, CI/CD and AI agent setups. GuardDog covers malicious packages; Cisco skill-scanner covers skills.
 
+**On real applications.** A scanner that cries wolf costs an agent tokens on every run, so false alarms are measured too: twelve well-known open-source apps (about 14,000 files, pinned to a commit) that handle tokens, passwords and API keys all day.
+
+| Findings at medium or above | 0.3.1 | 0.4.0 |
+|---|---|---|
+| All twelve apps | 2,024 | **101** |
+| Apps wrongly given a high or critical malware or supply-chain finding | 3 | **0** |
+
+Detection on the malware benchmark is unchanged between the two versions. Run it yourself with `node bench/noise.mjs` (no model, no cost); details in [`bench/README.md`](bench/README.md#false-alarms-on-real-applications).
+
 **Caveats.** Samples are 336 to 1,000 items, so numbers move by one or two points between samples. Most malicious packages in these datasets were found by GuardDog itself, which favours it. The numbers are the scanner alone; in normal use the agent re-reads every finding, which removes more false alarms. Everything is reproducible with the scripts in [`bench/`](bench/README.md).
 
 ## What it checks
@@ -144,7 +153,7 @@ Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settin
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.3.1", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.4.0", "vetcode-mcp"] }
   }
 }
 ```
@@ -152,7 +161,7 @@ Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settin
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.3.1", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.4.0", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -160,7 +169,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.3.1", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.4.0", "vetcode-mcp"]
 ```
 
 Then ask your agent to "use vetcode to review this project". The agent should call `vetcode_guide` once; the server also tells it to.
@@ -266,9 +275,11 @@ Name the rule. Folders can go in `.vetcodeignore` (gitignore syntax). Every repo
 
 ## How it works, and its limits
 
-The scanner is regex and heuristics: fast, offline, explainable, and noisy on purpose. It produces candidates, not verdicts. The skill tells the agent to confirm each one with a concrete exploit scenario, drop what it cannot justify, and review what patterns cannot see. [Cisco's measurements on malicious agent skills](https://github.com/cisco-ai-defense/skill-scanner) found that rules alone catch a small share of them, while adding a model's judgement catches far more; vetcode is built around that combination.
+The scanner is regex and heuristics: fast, offline and explainable. It produces candidates, not verdicts. The skill tells the agent to confirm each one with a concrete exploit scenario, drop what it cannot justify, and review what patterns cannot see. [Cisco's measurements on malicious agent skills](https://github.com/cisco-ai-defense/skill-scanner) found that rules alone catch a small share of them, while adding a model's judgement catches far more; vetcode is built around that combination.
 
 It is not a guarantee. New malware, logic bugs and infrastructure outside the repository can still slip through. Treat a clean report as "nothing obvious found".
+
+**What vetcode adds, and what it does not.** We measured the review step on 49 real authorization and business-logic advisories published after the model's training cutoff. Claude Code with vetcode found the bug in 41% of them, and on a 15-case control Claude Code alone did as well (7 against 8). Finding logic bugs is your agent's own ability; the skill does not raise it. What vetcode gives an agent is what it does not have by itself: every file read, not a sample; patterns for malware, supply-chain tricks and leaked secrets with measured accuracy; registry and advisory data newer than the model; and a procedure for looking at untrusted code without running it. The numbers and their limits are in [`bench/README.md`](bench/README.md#the-agent-step-on-real-advisories).
 
 **Privacy:** the scanner runs locally and sends no code anywhere. Only with `--online` does it reach the network: package names and versions go to OSV.dev, and installed semgrep, osv-scanner and trivy run with their own network access (semgrep downloads its rules). Secrets are redacted in every report. The review step is different: your agent reads the code, so that code goes to whichever model provider the agent uses (Anthropic, OpenAI, Google…), under that provider's terms. For code that must not leave the machine, run the scanner alone, or use an agent backed by a local model.
 

@@ -842,3 +842,40 @@ test("web patterns: helpers, text templates, fragments, tests and vendored code 
     "xss-template-unescaped medium views/y.ejs:1",
   ]);
 });
+
+test("maintainer scripts, dev stacks and query builders are candidates at low, the same code in the app is not", async () => {
+  const pem = j("-----BEGIN ", "RSA PRIVATE KEY-----");
+  const dir = project({
+    "scripts/release.js": "const { execSync } = require('child_process');\nexecSync(`git push origin ${branch}`);\n",
+    "src/server.js": "const { execSync } = require('child_process');\nexecSync(`convert ${req.query.file} out.png`);\ndb.prepare(`DELETE FROM ${table} WHERE id = ?`).run(id);\ndb.query(`SELECT * FROM users WHERE id = ${req.params.id}`);\nconst bc = new BroadcastChannel('x');\nchannel.onmessage = (e) => use(e.data);\nwindow.addEventListener('message', (e) => use(e.data));\n// const agent = new https.Agent({ rejectUnauthorized: false });\n",
+    "store/q.go": 'package store\nfunc q() {\n\ta := fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE %s)", quoteTable(d, t), cond)\n\tb := fmt.Sprintf("SELECT * FROM users WHERE name = \'%s\'", name)\n\tdb.Exec(query, status, fmt.Sprintf("%d days", days))\n\tdb.Exec(fmt.Sprintf("DELETE FROM logs WHERE day < %d", day))\n}\n',
+    "api/views.py": "@csrf_exempt\ndef a(r): pass\n@csrf_exempt\ndef b(r): pass\n@csrf_exempt\ndef c(r): pass\n",
+    ".devcontainer/docker-compose.yml": "services:\n  db:\n    image: postgres\n    environment:\n      POSTGRES_PASSWORD: postgres\n    ports:\n      - 5432:5432\n",
+    "docker-compose.yml": "services:\n  app:\n    environment:\n      APP_SECRET: replace-me-with-a-random-string\n      DB_PASSWORD: hunter2secret\n",
+    "tests/certs/test.key": `${pem}\nMIIE\n`,
+    "src/db.js": "const url = 'postgresql://umami:umami@db:5432/umami';\n",
+  });
+  const r = await run(dir);
+  const got = r.findings.filter(f => ["critical", "high", "medium"].includes(f.severity)).map(f => `${f.rule} ${f.file}:${f.line}`).sort();
+  assert.deepEqual(got, [
+    "cmd-injection-js src/server.js:2",
+    "compose-literal-password docker-compose.yml:5",
+    "csrf-disabled api/views.py:1",
+    "postmessage-no-origin src/server.js:7",
+    "sql-concat store/q.go:4",
+    "sql-go-sprintf store/q.go:6",
+    "sql-template-literal src/server.js:4",
+  ]);
+  const low = r.findings.filter(f => f.severity === "low").map(f => `${f.rule} ${f.file}`);
+  for (const want of ["cmd-injection-js scripts/release.js", "sql-fragments src/server.js", "sql-fragments store/q.go", "compose-literal-password .devcontainer/docker-compose.yml", "secret-private-key tests/certs/test.key"]) assert.ok(low.includes(want), want);
+  assert.match(r.findings.find(f => f.rule === "csrf-disabled").title, /3 places in this file/);
+});
+
+test("an env file kept in git is a secret file only when a value in it looks like a secret", async () => {
+  const dir = project({ ".env.testing": "APP_ENV=testing\nDB_HOST=127.0.0.1\nCACHE_DRIVER=array\n", ".env.production": `APP_ENV=production\nSTRIPE_KEY=${fake("sk_live_", 24)}\n` });
+  const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  git("init", "-q"); git("add", "-f", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
+  const r = await run(dir);
+  const sev = Object.fromEntries(r.findings.filter(f => f.rule === "secret-file-committed").map(f => [f.file, f.severity]));
+  assert.deepEqual(sev, { ".env.testing": "low", ".env.production": "high" });
+});

@@ -89,6 +89,8 @@ Rules alone catch a minority of malicious skills for every tool; most of them ar
 | Twelve more apps (37,000 files) | 340 (0.6.0) | **247** |
 | Wrongly flagged among those | 2 | **0** |
 
+The report itself got shorter too, which is what an agent pays for: on the first twelve apps the text an agent has to read went from 131 KB to 45 KB in total (median per app 11 KB to 4 KB), and on the third twelve from 147 KB to 79 KB. Fewer findings account for most of it; low and informational findings are now one line per rule, with the detail in the JSON report.
+
 "First look" is the version that met the apps before any rule was changed because of them, so that column is the honest one: each new set of apps has cost about 9 findings per thousand files on first contact since 0.6.0, and one or two wrong verdicts in twelve.
 
 Detection did not pay for this: on a malware sample no rule was written from, 0.6.0 catches slightly more than 0.5.0 (npm 944 → 949 of 1,000, PyPI 247 → 262 of 300) with the same false alarms. Run the noise check yourself with `node bench/noise.mjs` (no model, no cost); details in [`bench/README.md`](bench/README.md#false-alarms-on-real-applications).

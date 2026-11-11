@@ -41,6 +41,16 @@ export function markdown(result) {
     out.push(``, `## ${ICON[sev]} ${sev[0].toUpperCase() + sev.slice(1)} (${group.length})`);
     const byRule = new Map();
     for (const f of group) { if (!byRule.has(f.rule)) byRule.set(f.rule, []); byRule.get(f.rule).push(f); }
+    // Low and info: one line per rule. They are hygiene, rarely what the reader came for, and an
+    // agent pays for every line; the JSON report has each one with its why and fix.
+    if (sev === "low" || sev === "info") {
+      out.push(``);
+      for (const [rule, list] of byRule) {
+        const where = list.slice(0, 3).map(f => code(f.line ? `${f.file}:${f.line}` : f.file)).join(", ");
+        out.push(`- ${list[0].title} · ${code(rule)} · ${list.length}×: ${where}${list.length > 3 ? ` and ${list.length - 3} more` : ""}`);
+      }
+      continue;
+    }
     for (const [rule, list] of byRule) {
       const f0 = list[0];
       out.push(``, `### ${f0.title} · ${code(rule)} · ${f0.category}${f0.tool ? ` · via ${f0.tool}` : ""}`, ``);

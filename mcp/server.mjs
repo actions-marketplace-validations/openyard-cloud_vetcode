@@ -5,7 +5,7 @@
 //
 // Tools:   vetcode_scan       run the scanner on a folder (read-only) and return the report
 //          vetcode_guide      the review workflow (SKILL.md): how to confirm and report findings
-//          vetcode_reference  a manual-review checklist: malware | web | server | secrets
+//          vetcode_reference  a manual-review checklist: malware | web | isolation | server | secrets
 // Prompts: security_review    the workflow as a ready-made prompt
 import fs from "node:fs";
 import path from "node:path";
@@ -15,7 +15,7 @@ import { vet, VERSION } from "../skills/vetcode/scripts/lib/index.mjs";
 import { markdown } from "../skills/vetcode/scripts/lib/report.mjs";
 
 const SKILL = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "skills", "vetcode");
-const TOPICS = ["malware", "web", "server", "secrets"];
+const TOPICS = ["malware", "web", "isolation", "server", "secrets"];
 const MAX_FINDINGS = 150;
 
 // The skill's own text, minus front matter, so non-skill agents get the same instructions.
@@ -49,7 +49,7 @@ const TOOLS = [
   },
   {
     name: "vetcode_reference",
-    description: "A manual-review checklist: malware (how attacks hide and how to analyse them safely), web (auth, IDOR, input handling, payments, LLM features), server (deployment, containers, cloud and BaaS), secrets (where they leak, how to rotate).",
+    description: "A manual-review checklist: malware (how attacks hide and how to analyse them safely), web (auth, IDOR, input handling, payments, LLM features), isolation (libraries, SDKs, brokers, databases and sandboxes that decide who may do what), server (deployment, containers, cloud and BaaS), secrets (where they leak, how to rotate).",
     inputSchema: { type: "object", properties: { topic: { type: "string", enum: TOPICS } }, required: ["topic"], additionalProperties: false },
     annotations: { title: "vetcode checklist", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },

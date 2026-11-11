@@ -620,6 +620,15 @@ test("MCP server: initialize, list tools, scan, guide, errors", async () => {
   assert.equal(Object.keys(out).length, 6, "notifications get no reply");
 });
 
+test("every checklist the MCP server offers exists and SKILL.md names it", () => {
+  const src = fs.readFileSync(path.resolve("mcp/server.mjs"), "utf8");
+  const topics = JSON.parse(src.match(/const TOPICS = (\[.*?\]);/)[1]);
+  const skill = fs.readFileSync(path.resolve("skills/vetcode/SKILL.md"), "utf8");
+  const files = fs.readdirSync(path.resolve("skills/vetcode/references")).map(f => f.replace(/\.md$/, "")).sort();
+  assert.deepEqual([...topics].sort(), files);
+  for (const t of topics) assert.ok(skill.includes(`references/${t}.md`), `SKILL.md names references/${t}.md`);
+});
+
 test("MCP configs pinned to a git tag or commit are not reported as unpinned", async () => {
   const dir = project({ ".mcp.json": JSON.stringify({ mcpServers: {
     a: { command: "npx", args: ["-y", "-p", "github:openyard-cloud/vetcode#v0.3.0", "vetcode-mcp"] },

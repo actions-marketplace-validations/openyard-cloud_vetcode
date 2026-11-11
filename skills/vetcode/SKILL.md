@@ -79,10 +79,11 @@ Load only the references that match the stack:
 
 - `references/malware.md`: how attacks hide in packages, repos, extensions and MCP servers, and how to analyse them safely.
 - `references/web.md`: authentication, authorization (IDOR), sessions, input handling, uploads, payments, webhooks, multi-tenant data, LLM/agent features.
+- `references/isolation.md`: libraries, SDKs, brokers, databases, sandboxes and other code with no routes that still decides who may do what (keys and patterns built from user values, side doors, claimed identities, checks that go stale).
 - `references/server.md`: deployment, containers, cloud and BaaS (Supabase, Firebase, Cloudflare, Vercel), headers, exposed services.
 - `references/secrets.md`: where secrets leak and how to rotate and purge them.
 
-For an app, at minimum: list the routes/handlers/server actions and check each one for authentication **and** authorization on the specific object (can user A read or change user B's record by changing an id?). This is the most common serious bug and no regex finds it.
+For an app, at minimum: list the routes/handlers/server actions and check each one for authentication **and** authorization on the specific object (can user A read or change user B's record by changing an id?). This is the most common serious bug and no regex finds it. For a library, SDK or server, list its decision points instead and work through `references/isolation.md`.
 
 ## 6. Report
 

@@ -20,6 +20,7 @@ A rule is plain data: `id`, `category`, `severity`, `title`, a regex `re` (or a 
 - Add a test that fires and, where it matters, one that stays quiet on legitimate code.
 - **Never commit a real secret or working malware.** Build fixtures from pieces at test time (see how `tests/vet.test.mjs` does it), so GitHub push protection, antivirus and vetcode itself stay quiet on this repository.
 - Keep the scanner dependency-free. Large rule sets that already exist elsewhere (semgrep, gitleaks) are better used as external tools than copied.
+- A new rule about malware, the supply chain or agent files is a **sign**: it is reported, and it does not give a verdict alone until it has a record (`bench/README.md`, "Signs and verdicts"). After changing such rules, run the Benchmark workflow on seed 7 with `skills` and regenerate `skills/vetcode/scripts/lib/data/rule-trust.json` with `bench/calibrate.mjs`; check on seed 31 and `skills-heldout`. Do not edit the table by hand.
 - Before opening a pull request: `npm test` and `node skills/vetcode/scripts/vet.mjs . --fail-on high`.
 
 Changes go through pull requests; `main` is protected.

@@ -248,6 +248,43 @@ What changed, in three passes:
 
 Each change has a test in both directions: the ordinary shape is quiet, the same shape with a real target is still reported. The 101 left are what a reviewer should look at: `innerHTML = data`, `v-html`, `|safe`, certificate checks an option turns off, a password hashed with SHA-256.
 
+## Signs and verdicts
+
+Five sets of twelve apps were scanned for the first time, one after another (the corpora above, plus [a fifth](noise-fifth.json) and [a sixth](noise-sixth.json)). Each time two to five clean apps got a high or critical finding about malware, the supply chain or agent files, each time from a different rule matching one or two lines, and the rules fixed after one set did not make the next first look better: 3, 5, 2, 4 and 5 wrong verdicts. Tightening a rule to stop that cost catches on the malware benchmark. That loop is a property of the design, not of any rule: with several hundred rules each allowed to call a target malicious by itself, some rule is wrong somewhere in almost every large code base.
+
+So from 0.8.0 a finding and a verdict are different things (`lib/verdict.mjs`):
+
+- A **sign** is a high or critical finding in those three categories. Every sign is reported, as before.
+- A **verdict** needs one of: a sign from a rule that has earned it; two different rules about the same file; a sign in a file that an install script starts.
+- Which rules have earned it is measured, not chosen. `bench/run.mjs` records for every rule how many malicious and clean samples it flagged, and how many of them alone. `node bench/calibrate.mjs <results> --apps bench/app-first-look.json --out skills/vetcode/scripts/lib/data/rule-trust.json` then trusts a rule when malicious / (malicious + clean + 1) is at least 0.85 among the samples it flagged alone (the extra clean sample keeps a short record from looking perfect); a rule that never fired on anything clean is judged on all the malicious samples it fired on. Clean apps where a rule caused a wrong verdict at first look count against it ([`app-first-look.json`](app-first-look.json)). A rule written after the last calibration is a sign until it has a record.
+
+The table is computed from seed 7 and the Datadog skills only: 29 rules decide alone, 35 are signs. For example a lockfile entry from another host never flagged a malicious sample alone and flagged 9 clean ones; an injected instruction in an agent file flagged 133 malicious samples alone and one clean one. Checked on samples that had no part in the table (runs 43037719294 and 43037728582):
+
+| Sample | Any sign: caught · false alarms · F1 | Verdict: caught · false alarms · F1 |
+|---|---|---|
+| npm seed 7 (used for the table) | 925 · 31 of 999 · 94.6 | 878 · 8 · 93.1 |
+| PyPI seed 7 (used for the table) | 263 · 16 of 210 · 90.8 | 244 · 1 · 89.5 |
+| **npm seed 31** | 947 · 26 of 1,000 · 96.0 | **907 · 5 · 94.9** |
+| **PyPI seed 31** | 262 · 16 of 210 · 90.7 | **234 · 1 · 87.5** |
+| Skills, Datadog (used for the table) | 103 · 1 of 133 · 66.9 | 92 · 1 · 62.0 |
+| **Skills, held out** | 91 · 1 of 1,029 · 73.1 | **89 · 0 · 72.4** |
+
+On seed 31 the verdict keeps 96% of the npm catches and 89% of the PyPI ones and drops four false alarms in five (26 to 5) and fifteen in sixteen. GuardDog 3.2.0 on the same samples catches 903 with 43 false alarms and 241 with 48. Requiring the two rules to be about the same file rather than anywhere in the sample costs one or two catches and saves about as many false alarms; counting a sign in install-time code as corroborated adds three or four catches and no false alarm.
+
+Nothing is traded away by having both: the signs are still all reported. What changes is what each is used for. The guard denies an install on a verdict at critical and asks on anything less; on the two npm samples that takes wrong denials of clean packages from 8 in 1,999 to 1, and moves about 20 malicious packages per thousand from "blocked" to "asked". On apps, "wrongly flagged as dangerous" now means a verdict:
+
+| Apps | Wrong by the old rule (any sign), at first look | Verdicts, same findings |
+|---|---|---|
+| Fourth set, findings of 0.7.0 | 4 of 12 | 0 |
+| Fifth set, findings of 0.7.1 | 5 of 12 | 0 |
+| **Sixth set, first scanned with 0.8.0** | 2 of 12 | **1** |
+
+The first two rows flatter the mechanism: the nine wrong verdicts there are in `app-first-look.json`, so the table knew about them (without that file six of the nine go away). The sixth set is the fair row. Zulip was flagged the old way by a rule written the same day, which is exactly the case a rule without a record should not decide; Ghost gets a verdict both ways, from instructions to agents in its own skill files, and it does ship agent hooks.
+
+The dial is the 0.85. Lower it and more rules decide (more caught, more wrong verdicts); the curve is one run of `calibrate.mjs` and the benchmark, not a round of edits to rules.
+
+What this does not fix: the number of findings a new code base produces (9 to 24 per thousand files across the six sets, mostly web candidates), and malicious skills, where rules written from one set have not transferred to the other.
+
 ## The guard: what an agent installs, with and without it
 
 ```bash

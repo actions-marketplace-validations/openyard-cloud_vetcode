@@ -1,0 +1,62 @@
+[
+ {
+  "repo": "AmintaCCCP/GithubStarsManager",
+  "sha": "776ea89e38b5ec33872c27a51aa233cf3ebf08b0",
+  "about": "TypeScript, Electron + server; stores GitHub tokens, API keys and WebDAV passwords"
+ },
+ {
+  "repo": "louislam/uptime-kuma",
+  "sha": "fb8ef0fa8200bb989f3a115dda3b0e09a3c31167",
+  "about": "JavaScript, Vue + Node; monitors with credentials for many services"
+ },
+ {
+  "repo": "usememos/memos",
+  "sha": "9ee06fdc4722b45cc7efe1311767407fc86fec66",
+  "about": "Go + React"
+ },
+ {
+  "repo": "gethomepage/homepage",
+  "sha": "91b28e8a6ef15485a718a745a1c0270bf8c242d2",
+  "about": "Next.js; widgets with API keys for many services"
+ },
+ {
+  "repo": "miniflux/v2",
+  "sha": "9447aaeceb98ebdf7c4528b3e96dc5b44b35af5b",
+  "about": "Go"
+ },
+ {
+  "repo": "umami-software/umami",
+  "sha": "559e3c607c23d2c72d9bd4f6481bda428255323c",
+  "about": "Next.js + Prisma"
+ },
+ {
+  "repo": "healthchecks/healthchecks",
+  "sha": "255075ce65ee0997fd9d3b8dd04e4829a87fad5d",
+  "about": "Python, Django"
+ },
+ {
+  "repo": "linkwarden/linkwarden",
+  "sha": "24adcc146ba356632859a1e8adb4bffae2874d11",
+  "about": "TypeScript, Next.js"
+ },
+ {
+  "repo": "louislam/dockge",
+  "sha": "0329dabb5003f206d4fd9f7403a6af26d7138497",
+  "about": "TypeScript, Vue + Node"
+ },
+ {
+  "repo": "pocketbase/pocketbase",
+  "sha": "7f2773ec234b62d0b80ca47c508397cb3d0da3ea",
+  "about": "Go; auth and tokens are its subject"
+ },
+ {
+  "repo": "maybe-finance/maybe",
+  "sha": "77b5469832758d1cbee1a940f3012a1ae1c74cd3",
+  "about": "Ruby on Rails"
+ },
+ {
+  "repo": "firefly-iii/firefly-iii",
+  "sha": "d65e916130c91d8f13ca808ca088d225ddd9a939",
+  "about": "PHP, Laravel"
+ }
+]

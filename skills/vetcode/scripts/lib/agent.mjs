@@ -2,6 +2,8 @@
 // repository can attack whoever opens it with an agent: hooks that run commands, an API
 // base URL that sends your key elsewhere, auto-approved MCP servers, and hidden
 // instructions in CLAUDE.md / AGENTS.md / .cursorrules / skills / MCP tool descriptions.
+import fs from "node:fs";
+import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
 
 const rule = r => ({ category: "agent", confidence: "medium", ...r });
@@ -61,9 +63,9 @@ const INJECTION = [
   [/\b(?:execute|run|act|operate|perform|make (?:changes|decisions))\b[^.\n]{0,40}\b(?:without (?:any )?(?:confirmation|permission|approval)|completely silently)\b/i, "tells the model to act without confirmation"],
   [/\b(this|the)\s+(file|code|package|repo(sitory)?)\s+(is|has\s+been)\s+(safe|verified|audited|trusted)\b[^.\n]{0,60}\b(skip|do\s+not|don'?t|no\s+need)/i, "tells a reviewer to skip checking"],
   // Reading a setting from .env is ordinary development; sending the file somewhere is not.
-  [/\b(read|cat|open|send|upload|post|include|copy|print|attach|append|exfiltrate|collect)\b[^.\n]{0,60}(~\/\.ssh|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.git-credentials)|\b(send|upload|post|attach|append|exfiltrate|forward|copy)\b[^.\n]{0,60}(?<![\w/])\.env\b|\b(send|upload|post|exfiltrate|forward)\b[^.\n]{0,40}\b(the\s+)?(tokens?|secrets?|credentials?|api[_ ]?keys?|env(ironment)? variables)\b[^.\n]{0,40}\b(to|at)\b[^.\n]{0,30}(https?:\/\/|webhook|server|endpoint)/i, "points the model at credentials", true],
+  [/\b(read|cat|open|send|upload|post|include|copy|print|attach|append|exfiltrate|collect)\b[^.\n]{0,60}(~\/\.ssh|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.git-credentials)|\b(send|upload|post|attach|append|exfiltrate|forward|copy)\b[^.\n]{0,60}(?<![\w/])\.env\b|\b(env|printenv)\s*\|\s*grep\b[^\n]{0,40}(?:TOKEN|PASSWORD|SECRET|CREDENTIAL)|\b(send|upload|post|exfiltrate|forward)\b[^.\n]{0,40}\b(the\s+)?(tokens?|secrets?|credentials?|api[_ ]?keys?|env(ironment)? variables)\b[^.\n]{0,40}\b(to|at)\b[^.\n]{0,30}(https?:\/\/|webhook|server|endpoint)/i, "points the model at credentials", true],
   [/\b(curl|wget)\b(?![^\n|]*https:\/\/(?:(?:deb|rpm)\.nodesource\.com|get\.docker\.com|sh\.rustup\.rs|install\.python-poetry\.org|bun\.sh\/install|get\.pnpm\.io|astral\.sh\/|deno\.land\/install|get\.helm\.sh|aspire\.dev\/install|aka\.ms\/|raw\.githubusercontent\.com\/(?:nvm-sh\/nvm|Homebrew\/install)\/|claude\.ai\/install))[^\n]*\|\s*(ba|z)?sh\b|--dangerously-skip-permissions|--yolo\b|--trust-all-tools|bypassPermissions/i, "asks the model to run downloaded code or skip permission prompts"],
-  [/extract(?:ed)?\s+(?:it\s+)?(?:using|with)\s+(?:the\s+)?pass(?:word)?|\(pass(?:word)?:\s*`?[\w-]+`?\)|\b(?:download|install)\b[^\n]{0,160}\.(?:zip|exe|dmg|pkg|msi|appimage)\b[^\n]{0,160}\b(?:run|execute|open|launch)\b|\b(?:download|install|extract|unzip|unpack)\b[^\n]{0,200}\b(?:run|execute|launch)\s+the\s+(?:executable|installer|binary|installation command)|\b(?:run|execute|launch)\s+the\s+(?:installer|installation command)|\b(?:glot\.io|pastebin\.com|paste\.ee|rentry\.co|hastebin\.com|controlc\.com)\/|must be (?:installed|running) before (?:using|you use) this skill[^\n]{0,200}https?:\/\//i, "tells you to download and run an outside program"],
+  [/extract(?:ed)?\s+(?:it\s+)?(?:using|with)\s+(?:the\s+)?pass(?:word)?|\b(?:archive|zip|rar|7z)\s+pass(?:word|code)?\**\s*[:：]|\(pass(?:word)?:\s*`?[\w-]+`?\)|\b(?:download|install)\b[^\n]{0,160}\.(?:zip|exe|dmg|pkg|msi|appimage)\b[^\n]{0,160}\b(?:run|execute|open|launch)\b|\b(?:download|install|extract|unzip|unpack)\b[^\n]{0,200}\b(?:run|execute|launch)\s+the\s+(?:executable|installer|binary|installation command)|\b(?:run|execute|launch)\s+the\s+(?:installer|installation command)|\b(?:glot\.io|pastebin\.com|paste\.ee|rentry\.co|hastebin\.com|controlc\.com)\/|must be (?:installed|running) before (?:using|you use) this skill[^\n]{0,200}https?:\/\//i, "tells you to download and run an outside program"],
 ];
 
 // Hosts nobody ships real software from: free app hosting, throwaway domains, paste sites,
@@ -91,8 +93,26 @@ function checkDestinations(file, text, out) {
   }
 }
 
+// Is this file part of a skill (a SKILL.md beside it or one folder up)? Its README is read by the same reader.
+const skillDirs = new Map();
+function inSkill(abs) {
+  for (const dir of [path.dirname(abs), path.dirname(path.dirname(abs))]) {
+    if (!skillDirs.has(dir)) skillDirs.set(dir, fs.existsSync(path.join(dir, "SKILL.md")));
+    if (skillDirs.get(dir)) return true;
+  }
+  return false;
+}
+
 function checkInstructions(file, text, out) {
   checkDestinations(file, text, out);
+  // An API the skill is told to use over plain HTTP, on a host that is neither this machine nor a
+  // placeholder: the key and every prompt cross the network readable, to whoever runs that host.
+  const plain = /\b(?:base[ _-]?url|endpoint|api[ _-]?url|api[ _-]?base|server[ _-]?url)\b[^a-z0-9\n]{0,20}(http:\/\/(?!localhost\b|127\.|0\.0\.0\.0|\[?::1|192\.168\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.|host\.docker\.internal\b|example\.|your|my|<|\{|\$)[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?[^\s"'`)>]*)/i.exec(text);
+  if (plain && /api[ _-]?key|token|secret|authorization|bearer/i.test(text)) {
+    out.push(finding(rule({ id: "agent-plain-http-endpoint", severity: "high", title: "Agent instruction file points an API at a plain-HTTP address",
+      why: "The skill sends a key and the content of requests to this address without encryption. A real service uses HTTPS; a bare HTTP host on a port is usually someone's own relay.",
+      fix: "Do not use it with a real key. Ask who runs the host and why it has no HTTPS." }), file.rel, lineOf(text, plain.index), plain[1]));
+  }
   // Front matter opened with `---js` is not data: the front-matter parser most tools use (gray-matter)
   // evaluates it as JavaScript the moment the file is loaded, before any agent reads a word.
   if (/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?$/im.test(text)) {
@@ -144,5 +164,7 @@ function checkMcpTools(file, text, out) {
 export function scanAgentFiles(file, text, out) {
   if (SETTINGS.test(file.rel)) checkSettings(file, text, out);
   else if (INSTRUCTIONS.test(file.rel)) checkInstructions(file, text, out);
+  // The other Markdown of a skill (its README, its install notes): where it sends the reader to get software.
+  else if (/\.md$/i.test(file.rel) && file.abs && inSkill(file.abs)) checkDestinations(file, text, out);
   if (/\.(c|m)?(j|t)s$|\.py$/.test(file.rel) && /(McpServer|@modelcontextprotocol\/sdk|from mcp\b|FastMCP|server\.tool\(|\.registerTool\()/.test(text.slice(0, 50000))) checkMcpTools(file, text, out);
 }

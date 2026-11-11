@@ -15,7 +15,7 @@ on:
         description: Sampling seed (same seed, same sample)
         default: "7"
       only:
-        description: Datasets to run (npm,pypi,skills)
+        description: Datasets to run (npm,pypi,skills,skills-heldout)
         default: "npm,pypi,skills"
       explain:
         description: Also describe the malicious samples that were missed (true or false)

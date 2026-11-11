@@ -17,6 +17,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { analyzeHistory } from "./npmhistory.mjs";
 import { lookalike } from "./supply.mjs";
+import { lockedPackages } from "./osv.mjs";
 import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 
 const HOUR = 3600000;
@@ -391,9 +392,7 @@ export function fromManifest(m) {
   if (!pkg || typeof pkg !== "object") return { items, locked };
   const lockFile = ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"].map(f => path.join(m.dir, f)).find(f => fs.existsSync(f));
   const lock = lockFile ? readText(lockFile) || "" : "";
-  if (lockFile && /package-lock|shrinkwrap/.test(lockFile)) {
-    try { for (const [k, v] of Object.entries(JSON.parse(lock).packages || {})) { const name = k.split("node_modules/").pop(); if (k && name && typeof v?.version === "string" && !v.link) locked.push({ eco: "npm", name, version: v.version, file: path.basename(lockFile) }); } } catch { /* an unreadable lockfile pins nothing we can check */ }
-  }
+  if (lockFile) for (const p of lockedPackages([{ rel: path.basename(lockFile), text: lock }])) if (p.ecosystem === "npm") locked.push({ eco: "npm", name: p.name, version: p.version, file: p.file });
   const esc = x => x.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
   const held = name => new RegExp(`(?:^|[\\s"'/(])${esc(name)}(?:@|["']\\s*:)`, "m").test(lock) || fs.existsSync(path.join(m.dir, "node_modules", name, "package.json"));
   for (const [name, spec] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies })) {

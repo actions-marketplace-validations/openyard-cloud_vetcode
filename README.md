@@ -185,7 +185,7 @@ For tools that read `AGENTS.md` (or `.cursorrules`, `CONVENTIONS.md`…) but nei
 ```markdown
 ## The guard: checked before your agent installs
 
-An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code plugin, vetcode looks at every install command **before** it runs and answers allow, ask or deny:
+An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code plugin, vetcode looks at every install command **before** it runs, and at every MCP server before it is registered, and answers allow, ask or deny:
 
 | The command would… | Answer |
 |---|---|
@@ -195,11 +195,23 @@ An agent decides to install a package in a second: a name it remembered wrong, a
 | install a name one letter from a popular package (`expres`, `reqeusts`) | ask |
 | install a release less than 72 hours old, or one that lost its provenance or gained an install script | ask |
 | pipe a download into a shell, or install from another index, a repository or a URL | ask |
+| add an MCP server at a tunnel address (ngrok, trycloudflare…) or over plain HTTP to another machine | ask |
 | install well-known packages at settled versions | allow, silently |
+
+The same answers apply wherever a package is about to be fetched, not only when the command names it:
+
+| Where | What is checked |
+|---|---|
+| `npm install x`, `npx x`, `pip install x`, `uvx x`, also inside `bash -c "…"` | the packages named |
+| `npm install`, `npm ci`, `pnpm install`, `yarn`, `bun install`, `pip install -r requirements.txt` | the dependencies added since the lockfile was written (what an agent just put into `package.json`), one by one; and everything the lockfile or requirements file pins, against malware advisories in one request |
+| `claude mcp add … -- npx x`, `codex mcp add`, `gemini mcp add` | the package the server would run, and the server's address |
+| writing `.mcp.json`, `claude_desktop_config.json`, agent `settings.json` or Codex `config.toml` | the same, for every server or hook command in the text being written |
+
+A server started through `npx` or `uvx` without a version is fetched again at every start, long after the check; the guard says so and names the version to pin.
 
 **After a clone.** When the agent runs `git clone`, `gh repo clone` or `npx degit`, the guard reads the folder that arrived (nothing is run) and, if it holds signs of malware or of an attack on coding agents (a poisoned `CLAUDE.md`, hooks in project settings, an install script that decodes and runs code), tells the agent before it installs, builds or runs anything from it. A clean clone gets no message.
 
-It reads `npm`, `pnpm`, `yarn` and `bun` installs, `npx` and friends, `pip`, `uv`, `uvx`, `pipx` and `poetry`. Other shell commands cost one regex. "Ask" shows you the reason and waits for your answer; in a run with nobody to ask (`claude -p`) it stops the command and tells the agent why.
+It reads `npm`, `pnpm`, `yarn` and `bun` installs, `npx` and friends, `pip`, `uv`, `uvx`, `pipx` and `poetry`. Other shell commands and other files cost one regex. "Ask" shows you the reason and waits for your answer; in a run with nobody to ask (`claude -p`) it stops the command and tells the agent why.
 
 ```bash
 node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
@@ -211,9 +223,9 @@ Agents without hooks can call the same check as the MCP tool `vetcode_guard`, or
 
 **Settings** (environment variables): `VETCODE_GUARD=off` turns it off, `VETCODE_GUARD=strict` turns every ask into deny, `VETCODE_GUARD_MIN_AGE_HOURS=72` sets how old a release must be.
 
-**What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
+**What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. For an install that names no package, the names and versions in the lockfile or requirements file go to OSV.dev. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
 
-**Limits:** the clone check reports what the scanner sees at high or critical; it does not stop the agent by force, it tells it. For packages, it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable cannot be tested live; on the malware datasets, put to the guard as if no advisory existed yet, it blocks or questions about 95% of malicious npm packages and 88% of PyPI ones, and 3% of clean npm packages ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)).
+**Limits:** the clone check reports what the scanner sees at high or critical; it does not stop the agent by force, it tells it. For packages, it reads the code of the packages named and of new direct dependencies, up to 12 per command; what those packages depend on in turn is checked against malware advisories once it is in a lockfile, but its code is not read (scan the project for that). `pnpm-lock.yaml`, `yarn.lock` and `bun.lock` are used to tell which dependencies are new, but only `package-lock.json` and requirements files are checked against advisories. Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable cannot be tested live; on the malware datasets, put to the guard as if no advisory existed yet, it blocks or questions about 95% of malicious npm packages and 88% of PyPI ones, and 3% of clean npm packages ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)).
 
 ## Security reviews
 When asked to check code for security problems or malware, follow `../vetcode/skills/vetcode/SKILL.md`

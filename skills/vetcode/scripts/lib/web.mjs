@@ -97,11 +97,14 @@ export const WEB_RULES = [
     why: "React stops escaping here; user-controlled HTML becomes XSS.", fix: "Sanitise with DOMPurify, or render text instead." }),
   rule({ id: "xss-framework-raw", severity: "medium", title: "Raw HTML binding", files: /\.(vue|svelte|astro|html?)$/i,
     re: /\sv-html\s*=|\{@html\s|set:html\s*=/,
+    // Not when what is bound is a sanitiser's output.
+    unless: /(?:v-html\s*=\s*["']|\{@html\s+|set:html\s*=\s*\{?)\s*(?:await\s+)?(?:[\w$]+\.)*(?:sanitize\w*|sanitise\w*|purify\w*|clean\w*Html|xss)\s*\(/i,
     why: "These bindings skip escaping.", fix: "Bind text, or sanitise the HTML first." }),
   rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: TEMPLATE,
-    // A template with no HTML in it (a text message, an email subject) has nothing to inject into.
+    // A template with no HTML element in it (a text message, an email subject) has nothing to
+    // inject into; a comment used as a separator line is not markup.
     // In Blade, a raw variable or request data is the case to read; a helper call is the rule below.
-    requires: /<[a-z!][^>]*>/i,
+    requires: /<[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>/i,
     re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[\w>\[\]'"-]+\s*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`{{ }}`, `<%=`), or sanitise before marking safe." }),
   // `<%-` prints raw HTML in EJS; in ERB it only trims whitespace.
@@ -199,6 +202,8 @@ export const WEB_RULES = [
   rule({ id: "postmessage-no-origin", severity: "medium", confidence: "low", title: "message listener (check that it verifies event.origin)", files: JS,
     // A BroadcastChannel only carries messages from the same origin.
     re: /addEventListener\(\s*["']message["']\s*,|\bonmessage\s*=/, skip: /(^|\/)(?:sw|service-?worker)\.[jt]s$|\.worker\.[jt]s$|(^|\/)workers?\//i,
+    // The handler is often a named function further down: the file reads the sender's origin somewhere.
+    unlessFile: /\b(?:event|evt|ev|e|msg|message|m)\??\.origin\b|\(\s*\{[^})]*\borigin\b[^})]*\}\s*(?::[^)]*)?\)\s*(?:=>|\{)/,
     unless: /origin|\bself\.(?:addEventListener|onmessage)|^\s*onmessage\s*=|[Ww]orker\w*(?:\.\w+)*\.(?:addEventListener|onmessage)|[Cc]hannel\??\.(?:addEventListener|onmessage)|\b(?:worker|port|socket|ws|eventSource|es)\w*\??\.(?:addEventListener|onmessage)/i,
     why: "Any page that can open or frame yours can send it messages; without an origin check they are trusted.", fix: "Compare `event.origin` to an exact allow-list before acting on the data." }),
   rule({ id: "prototype-pollution", severity: "medium", title: "Deep merge of request data", files: JS,

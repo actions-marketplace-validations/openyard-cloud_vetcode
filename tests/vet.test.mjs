@@ -1063,6 +1063,56 @@ test("packages: a payload on one enormous line, PyPI look-alike names, confusion
   assert.deepEqual(f.findings.filter(x => ["critical", "high"].includes(x.severity)).map(x => x.rule), []);
 });
 
+test("a committed package manager gets a note, and its pattern matches decide nothing", async () => {
+  const body = j("const c = require('crypto').createDeciph", "eriv('aes-256-cbc', k, iv); const run = new Func", "tion(c.update(blob, 'hex', 'utf8'));\n");
+  const dir = project({
+    ".yarn/releases/yarn-4.6.0.cjs": body + "var pad = 0;\n".repeat(20000),
+    ".yarn/releases/yarn-9.9.9.cjs": body,
+    ".yarnrc.yml": "yarnPath: .yarn/releases/yarn-4.6.0.cjs\n",
+    "src/loader.cjs": body,
+    "package.json": JSON.stringify({ name: "app", private: true, dependencies: { "react-rnd": "^10.4.0", "react-dnd": "^16.0.0" } }),
+  });
+  const r = await run(dir);
+  const at = file => r.findings.filter(f => f.file === file);
+  assert.ok(at("src/loader.cjs").some(f => f.category === "malware" && f.confidence !== "low"), "the same code in the app's own file still counts");
+  assert.ok(at(".yarn/releases/yarn-4.6.0.cjs").filter(f => f.rule !== "committed-package-manager").every(f => f.confidence === "low"));
+  const note = at(".yarn/releases/yarn-4.6.0.cjs").find(f => f.rule === "committed-package-manager");
+  assert.equal(note.severity, "low");
+  assert.match(note.fix, /--online/);
+  assert.ok(at(".yarn/releases/yarn-9.9.9.cjs").some(f => f.category === "malware" && f.confidence !== "low"), "a small file with that name is not a Yarn release");
+  assert.ok(!rules(r).has("dep-typosquat"), "react-rnd is a package of its own");
+});
+
+test("fresh-corpus false alarms: placeholders, sanitised bindings, local databases, origin checks", async () => {
+  const dir = project({
+    "docs/database.md": "DATABASE_URL=postgresql://[user]:[password]@[host]:5432/app\nDB_URL='postgresql://dbusername:dbpassword@dbhost/app'\n",
+    ".github/workflows/test.yml": "name: t\non: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      DATABASE_URL: mysql://root:kimai@127.0.0.1:3306/kimai\n    steps:\n      - run: echo hi\n  build:\n    uses: ./.github/workflows/build.yml\n    secrets: inherit\n  other:\n    uses: some-org/workflows/.github/workflows/build.yml@v1\n    secrets: inherit\n",
+    "config/prod.js": j("module.exports = { db: 'postgres://app:Xk9", "wQ2mZ7vLp@db.internal.example.org:5432/app' };\n"),
+    "src/View.svelte": "<div>{@html DOMPurify.sanitize(marked(text))}</div>\n<p>{@html raw}</p>\n",
+    "src/popup.ts": "window.addEventListener('message', onMessage);\nfunction onMessage(event: MessageEvent) {\n  if (event.origin !== window.location.origin) return;\n  use(event.data);\n}\n",
+    "src/frame.ts": "window.addEventListener('message', e => use(e.data));\n",
+    "mail/invite.hbs": "Invitation to {{{org_name}}} accepted\n<!---------------->\nPlease log in via {{url}}.\n",
+    "mail/invite.html.hbs": "<p>Invitation to {{{org_name}}} accepted</p>\n",
+    "src/consts.cs": 'private const string PasswordCharacters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";\n',
+    "src/keys.ts": 'export enum Aaguid { GooglePasswordManager = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4" }\nconst SESSION_TOTP_SECRET = "_totp_secret";\nconst apiSecret = "9f2c1e7ab45d4c03b8e6a1d7c5f09e2bq";\n',
+    "Dockerfile": 'FROM node:22\nARG NEXT_PRIVATE_ENCRYPTION_KEY\nENV NEXT_PRIVATE_ENCRYPTION_KEY="$NEXT_PRIVATE_ENCRYPTION_KEY"\nUSER node\n',
+  });
+  const r = await run(dir);
+  const got = (rule, file) => r.findings.filter(f => f.rule === rule && f.file === file);
+  assert.equal(got("secret-db-url", "docs/database.md").length, 0, "placeholders in brackets, and a password that says it is one");
+  assert.deepEqual(got("secret-db-url", ".github/workflows/test.yml").map(f => f.severity), ["low"], "a database on this machine");
+  assert.deepEqual(got("secret-db-url", "config/prod.js").map(f => f.severity), ["high"]);
+  assert.deepEqual(got("gha-secrets-overexposed", ".github/workflows/test.yml").map(f => f.severity).sort(), ["low", "medium"], "a workflow in this repository, and one from elsewhere");
+  assert.deepEqual(got("xss-framework-raw", "src/View.svelte").map(f => f.line), [2], "the sanitised binding is not reported");
+  assert.equal(got("postmessage-no-origin", "src/popup.ts").length, 0, "the named handler checks the origin");
+  assert.equal(got("postmessage-no-origin", "src/frame.ts").length, 1);
+  assert.equal(got("xss-template-unescaped", "mail/invite.hbs").length, 0, "a text template with a separator comment has no markup");
+  assert.equal(got("xss-template-unescaped", "mail/invite.html.hbs").length, 1);
+  assert.equal(got("secret-assignment", "src/consts.cs").length, 0);
+  assert.deepEqual(got("secret-assignment", "src/keys.ts").map(f => f.line), [3], "an identifier under a password-like name and a session key name are not secrets; a secret value is");
+  assert.equal(got("secret-assignment", "Dockerfile").length, 0, "a reference to a build argument");
+});
+
 test("guard: MCP servers are checked when they are registered or written into a config file", async () => {
   const p = c => parseInstalls(c, { exists: () => false }).map(x => x.server ? `server ${x.server}` : `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}${x.mcp ? " mcp" : ""}`);
   assert.deepEqual(p("claude mcp add github -e TOKEN=x -- npx -y @modelcontextprotocol/server-github"), ["npm:@modelcontextprotocol/server-github mcp"]);

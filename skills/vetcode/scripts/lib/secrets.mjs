@@ -35,8 +35,12 @@ export const SECRET_RULES = [
   { id: "secret-npmrc-token", severity: "critical", title: "Registry auth token in .npmrc", re: /_authToken\s*=\s*(?!\$\{)[A-Za-z0-9_\-.]{20,}/ },
   { id: "secret-slack-webhook", severity: "medium", title: "Slack incoming webhook URL", re: /https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[A-Za-z0-9]{20,}/, unless: /\bplaceholder\s*=/i },
   { id: "secret-gcp-service-account", severity: "critical", title: "Google service account key", re: /"private_key_id"\s*:\s*"[a-f0-9]{40}"/ },
-  { id: "secret-db-url", severity: "high", title: "Database URL with a password", re: /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|amqps?|mssql):\/\/[^\s:@/'"`]+:([^\s@/'"`]{3,})@[^\s'"`]+/i,
-    unless: /:\/\/[^\s:@/]+:(?:\$\{?|<|\{\{|%\(|password|passw(or)?d|pass|pwd|secret|changeme|example|xxx+|\*{3,}|user|test|postgres|root|my[_-]?\w*|your[_-]?\w*|replace[\w-]*|invalid)[^@]*@|:\/\/(?<same>[^\s:@/]+):\k<same>@/i },
+  // A database on this machine (a CI service container, a local stack) is not reachable by whoever reads the code.
+  { id: "secret-db-url", severity: "low", title: "Database URL with a password, for a database on this machine", re: /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|amqps?|mssql):\/\/[^\s:@/'"`]+:([^\s@/'"`]{3,})@(?:localhost|127\.0\.0\.1|\[?::1\]?|0\.0\.0\.0)(?=[:/?'"`\s]|$)[^\s'"`]*/i,
+    unless: /:\/\/[^\s:@/]+:(?:\$\{?|<|\[|\{\{|%\(|[^@]*(?:passw(?:or)?d|secret|changeme|example)|pass|pwd|xxx+|\*{3,}|user|test|postgres|root|my[_-]?\w*|your[_-]?\w*|replace[\w-]*|invalid)[^@]*@|:\/\/(?<same>[^\s:@/]+):\k<same>@/i },
+  { id: "secret-db-url", severity: "high", title: "Database URL with a password", re: /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|rediss|amqps?|mssql):\/\/[^\s:@/'"`]+:([^\s@/'"`]{3,})@(?!(?:localhost|127\.0\.0\.1|\[?::1\]?|0\.0\.0\.0)(?=[:/?'"`\s]|$))[^\s'"`]+/i,
+    // Not a placeholder in brackets, and not a password that says it is one (dbpassword, your-secret).
+    unless: /:\/\/[^\s:@/]+:(?:\$\{?|<|\[|\{\{|%\(|[^@]*(?:passw(?:or)?d|secret|changeme|example)|passw(or)?d|pass|pwd|secret|changeme|example|xxx+|\*{3,}|user|test|postgres|root|my[_-]?\w*|your[_-]?\w*|replace[\w-]*|invalid)[^@]*@|:\/\/(?<same>[^\s:@/]+):\k<same>@/i },
 ].map(r => ({ category: "secrets", confidence: "high", why: "Anyone who can read this code (or a copy of it, a build, a log) can use the credential.", fix: ROTATE, ...r }));
 
 // Values that are clearly not real secrets.
@@ -71,7 +75,12 @@ const neverIssued = (rule, value) => {
 // The key says what a field is called or what state it is in, not what its value is.
 const NAME_KEY = /(?:column|field|name|label|header|param(?:eter)?|path|prop|attr(?:ibute)?|selector|placeholder|title|type|status|state|hint|help|text|message|description|prefix|suffix|env|var(?:iable)?|regex|pattern|format|url|uri|endpoint|file(?:name)?|dir|length|size|count|ttl|expir\w*|algo(?:rithm)?|scheme|mode|kind|event|action|error|required|enabled|visible|strength|policy|rules?|min|max)$/i;
 // A name, not a value: words joined by . _ - : or / (api_key_encrypted, backend-api-key).
-const NAME_VALUE = /^[A-Za-z]+(?:[._:\/-][A-Za-z]+)+$/;
+// Also a session key or an error code (_totp_secret, profile-password-01).
+const NAME_VALUE = /^[_-]?[A-Za-z]+(?:[._:\/-](?:[A-Za-z]+|\d{1,3}))+$/;
+// The pool characters are drawn from, a reference to a variable or a framework parameter, and
+// an identifier-shaped value under a key that only says "password" (passwords are not UUIDs; keys and tokens can be).
+const NOT_A_VALUE = v => /abcdefgh|ABCDEFGH|01234567/.test(v) || /^\$[A-Za-z_]\w*$/.test(v) || /^%[\w.]+%/.test(v);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const redact = v => v.length <= 8 ? "•".repeat(v.length) : `${v.slice(0, 4)}…${v.slice(-2)} (${v.length} chars)`;
 
@@ -122,6 +131,7 @@ export function scanSecrets(file, text, out) {
     if (PLACEHOLDER.test(value) || /process\.env|os\.environ|getenv|import\.meta\.env|\$\{|\{\{|ENV\[|config\(|secrets\.|\benv\(/.test(line)) continue;
     if (entropy(value) < 3.2 || /^[a-z]+$/i.test(value) || /^(https?:|\/|\.\/)/.test(value)) continue;
     if (NAME_KEY.test(m[1]) || NAME_VALUE.test(value) || /[^\x00-\x7F]/.test(value)) continue;
+    if (NOT_A_VALUE(value) || (UUID.test(value) && !/key|token|secret|credential|auth/i.test(m[1]))) continue;
     // A commented-out example, a value built at run time, or the search-only key a docs site publishes on purpose.
     if (/^\s*(?:#|\/\/|\*|--|;)/.test(line) || /#\{|\$\{|%[sd]|\{\w*\}/.test(value) || (/^api_?key$/i.test(m[1]) && /algolia|docsearch|docusaurus|vitepress/i.test(file.rel + text.slice(0, 4000)))) continue;
     out.push(finding(GENERIC, file.rel, i + 1, line.replace(value, redact(value)), DEVSTACK.test(file.rel) ? { severity: "low", title: "Secret-looking value in a development or CI stack" } : {}));

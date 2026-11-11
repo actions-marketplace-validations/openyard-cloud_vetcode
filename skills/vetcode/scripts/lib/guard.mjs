@@ -224,7 +224,8 @@ export function parseClones(line, { cwd = process.cwd() } = {}) {
 /** What to tell the agent about a folder it just cloned: null when there is nothing to say. */
 export async function checkClone(dir, { vet }) {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return null;
-  const res = await vet(dir, { tools: false, noIgnore: true, log: () => {} });
+  // verifyTools: a committed copy of Yarn is compared with the one Yarn published.
+  const res = await vet(dir, { tools: false, noIgnore: true, verifyTools: true, log: () => {} });
   const hits = res.findings.filter(f => VERDICT_CATS.has(f.category) && f.confidence !== "low" && (f.severity === "critical" || f.severity === "high"));
   if (!hits.length) return null;
   const top = hits.slice(0, 5).map(f => `${f.severity}: ${f.title} (${f.file}${f.line ? ":" + f.line : ""})`).join("; ");
@@ -494,7 +495,7 @@ export async function scanArchive(eco, url, _size, { fetch: fetchFn = fetch, vet
     const un = file.endsWith(".zip") ? spawnSync("unzip", ["-qq", "-o", file, "-d", into]) : spawnSync("tar", ["-xzf", file, "-C", into, "--no-same-owner"]);
     if (un.status !== 0 && !fs.readdirSync(into).length) return null;
     const top = fs.readdirSync(into), root = top.length === 1 && fs.statSync(path.join(into, top[0])).isDirectory() ? path.join(into, top[0]) : into;
-    const res = await vet(root, { tools: false, noIgnore: true, log: () => {} });
+    const res = await vet(root, { tools: false, noIgnore: true, verifyTools: true, log: () => {} });
     return Object.assign(res.findings, { stats: res.stats });
   } catch { return null; }
   finally { spawnSync("chmod", ["-R", "u+rwX", dir]); fs.rmSync(dir, { recursive: true, force: true }); }

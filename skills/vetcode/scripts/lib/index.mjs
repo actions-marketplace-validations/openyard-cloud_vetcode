@@ -115,8 +115,9 @@ export async function vet(target, opts = {}) {
   const files = [];
   const partial = [];
   const yarnCopies = [];
+  // Only a file as big as the real thing: a small script under .yarn/ is read like any other.
   const committedTool = (file, from) => {
-    if (!TOOLCHAIN.test(file.rel)) return false;
+    if (!TOOLCHAIN.test(file.rel) || !(file.partial || file.text.length > 200_000)) return false;
     for (let i = from; i < findings.length; i++) findings[i].confidence = "low";
     const yarn = /(^|\/)\.yarn\/releases\/yarn-(\d+\.\d+\.\d+)\.cjs$/.exec(file.rel);
     if (yarn) { findings.push(finding(YARN_COPY, file.rel, 1, `yarn ${yarn[2]}`)); yarnCopies.push({ rel: file.rel, abs: file.abs, version: yarn[2] }); }
@@ -205,8 +206,9 @@ export async function vet(target, opts = {}) {
     try { await queryOsv(pkgs, findings, log); osv = `${pkgs.length} packages`; }
     catch (e) { osv = `failed (${e.message})`; log(`OSV lookup failed: ${e.message}`); }
     await npmHistory(files, findings, log);
-    await yarnCopiesAreOfficial(yarnCopies, findings, log);
   }
+  // The guard asks for this alone: it already uses the network, and sends nothing about the project.
+  if (opts.online || opts.verifyTools) await yarnCopiesAreOfficial(yarnCopies, findings, log);
 
   // Same rule on the same line from two sources (e.g. built-in + gitleaks) is reported once.
   const seen = new Set();

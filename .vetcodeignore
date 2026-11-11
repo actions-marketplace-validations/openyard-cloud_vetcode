@@ -6,3 +6,5 @@ bench/redteam.mjs
 bench/mutate.mjs
 # Small apps with planted authorization and business-logic bugs, to score the agent step.
 bench/agent.mjs
+# Writes stand-in package managers into a temp folder and makes them executable, next to registry lookups.
+bench/guard.mjs

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Scans every cached sample with vetcode and scores the verdicts.
 //
-//   node bench/run.mjs --cache <dir> [--out bench/results]
+//   node bench/run.mjs --cache <dir> [--out bench/results] [--only skills] [--explain]
 //
 // Each archive is unpacked into its own empty folder, scanned read-only, and deleted.
 // Verdict: a package is "flagged" when vetcode reports at least one finding at the chosen
@@ -22,6 +22,26 @@ const ONLY = arg("--only", "npm,pypi,skills").split(",");
 const [SHARD, SHARDS] = arg("--shard", "0/1").split("/").map(Number);
 const mine = list => list.filter((_, i) => i % SHARDS === SHARD);
 const CATS = new Set(["malware", "supply-chain", "agent"]);
+// --explain: for every malicious sample that was not flagged, record what it holds, so rules
+// can be written without the sample leaving the runner: its files, the findings that fell
+// short of the verdict, and the lines that mention downloads, secrets, shells or orders to
+// an agent (cut to 220 characters; a description, not the sample).
+const EXPLAIN = process.argv.includes("--explain");
+const TELL = /curl|wget|https?:\/\/|base64|\beval\b|\bexec\b|subprocess|os\.system|child_process|\.ssh|\.aws|\.env\b|token|secret|password|credential|api[_-]?key|ignore (?:all|any|previous|prior)|do not (?:tell|mention|reveal|inform|ask)|without (?:asking|telling|confirm|permission|notif)|silently|secretly|exfiltrat|upload|webhook|pastebin|ngrok|chmod|sudo|rm -rf|crontab|bashrc|zshrc|authorized_keys|keychain|wallet|system prompt|<!--|always run|before (?:doing|responding|anything|you)/i;
+function explain(dir, res) {
+  const files = [], lines = [];
+  const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.isFile()) files.push(p); } };
+  try { walk(dir); } catch {}
+  for (const f of files) {
+    const st = fs.statSync(f); if (st.size > 300000 || !/\.(md|txt|py|js|mjs|cjs|ts|sh|bash|json|ya?ml|toml|ps1|rb|go)$|(^|\/)[A-Z]+$/i.test(f)) continue;
+    const rel = path.relative(dir, f), text = fs.readFileSync(f, "utf8").split(/\r?\n/);
+    if (/SKILL\.md$/i.test(f)) lines.push(...text.slice(0, 12).map((l, i) => `${rel}:${i + 1} ${l.slice(0, 220)}`));
+    for (let i = 0; i < text.length && lines.length < 45; i++) if (TELL.test(text[i])) lines.push(`${rel}:${i + 1} ${text[i].trim().slice(0, 220)}`);
+  }
+  return { files: files.slice(0, 40).map(f => `${path.relative(dir, f)} (${fs.statSync(f).size})`), fileCount: files.length,
+    below: res.findings.filter(f => RANK[f.severity] >= 2 || f.confidence === "low" || !CATS.has(f.category)).slice(0, 25).map(f => `${f.rule} ${f.severity}${f.confidence === "low" ? " (low confidence)" : ""} ${f.file}:${f.line}`), lines };
+}
+const explained = {};
 const RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
 // Packages can ship read-only folders; make them writable so cleanup cannot stop the run.
@@ -59,6 +79,7 @@ async function score(name, items) {
     const hits = res.findings.filter(f => CATS.has(f.category) && f.confidence !== "low");
     const worst = hits.reduce((m, f) => Math.min(m, RANK[f.severity]), 9);
     rows.push({ id: it.id, label: it.label, worst, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
+    if (EXPLAIN && it.label === "malicious" && worst > 1) (explained[name] ||= []).push({ id: it.id, ...explain(it.dir, res) });
     if (it.cleanup) remove(it.dir);
   }
   const metrics = {};
@@ -94,4 +115,5 @@ remove(work);
 fs.mkdirSync(OUT, { recursive: true });
 const stamp = new Date().toISOString().slice(0, 10);
 fs.writeFileSync(path.join(OUT, `${stamp}${SHARDS > 1 ? `.shard${SHARD}` : ""}.json`), JSON.stringify({ version: VERSION, date: stamp, results }, null, 2));
+for (const [name, list] of Object.entries(explained)) fs.writeFileSync(path.join(OUT, `explain-${name}.json`), JSON.stringify(list, null, 1));
 console.error(`results: ${path.join(OUT, stamp + ".json")}`);

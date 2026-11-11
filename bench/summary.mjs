@@ -5,7 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const dir = process.argv[2] || "bench/results";
-const file = fs.readdirSync(dir).filter(f => f.endsWith(".json")).sort().pop();
+const file = fs.readdirSync(dir).filter(f => /^\d{4}-\d\d-\d\d(\.shard\d+)?\.json$/.test(f)).sort().pop();
 const { version, date, results } = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
 const pct = x => (x * 100).toFixed(1) + "%";
 console.log(`## vetcode ${version} benchmark (${date})\n`);

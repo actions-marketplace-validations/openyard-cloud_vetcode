@@ -14,6 +14,12 @@ on:
       seed:
         description: Sampling seed (same seed, same sample)
         default: "7"
+      only:
+        description: Datasets to run (npm,pypi,skills)
+        default: "npm,pypi,skills"
+      explain:
+        description: Also describe the malicious samples that were missed (true or false)
+        default: "false"
 permissions:
   contents: read
 jobs:
@@ -33,12 +39,17 @@ jobs:
           NPM_N: ${{ inputs.npm }}
           PYPI_N: ${{ inputs.pypi }}
           SEED: ${{ inputs.seed }}
-        run: node bench/fetch.mjs --cache "$RUNNER_TEMP/bench" --npm "$NPM_N" --pypi "$PYPI_N" --seed "$SEED"
+          ONLY: ${{ inputs.only }}
+        run: node bench/fetch.mjs --cache "$RUNNER_TEMP/bench" --npm "$NPM_N" --pypi "$PYPI_N" --seed "$SEED" --only "$ONLY"
       - name: Scan and score
-        run: node bench/run.mjs --cache "$RUNNER_TEMP/bench" --out bench-results
+        env:
+          ONLY: ${{ inputs.only }}
+          EXPLAIN: ${{ inputs.explain }}
+        run: node bench/run.mjs --cache "$RUNNER_TEMP/bench" --out bench-results --only "$ONLY" $([ "$EXPLAIN" = "true" ] && echo --explain)
       - name: Summary
         run: node bench/summary.mjs bench-results >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: vetcode-benchmark
           path: bench-results/

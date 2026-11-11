@@ -48,13 +48,40 @@ const INJECTION = [
   [/\b(do\s+not|don'?t|never)\s+(tell|inform|mention|reveal|show)\b[^.\n]{0,40}\b(the\s+)?(user|human|developer|reviewer)/i, "asks the model to hide something from the user"],
   [/<\s*(IMPORTANT|SYSTEM|INSTRUCTIONS?|ADMIN|secret)\s*>/i, "fake system/priority tag"],
   [/\b(?:without|never|don'?t|do not)\s+(?:ask(?:ing)?|prompt(?:ing)?|notify(?:ing)?|tell(?:ing)?|inform(?:ing)?|confirm(?:ing)?\s+with)\s+(?:the\s+)?(?:user|human|developer|them)\b[^.\n]{0,80}\b(?:run|execute|install|download|send|upload|delete|push|post|curl|wget)\b|\b(?:silently|secretly|quietly|covertly)\s+(?:run|execute|install|download|send|upload|exfiltrate|post|copy)\b/i, "tells the model to act without the user knowing"],
+  [/\b(?:execute|run|act|operate|perform|make (?:changes|decisions))\b[^.\n]{0,40}\b(?:without (?:any )?(?:confirmation|permission|approval)|completely silently)\b/i, "tells the model to act without confirmation"],
   [/\b(this|the)\s+(file|code|package|repo(sitory)?)\s+(is|has\s+been)\s+(safe|verified|audited|trusted)\b[^.\n]{0,60}\b(skip|do\s+not|don'?t|no\s+need)/i, "tells a reviewer to skip checking"],
   [/\b(read|cat|open|send|upload|post|include|copy|print|attach|append|exfiltrate|collect)\b[^.\n]{0,60}(~\/\.ssh|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.git-credentials|\.env\b)|\b(send|upload|post|exfiltrate|forward)\b[^.\n]{0,40}\b(the\s+)?(tokens?|secrets?|credentials?|api[_ ]?keys?|env(ironment)? variables)\b[^.\n]{0,40}\b(to|at)\b[^.\n]{0,30}(https?:\/\/|webhook|server|endpoint)/i, "points the model at credentials", true],
   [/\b(curl|wget)\b[^\n]*\|\s*(ba|z)?sh\b|--dangerously-skip-permissions|--yolo\b|--trust-all-tools|bypassPermissions/i, "asks the model to run downloaded code or skip permission prompts"],
   [/extract(?:ed)?\s+(?:it\s+)?(?:using|with)\s+(?:the\s+)?pass(?:word)?|\(pass(?:word)?:\s*`?[\w-]+`?\)|\b(?:download|install)\b[^\n]{0,160}\.(?:zip|exe|dmg|pkg|msi|appimage)\b[^\n]{0,160}\b(?:run|execute|open|launch)\b|\b(?:run|execute|launch)\s+the\s+(?:executable|installer|binary|installation command)|\b(?:glot\.io|pastebin\.com|paste\.ee|rentry\.co|hastebin\.com|controlc\.com)\/|must be (?:installed|running) before (?:using|you use) this skill[^\n]{0,200}https?:\/\//i, "tells you to download and run an outside program"],
 ];
 
+// Hosts nobody ships real software from: free app hosting, throwaway domains, paste sites,
+// link shorteners and bare addresses. A skill that sends its reader there to install a
+// "required" tool is the fake-prerequisite trick (the ClawHavoc skills did exactly this).
+const THROWAWAY = /(?:^|\.)(?:vercel\.app|netlify\.app|pages\.dev|workers\.dev|web\.app|firebaseapp\.com|onrender\.com|glitch\.me|repl\.co|replit\.app|herokuapp\.com|surge\.sh|carrd\.co|wixsite\.com|weebly\.com|000webhostapp\.com|glot\.io|rentry\.(?:co|org)|pastebin\.com|hastebin\.com|paste\.ee|bit\.ly|tinyurl\.com|is\.gd|cutt\.ly|rb\.gy)$|\.(?:forum|xyz|top|click|icu|cfd|sbs|cyou|monster|rest|quest|buzz|lol|zip|mov|tk|ml|ga|cf|gq)$|^\d{1,3}(?:\.\d{1,3}){3}$/i;
+// Tunnels to somebody's own machine. Real services have a domain.
+const TUNNEL = /https?:\/\/(?:bore\.pub:\d+|[a-z0-9-]+\.trycloudflare\.com|[a-z0-9-]{6,}\.ngrok(?:-free)?\.(?:io|app|dev)|[a-z0-9-]+\.loca\.lt|[a-z0-9-]+\.serveo\.net|[a-z0-9]+\.lhr\.life|[a-z0-9-]+\.playit\.gg|[a-z0-9-]+\.pinggy\.(?:io|link))[^\s)>\]"'`]*/i;
+
+function checkDestinations(file, text, out) {
+  for (const m of text.matchAll(/https?:\/\/([a-z0-9.-]+)(?::\d+)?[^\s)>\]"'`]*/gi)) {
+    if (!THROWAWAY.test(m[1])) continue;
+    const before = text.slice(Math.max(0, m.index - 160), m.index);
+    if (!/\b(?:download|install|set\s?up|setup|get it|grab it)\b/i.test(before.split(/\n\s*\n/).pop())) continue; // the same paragraph as the link
+    out.push(finding(rule({ id: "agent-fake-prerequisite", severity: "high", confidence: "high", title: `Agent instruction file sends you to install software from ${m[1]}`,
+      why: "Malicious skills say a helper tool is required and link to an installer on a throwaway host. Whoever follows the instruction, the agent or you, runs the attacker's program.",
+      fix: "Do not install it. Real tools are installed from their own domain or a package registry; remove the skill." }), file.rel, lineOf(text, m.index), text.split("\n")[lineOf(text, m.index) - 1]));
+    break;
+  }
+  const t = TUNNEL.exec(text);
+  if (t && !/\b(?:example|your[-_ ]|placeholder|<)/i.test(text.slice(Math.max(0, t.index - 40), t.index + t[0].length))) {
+    out.push(finding(rule({ id: "agent-tunnel-endpoint", severity: "high", title: "Agent instruction file points at a tunnel to someone's own machine",
+      why: "A tunnel address (bore, ngrok, trycloudflare…) leads to whatever computer opened it. An agent told to use it as an API or MCP server sends your prompts and data there.",
+      fix: "Do not use it. A real service has its own domain; ask the author where the endpoint is hosted." }), file.rel, lineOf(text, t.index), t[0]));
+  }
+}
+
 function checkInstructions(file, text, out) {
+  checkDestinations(file, text, out);
   for (const [re, what, negatable] of INJECTION) {
     const m = re.exec(text);
     if (!m) continue;

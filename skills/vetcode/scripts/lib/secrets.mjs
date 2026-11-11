@@ -10,7 +10,8 @@ const ROTATE = "Revoke and rotate it at the provider first (assume it is already
 export const SECRET_RULES = [
   { id: "secret-private-key", severity: "critical", title: "Private key in the repository", re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/,
     // A header named in docs, or matched against (`starts_with("-----BEGIN …-----")`), holds no key.
-    unless: /^\s*(?:\/\/[/!]?|\*|#|--)\s|-----BEGIN[^"'`\n]*-----["'`]\s*[,;)\]]|\bplaceholder\s*=/i },
+    // Nor does a pattern that looks for one (a scrubber's regular expression), or a header followed by dots, stars or a template field.
+    unless: /^\s*(?:\/\/[/!]?|\*|#|--)\s|-----BEGIN[^"'`\n]*-----["'`]\s*[,;)\]]|\bplaceholder\s*=|\/[^\/\n]*-----BEGIN[^\n]*\/[gimsuy]*\s*[,;)}\]]|\b(?:regex|pattern|RegExp|re\.compile|Regex::new)\b[^\n]*-----BEGIN|-----BEGIN[^\n]{0,60}(?:\.\.\.|\*{3,}|\{\w+\}|\\n\.\.\.)/i },
   { id: "secret-aws-key", severity: "critical", title: "AWS access key", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, unless: /EXAMPLE/ },
   { id: "secret-github-token", severity: "critical", title: "GitHub token", re: /\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{60,})\b/ },
   { id: "secret-gitlab-token", severity: "critical", title: "GitLab token", re: /\bglpat-[A-Za-z0-9_-]{20,}\b/ },
@@ -76,10 +77,11 @@ const neverIssued = (rule, value) => {
 const NAME_KEY = /(?:column|field|name|label|header|param(?:eter)?|path|prop|attr(?:ibute)?|selector|placeholder|title|type|status|state|hint|help|text|message|description|prefix|suffix|env|var(?:iable)?|regex|pattern|format|url|uri|endpoint|file(?:name)?|dir|length|size|count|ttl|expir\w*|algo(?:rithm)?|scheme|mode|kind|event|action|error|required|enabled|visible|strength|policy|rules?|min|max)$/i;
 // A name, not a value: words joined by . _ - : or / (api_key_encrypted, backend-api-key).
 // Also a session key or an error code (_totp_secret, profile-password-01).
-const NAME_VALUE = /^[_-]?[A-Za-z]+(?:[._:\/-](?:[A-Za-z]+|\d{1,3}))+$/;
+const NAME_VALUE = /^[_-]?[A-Za-z]+(?:[._:\/-](?:[A-Za-z]+|\d{1,3}))+(?:,\s*[A-Za-z]+(?:[._:\/-](?:[A-Za-z]+|\d{1,3}))+)*$/;
 // The pool characters are drawn from, a reference to a variable or a framework parameter, and
 // an identifier-shaped value under a key that only says "password" (passwords are not UUIDs; keys and tokens can be).
-const NOT_A_VALUE = v => /abcdefgh|ABCDEFGH|01234567/.test(v) || /^\$[A-Za-z_]\w*$/.test(v) || /^%[\w.]+%/.test(v);
+// Also a command substitution, and a route written as METHOD:/path.
+const NOT_A_VALUE = v => /abcdefgh|ABCDEFGH|01234567/.test(v) || /^\$[A-Za-z_]\w*$/.test(v) || /^%[\w.]+%/.test(v) || /^\$\(/.test(v) || /^(?:GET|POST|PUT|PATCH|DELETE|HEAD):\//.test(v);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const redact = v => v.length <= 8 ? "•".repeat(v.length) : `${v.slice(0, 4)}…${v.slice(-2)} (${v.length} chars)`;
@@ -110,7 +112,7 @@ export function scanSecrets(file, text, out) {
       const m = r.re.exec(line);
       if (!m || (r.unless && r.unless.test(line)) || neverIssued(r, m[0]) || suppressedHere(lines, i, file.rel, r.id)) continue;
       hit = true;
-      out.push(finding(r, file.rel, i + 1, line.replace(m[1] ?? m[0], redact(m[1] ?? m[0])), doc ? { confidence: "low" } : test && r.id === "secret-private-key" ? { severity: "low", title: "Private key among the tests (a fixture, unless it is used anywhere real)" } : {}));
+      out.push(finding(r, file.rel, i + 1, line.replace(m[1] ?? m[0], redact(m[1] ?? m[0])), doc ? { confidence: "low" } : (test || /\b\w*(?:FAKE|DUMMY|EXAMPLE|SAMPLE|TEST)\w*\s*(?::[^=\n]*)?=/i.test(line)) && r.id === "secret-private-key" ? { severity: "low", title: "Private key that is a fixture by its place or its name (unless it is used anywhere real)" } : {}));
     }
     for (const m of jwt ? line.matchAll(JWT) : []) {
       hit = true;

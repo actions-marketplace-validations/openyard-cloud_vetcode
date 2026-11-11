@@ -120,9 +120,16 @@ async function score(name, items) {
   }
   const guard = GUARD && !name.startsWith("skills") ? Object.fromEntries(["malicious", "benign"].map(l => [l, Object.fromEntries(["deny", "ask", "allow", "error"].map(d => [d, rows.filter(r => r.label === l && r.decision === d).length]))])) : undefined;
   if (guard) console.error(`${name} guard: malicious ${JSON.stringify(guard.malicious)} · benign ${JSON.stringify(guard.benign)}`);
+  // Per rule: how many samples it helped decide, and how many it decided alone. This is what says
+  // which rules can be trusted to give a verdict by themselves and which need a second signal.
+  const ruleStats = {};
+  for (const r of rows) for (const id of r.rules) {
+    const st = ruleStats[id] ||= { malicious: 0, maliciousAlone: 0, benign: 0, benignAlone: 0 };
+    st[r.label]++; if (r.rules.length === 1) st[`${r.label}Alone`]++;
+  }
   const ruleCount = label => Object.entries(rows.filter(r => r.label === label).flatMap(r => r.rules).reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
   console.error(`${name}: ${rows.length} samples · F1 ${(metrics.high.f1 * 100).toFixed(1)}% (high) · ${(metrics.critical.f1 * 100).toFixed(1)}% (critical)`);
-  return { name, samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, guard, rulesOnMalicious: ruleCount("malicious"), rulesOnBenign: ruleCount("benign"), missed: rows.filter(r => r.label === "malicious" && r.worst > 1).map(r => r.id), falseAlarms: rows.filter(r => r.label === "benign" && r.worst <= 1).map(r => ({ id: r.id, rules: r.rules })) };
+  return { name, samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, guard, ruleStats, rulesOnMalicious: ruleCount("malicious"), rulesOnBenign: ruleCount("benign"), missed: rows.filter(r => r.label === "malicious" && r.worst > 1).map(r => r.id), falseAlarms: rows.filter(r => r.label === "benign" && r.worst <= 1).map(r => ({ id: r.id, rules: r.rules })) };
 }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-bench-work-"));

@@ -132,6 +132,8 @@ export async function vet(target, opts = {}) {
       scanFile(file, file.text, MALWARE_FILE_RULES, findings);
       // A committed package manager is expected to be this big; it is checked by comparison below, not by reading.
       if (committedTool(file, from)) continue;
+      // More than a megabyte of JavaScript in one file is build output: its matches stay visible and decide nothing.
+      if (/\.(c|m)?js$/.test(file.rel)) for (let i = from; i < findings.length; i++) if (findings[i].confidence === "medium") findings[i].confidence = "low";
       partial.push({ file: file.rel, bytes: file.partial });
       continue;
     }
@@ -162,7 +164,7 @@ export async function vet(target, opts = {}) {
     // visible but let only high-confidence ones decide.
     // Only JavaScript ships that way on purpose: a one-line Python file or setup.py is itself
     // suspicious (that is how obfuscated payloads look), so those keep their confidence.
-    if (/\.(c|m)?js$/.test(file.rel) && (/\.min\.|[-.]bundle\.|(^|\/)(dist|out)\//.test(file.rel) || file.text.length / (file.text.split("\n").length || 1) > 300))
+    if (/\.(c|m)?js$/.test(file.rel) && (/\.min\.|[-.]bundle\.|\.dart\.js$|(^|\/)(dist|out)\//.test(file.rel) || file.text.length / (file.text.split("\n").length || 1) > 300))
       for (let i = mark; i < findings.length; i++) if (findings[i].confidence === "medium") findings[i].confidence = "low";
     // A committed package manager matches every pattern and none of it means anything; its
     // findings stay visible but decide nothing. What matters is whether the file is the

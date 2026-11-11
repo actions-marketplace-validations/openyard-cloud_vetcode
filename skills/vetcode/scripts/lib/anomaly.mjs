@@ -20,6 +20,8 @@ const codeOnly = text => text
 
 // Only Cyrillic and Greek letters that are drawn like Latin ones (о, а, р, с, Α, Ο…): a math Σ or a
 // whole Russian word is not a disguise.
+// What each look-alike letter passes for.
+const TWIN = Object.fromEntries([..."\u0430a\u0435e\u043Eo\u0440p\u0441c\u0443y\u0445x\u0456i\u0458j\u0455s\u04BBh\u0501d\u04CFl\u0410A\u0412B\u0415E\u041AK\u041CM\u041DH\u041EO\u0420P\u0421C\u0422T\u0425X\u03BFo\u03B1a\u03BDv\u03C1p\u03B9i\u03BAk\u0391A\u0392B\u0395E\u0396Z\u0397H\u0399I\u039AK\u039CM\u039DN\u039FO\u03A1P\u03A4T\u03A5Y\u03A7X"].reduce((a, c, i, all) => (i % 2 ? a : [...a, [c, all[i + 1]]]), []));
 const LATIN = /[A-Za-z]/, LOOKALIKE = /[\u0430\u0435\u043E\u0440\u0441\u0443\u0445\u0456\u0458\u0455\u04BB\u0501\u04CF\u0410\u0412\u0415\u041A\u041C\u041D\u041E\u0420\u0421\u0422\u0425\u03BF\u03B1\u03BD\u03C1\u03B9\u03BA\u0391\u0392\u0395\u0396\u0397\u0399\u039A\u039C\u039D\u039F\u03A1\u03A4\u03A5\u03A7]/;
 
 export const ANOMALY_FILE_RULES = [
@@ -43,7 +45,13 @@ export const ANOMALY_FILE_RULES = [
         const swapped = [...m[0]].filter(c => LOOKALIKE.test(c)).length, latin = (m[0].match(/[A-Za-z]/g) || []).length;
         if (swapped >= 1 && swapped <= 2 && latin >= 2 && latin >= swapped * 2 && ![...m[0]].some(c => /[\u0400-\u04FF\u0370-\u03FF]/.test(c) && !LOOKALIKE.test(c))) {
           const at = text.indexOf(m[0]);
-          return [{ line: at < 0 ? 1 : lineOf(text, at), evidence: `${m[0]} (${[...m[0]].filter(c => LOOKALIKE.test(c)).map(c => "U+" + c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")).join(" ")})` }];
+          // The attack needs a twin: the same name in plain Latin somewhere in the file, which this one
+          // shadows. A lone name with one Cyrillic letter, spelt the same way wherever it is used, is a typo.
+          const twin = [...m[0]].map(c => TWIN[c] || c).join("");
+          const shadows = twin !== m[0] && new RegExp(`(?<![\\w$])${twin.replace(/[$]/g, "\\$&")}(?![\\w$])`).test(text);
+          const codes = [...m[0]].filter(c => LOOKALIKE.test(c)).map(c => "U+" + c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")).join(" ");
+          return [{ line: at < 0 ? 1 : lineOf(text, at), evidence: `${m[0]} (${codes})${shadows ? ` beside ${twin}` : ""}`,
+            extra: shadows ? {} : { severity: "medium", confidence: "medium", title: "Identifier has one look-alike Cyrillic or Greek letter (a typo, unless the plain name exists in another file)" } }];
         }
       }
       return [];

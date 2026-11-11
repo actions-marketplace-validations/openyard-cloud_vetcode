@@ -91,19 +91,19 @@ export const WEB_RULES = [
     why: "Jinja templates can run Python: server-side template injection is remote code execution.", fix: "Render a fixed template and pass the input as a variable." }),
 
   // XSS
-  rule({ id: "xss-inner-html", severity: "medium", title: "HTML set from a variable", files: JS,
+  rule({ id: "xss-inner-html", severity: "medium", perFile: true, title: "HTML set from a variable", files: JS,
     re: /\.(?:innerHTML|outerHTML)\s*\+?=\s*(?!\s*["'`][^"'`$]*["'`]\s*;?\s*$)(?!\s*["']\s*;)|\.insertAdjacentHTML\s*\([^,]+,\s*(?!["'`][^"'`$]*["'`]\s*\))|\bdocument\.write(?:ln)?\s*\(/,
     unless: /DOMPurify|sanitize|escapeHtml|escape\(|textContent|\.createHTML\(|^\s*(?:\/\/|\*)|\.(?:innerHTML|outerHTML)\s*=\s*\(?\s*(?:["'`]{2}\s*[;)]?|[\w.]*(?:[Ii]con|ICON|[Ss]vg|SVG)\w*(?:\s+as\s+\w+)?\)?\s*;?)\s*\)?\s*$/,
     why: "If any part comes from a user (or the URL), it can run script in your users' browsers (XSS).", fix: "Use `textContent`, build nodes with createElement, or sanitise with DOMPurify." }),
-  rule({ id: "xss-react-dangerous", severity: "medium", title: "dangerouslySetInnerHTML with a variable", files: JS,
+  rule({ id: "xss-react-dangerous", severity: "medium", perFile: true, title: "dangerouslySetInnerHTML with a variable", files: JS,
     re: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!["'`])/, unless: /DOMPurify|sanitize|__html\s*:\s*JSON\.stringify/,
     why: "React stops escaping here; user-controlled HTML becomes XSS.", fix: "Sanitise with DOMPurify, or render text instead." }),
-  rule({ id: "xss-framework-raw", severity: "medium", title: "Raw HTML binding", files: /\.(vue|svelte|astro|html?)$/i,
+  rule({ id: "xss-framework-raw", severity: "medium", perFile: true, title: "Raw HTML binding", files: /\.(vue|svelte|astro|html?)$/i,
     re: /\sv-html\s*=|\{@html\s|set:html\s*=/,
     // Not when what is bound is a sanitiser's output.
     unless: /(?:v-html\s*=\s*["']|\{@html\s+|set:html\s*=\s*\{?)\s*(?:await\s+)?(?:[\w$]+\.)*(?:sanitize\w*|sanitise\w*|purify\w*|clean\w*Html|xss)\s*\(/i,
     why: "These bindings skip escaping.", fix: "Bind text, or sanitise the HTML first." }),
-  rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: TEMPLATE,
+  rule({ id: "xss-template-unescaped", severity: "medium", perFile: true, title: "Template output without escaping", files: TEMPLATE,
     // A template with no HTML element in it (a text message, an email subject) has nothing to
     // inject into; a comment used as a separator line is not markup.
     // In Blade, a raw variable or request data is the case to read; a helper call is the rule below.
@@ -111,7 +111,7 @@ export const WEB_RULES = [
     re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$(?!slot\b|attributes\b)[\w>\[\]'"-]+\s*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`{{ }}`, `<%=`), or sanitise before marking safe." }),
   // `<%-` prints raw HTML in EJS; in ERB it only trims whitespace.
-  rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: /\.ejs$/i, re: /<%-(?!-)/,
+  rule({ id: "xss-template-unescaped", severity: "medium", perFile: true, title: "Template output without escaping", files: /\.ejs$/i, re: /<%-(?!-)/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`<%=`), or sanitise before printing." }),
   rule({ id: "xss-template-raw-helper", severity: "low", title: "Template prints a helper's output without escaping", files: TEMPLATE,
     re: /\{!!\s*(?![\s$])[^!]*!!\}|\{!!\s*\$[^!]*\)\s*!!\}/, unless: /\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE)/,

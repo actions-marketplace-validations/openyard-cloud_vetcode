@@ -273,7 +273,10 @@ function checkSetupPy(file, text, out) {
       fix: "Read the overridden run() method; install from a wheel or with --no-build-isolation in a throwaway environment if you must." }), file.rel, lineOf(text, text.search(INSTALL_CMD)), acts ? `install command + ${acts[0]}` : text.match(INSTALL_CMD)[0]));
   }
   const m = /\b(?:urllib\.request|urlopen|requests\.(?:get|post)|httpx\.|subprocess\.|os\.system|os\.popen|exec\s*\(|eval\s*\(|socket\.|base64\.b64decode|__import__\()/.exec(text);
-  if (!m) return;
+  // A module that happens to be called setup.py (an app's setup endpoint) is not run by pip.
+  // pip runs the setup.py at the root of a distribution: the top of what is being read, a file that calls setup(), or one beside packaging metadata.
+  const packaging = !file.rel.includes("/") || /\b(?:setuptools|distutils)\b|^\s*setup\s*\(/m.test(text) || (file.abs && ["PKG-INFO", "pyproject.toml", "setup.cfg", "MANIFEST.in"].some(f => fs.existsSync(path.join(path.dirname(file.abs), f))));
+  if (!m || !packaging) return;
   // Building C extensions or reading git tags needs subprocess; fetching or decoding code does not.
   // exec(open("pkg/version.py").read()) and compile(open(...)) read the version; that is fine.
   const runsDecoded = /\b(?:exec|eval)\s*\((?!\s*(?:compile\s*\()?\s*open\s*\()(?![^)\n]*\.read\(\))[^\n]*/.test(text) && /b64decode|decompress|marshal|fromhex|unhexlify|__import__/.test(text);
@@ -287,6 +290,24 @@ const GH_INPUT = /\$\{\{\s*github\.(?:event\.(?:issue|pull_request|comment|revie
 
 // Actions that were compromised in the past: pin them by SHA to a version you have checked.
 const ONCE_COMPROMISED = /^(?:tj-actions\/(?:changed-files|eslint-changed-files|verify-changed-files)|reviewdog\/action-[\w-]+|ultralytics\/actions)$/i;
+
+// Who owns the repository being read, from its git remote (lower case), or "" when it cannot be told.
+const owners = new Map();
+function repoOwner(abs) {
+  let dir = abs ? path.dirname(abs) : "";
+  for (let i = 0; dir && i < 8; i++, dir = path.dirname(dir)) {
+    if (owners.has(dir)) return owners.get(dir);
+    const cfg = path.join(dir, ".git", "config");
+    if (fs.existsSync(cfg)) {
+      let text = ""; try { text = fs.readFileSync(cfg, "utf8"); } catch { /* unreadable: unknown */ }
+      const owner = ((/url\s*=\s*\S*github\.com[:/]([\w.-]+)\//i.exec(text) || [])[1] || "").toLowerCase();
+      owners.set(dir, owner);
+      return owner;
+    }
+    if (path.dirname(dir) === dir) break;
+  }
+  return "";
+}
 
 function checkWorkflow(file, text, out) {
   const lines = text.split(/\r?\n/);
@@ -317,7 +338,8 @@ function checkWorkflow(file, text, out) {
     const runKey = /^(\s*)(-\s+)?run\s*:\s*(.*)$/.exec(line);
     if (runKey) { inRun = /^[|>][+-]?\d*\s*(?:#.*)?$/.test(runKey[3].trim()); runIndent = runKey[1].length + (runKey[2]?.length || 0); }
     else if (inRun && indent >= 0 && indent <= runIndent && line.trim()) inRun = false;
-    if ((inRun || /^\s*-?\s*run\s*:/.test(line) || /script\s*:/.test(line)) && GH_INPUT.test(line)) {
+    // The base of a pull request (its ref, sha, label) is a branch of this repository, not the author's text.
+    if ((inRun || /^\s*-?\s*run\s*:/.test(line) || /script\s*:/.test(line)) && GH_INPUT.test(line.replace(/\$\{\{[^}]*\.base\.(?:ref|sha|label)[^}]*\}\}/g, ""))) {
       out.push(finding(rule({ id: "gha-script-injection", severity: "high", confidence: "high", title: "Untrusted event text inside a workflow script",
         why: "A PR title, branch name or comment becomes shell code: anyone opening a PR or issue can run commands with the workflow's token and secrets.",
         fix: "Pass it through `env:` (e.g. `TITLE: ${{ github.event.pull_request.title }}`) and use \"$TITLE\" in the script." }), file.rel, i + 1, line));
@@ -341,7 +363,8 @@ function checkWorkflow(file, text, out) {
       // The job's own `uses:`: the nearest one at the same depth, without leaving the job.
       let uses = null;
       for (const step of [-1, 1]) for (let k = i + step; !uses && k >= 0 && k < lines.length && (depth(lines[k]) < 0 || depth(lines[k]) >= mine); k += step) if (depth(lines[k]) === mine && /^\s*uses\s*:/.test(lines[k])) uses = lines[k];
-      const local = /\bsecrets\s*:\s*inherit\b/.test(line) && /^\s*uses\s*:\s*["']?\.\//.test(uses || "");
+      const own = (/^\s*uses\s*:\s*["']?([\w.-]+)\//.exec(uses || "") || [])[1];
+      const local = /\bsecrets\s*:\s*inherit\b/.test(line) && (/^\s*uses\s*:\s*["']?\.\//.test(uses || "") || (!!own && own.toLowerCase() === repoOwner(file.abs)));
       out.push(finding(rule({ id: "gha-secrets-overexposed", severity: local ? "low" : "medium", confidence: "high", title: local ? "Workflow passes all its secrets to another workflow in this repository" : "Workflow hands out all secrets or re-enables unsafe commands",
         why: "Every secret becomes available to the called workflow or step, or old `set-env` commands can be injected through logs.", fix: "Pass only the secrets a job needs; remove ACTIONS_ALLOW_UNSECURE_COMMANDS." }), file.rel, i + 1, line.trim()));
     }
@@ -363,7 +386,8 @@ function checkWorkflow(file, text, out) {
         why: "Its tags were moved to malicious code in a past incident; a tag reference would pick that up again.", fix: "Pin to a reviewed commit SHA, or replace it." }), file.rel, i + 1, line.trim()));
     }
     // Once per action in a workflow: ten steps using the same action are one thing to fix.
-    if (uses && !/^(?:actions|github)\//.test(uses[1]) && !/^[0-9a-f]{40}$/.test(uses[2]) && !out.some(f => f.rule === "gha-unpinned-action" && f.file === file.rel && f.evidence.includes(`${uses[1]}@${uses[2]}`))) {
+    // Actions from the organisation that owns this repository are its own code on its own branch.
+    if (uses && !/^(?:actions|github)\//.test(uses[1]) && uses[1].split("/")[0].toLowerCase() !== repoOwner(file.abs) && !/^[0-9a-f]{40}$/.test(uses[2]) && !out.some(f => f.rule === "gha-unpinned-action" && f.file === file.rel && f.evidence.includes(`${uses[1]}@${uses[2]}`))) {
       out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: "Third-party action pinned to a tag, not a commit",
         why: "Tags can be moved: a compromised action repository can change what runs in your CI (as in the tj-actions incident).", fix: `Pin to the full commit SHA: uses: ${uses[1]}@<sha> # ${uses[2]}` }), file.rel, i + 1, line.trim()));
     }

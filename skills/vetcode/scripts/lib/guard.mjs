@@ -17,6 +17,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { analyzeHistory } from "./npmhistory.mjs";
 import { lookalike } from "./supply.mjs";
+import { lockedPackages } from "./osv.mjs";
 import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 
 const HOUR = 3600000;
@@ -102,6 +103,10 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
       return;
     }
     if (/^(npx|bunx|pnpx)$/.test(bin)) return runner(w.slice(1), bin);
+    // sh -c "…": the string is a command line of its own.
+    if (/^(?:ba|z|da|k)?sh$/.test(bin) && w.includes("-c") && w[w.indexOf("-c") + 1]) return void out.push(...parseInstalls(w[w.indexOf("-c") + 1], { cwd, exists }));
+    // Registering an MCP server: what follows the name is run at every start of the agent.
+    if (/^(claude|codex|gemini)$/.test(bin) && w[1] === "mcp" && /^(add|add-json)$/.test(w[2])) return mcpAdd(w.slice(3), `${bin} mcp ${w[2]}`, w[2] === "add-json");
     if (/^pip[\d.]*$/.test(bin) && w[1] === "install") return pip(w.slice(2), "pip install");
     if (/^python[\d.]*$/.test(bin) && w[1] === "-m" && w[2] === "pip" && w[3] === "install") return pip(w.slice(4), "pip install");
     if (bin === "uv") {
@@ -139,12 +144,63 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
       else if (/^(-i|--index-url|--extra-index-url|--index|--default-index)$/.test(a.flag) && a.value && !/^https:\/\/(?:pypi\.org|files\.pythonhosted\.org|download\.pytorch\.org)\//.test(a.value)) out.push({ eco: "pypi", index: a.value, via });
     }
   }
+  function mcpAdd(list, via, isJson) {
+    const dash = list.indexOf("--");
+    let cmd = dash >= 0 ? list.slice(dash + 1) : null, url = null;
+    if (!cmd) {
+      const plain = [];
+      for (let i = 0; i < list.length; i++) {
+        if (/^(-t|--transport|-s|--scope|-e|--env|-H|--header|--client-id|--client-secret|--callback-port|--timeout|--description|--include-tools|--exclude-tools|--bearer-token-env-var)$/.test(list[i])) { i++; continue; }
+        if (!list[i].startsWith("-") || plain.length > 1) plain.push(list[i]);
+      }
+      const rest = plain.slice(1); // the first plain word is the server's name
+      if (isJson) { try { const j = JSON.parse(rest[0]); cmd = typeof j.command === "string" ? [j.command, ...(Array.isArray(j.args) ? j.args.map(String) : [])] : null; url = j.url || null; } catch { /* not JSON: nothing to read */ } }
+      else if (/^https?:\/\//.test(rest[0] || "")) url = rest[0];
+      else cmd = rest;
+    }
+    if (url) { const why = remoteServer(url); if (why) out.push({ server: url, why, via }); return; }
+    if (cmd?.length) for (const it of parseInstalls(cmd.map(quote).join(" "), { cwd, exists })) out.push({ ...it, via: `${via}: ${it.via}`, mcp: true });
+  }
   function pyRunner(list, via) {
     const from = list.findIndex(x => /^(--from|--with|--spec)$/.test(x));
     if (from >= 0 && list[from + 1]) return add(list[from + 1], via, pipSpec);
     const first = list.find(x => !x.startsWith("-"));
     if (first) add(first, via, pipSpec);
   }
+}
+
+const quote = w => `'${String(w).replace(/'/g, `'\\''`)}'`;
+const TUNNEL = /^https?:\/\/[^/]*\.(?:ngrok(?:-free)?\.(?:io|app|dev)|trycloudflare\.com|loca\.lt|serveo\.net|localhost\.run|pinggy\.(?:io|link)|devtunnels\.ms)(?:[:/]|$)/i;
+// A remote MCP server worth a question: one person's tunnel, or plain HTTP to another machine.
+function remoteServer(url) {
+  if (TUNNEL.test(url)) return `${url} is a tunnel to one person's machine: whoever runs it sees every request your agent sends and decides what it gets back.`;
+  if (/^http:\/\/(?!localhost\b|127\.|\[::1\]|0\.0\.0\.0|host\.docker\.internal\b)/i.test(url)) return `${url} is plain HTTP: anyone on the path can read and change what the server tells your agent.`;
+  return null;
+}
+
+/**
+ * The servers an MCP configuration starts, as shell lines the guard can read. Takes a whole
+ * file (.mcp.json, claude_desktop_config.json, Codex config.toml…) or a fragment of one.
+ */
+export function mcpCommands(text) {
+  const lines = [];
+  const add = (command, args, url) => {
+    if (typeof command === "string" && command.trim()) lines.push(args?.length ? [command, ...args.map(String)].map(quote).join(" ") : command);
+    if (typeof url === "string" && /^https?:\/\//.test(url)) lines.push(`claude mcp add --transport http server ${quote(url)}`);
+  };
+  let j = null; try { j = JSON.parse(text); } catch { /* a fragment, or TOML */ }
+  if (j && typeof j === "object") {
+    (function walk(o, depth) {
+      if (!o || typeof o !== "object" || depth > 8) return;
+      if (typeof o.command === "string" || typeof o.url === "string" || typeof o.serverUrl === "string" || typeof o.httpUrl === "string") add(o.command, Array.isArray(o.args) ? o.args : [], o.url || o.serverUrl || o.httpUrl);
+      for (const v of Object.values(o)) walk(v, depth + 1);
+    })(j, 0);
+    return lines;
+  }
+  const strings = t => [...(t || "").matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(a => a[1].replace(/\\(.)/g, "$1"));
+  for (const m of text.matchAll(/["']?command["']?\s*[:=]\s*"((?:[^"\\\n]|\\.)+)"(?:[^{}]{0,200}?["']?args["']?\s*[:=]\s*\[([^\]]*)\])?/g)) add(m[1], strings(m[2]));
+  for (const m of text.matchAll(/["']?(?:url|serverUrl|httpUrl)["']?\s*[:=]\s*"(https?:\/\/[^"\s]+)"/g)) add(null, null, m[1]);
+  return lines;
 }
 
 /** Folders a shell line just cloned a repository into: `git clone`, `gh repo clone`, `npx degit`. */
@@ -168,7 +224,8 @@ export function parseClones(line, { cwd = process.cwd() } = {}) {
 /** What to tell the agent about a folder it just cloned: null when there is nothing to say. */
 export async function checkClone(dir, { vet }) {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return null;
-  const res = await vet(dir, { tools: false, noIgnore: true, log: () => {} });
+  // verifyTools: a committed copy of Yarn is compared with the one Yarn published.
+  const res = await vet(dir, { tools: false, noIgnore: true, verifyTools: true, log: () => {} });
   const hits = res.findings.filter(f => VERDICT_CATS.has(f.category) && f.confidence !== "low" && (f.severity === "critical" || f.severity === "high"));
   if (!hits.length) return null;
   const top = hits.slice(0, 5).map(f => `${f.severity}: ${f.title} (${f.file}${f.line ? ":" + f.line : ""})`).join("; ");
@@ -232,7 +289,7 @@ export async function checkPackage(pkg, deps = {}) {
   } catch { /* registry unreachable: decide on what we have */ }
 
   if (doc && npm) {
-    version = npmVersion(doc, pkg.want);
+    version = (!pkg.want && pkg.range && rangeVersion(doc, pkg.range)) || npmVersion(doc, pkg.want);
     const v = doc.versions?.[version];
     if (!v) { raise("deny", `${pkg.name}@${pkg.want} is not a published version.`); return done(); }
     archive = v.dist?.tarball; size = v.dist?.unpackedSize; published = Date.parse(doc.time?.[version] || "");
@@ -282,29 +339,145 @@ export async function checkPackage(pkg, deps = {}) {
   return done();
 }
 
+// ---- installs that name no package: the manifest and the lockfile decide ----------------------
+
+/** Installs that take their list from a file: `npm install`, `npm ci`, `pnpm install`, `yarn`, `bun install`, `pip install -r`. */
+export function parseManifests(line, { cwd = process.cwd() } = {}) {
+  const out = []; let dir = cwd;
+  for (const raw of splitCommands(line)) {
+    const w = strip(raw), bin = base(w[0]);
+    if (bin === "cd" && w[1]) { dir = path.resolve(dir, w[1].replace(/^~(?=\/|$)/, os.homedir())); continue; }
+    if (/^(npm|pnpm|yarn|bun)$/.test(bin)) {
+      const rest = w.slice(1), words = []; let at = dir, global = false;
+      for (let i = 0; i < rest.length; i++) {
+        if (/^(--prefix|-C|--dir|--cwd)$/.test(rest[i])) { at = path.resolve(dir, rest[++i] || "."); continue; }
+        if (VALUE_FLAGS.npm.test(rest[i])) { i++; continue; }
+        if (/^(-g|--global)$/.test(rest[i])) global = true;
+        if (!rest[i].startsWith("-")) words.push(rest[i]);
+      }
+      const bare = !global && (words.length === 0 ? bin === "yarn" : words.length === 1 && (bin === "npm" ? /^(i|in|ins|inst|insta|instal|install|isnt|isnta|isntal|isntall|ci|ic|clean-install|install-clean)$/ : /^(i|install)$/).test(words[0]));
+      if (bare) out.push({ eco: "npm", dir: at, via: [bin, ...words].join(" ") });
+      continue;
+    }
+    const pipAt = /^pip[\d.]*$/.test(bin) && w[1] === "install" ? 2 : /^python[\d.]*$/.test(bin) && w[1] === "-m" && w[2] === "pip" && w[3] === "install" ? 4 : bin === "uv" && w[1] === "pip" && /^(install|sync)$/.test(w[2]) ? 3 : 0;
+    if (pipAt) for (let i = pipAt; i < w.length; i++) {
+      const m = /^(?:-r|--requirement)(?:=(.+))?$/.exec(w[i]) || /^-r(.+)$/.exec(w[i]);
+      const file = m ? m[1] || w[++i] : bin === "uv" && w[2] === "sync" && !w[i].startsWith("-") ? w[i] : null;
+      if (file) out.push({ eco: "pypi", file: path.resolve(dir, file), via: `${bin === "uv" ? "uv pip" : "pip"} ${bin === "uv" ? w[2] : "install"} -r` });
+    }
+  }
+  return out;
+}
+
+const readText = f => { try { return fs.readFileSync(f, "utf8"); } catch { return null; } };
+/**
+ * What such an install would fetch that was not there before, and what the lockfile pins.
+ * A dependency that the lockfile or node_modules already holds was resolved earlier; only the
+ * ones added since (what an agent just wrote into package.json) are looked at one by one.
+ */
+export function fromManifest(m) {
+  const items = [], locked = [];
+  if (m.eco === "pypi") {
+    const via = path.basename(m.file);
+    for (const raw of (readText(m.file) || "").split(/\r?\n/)) {
+      const text = raw.replace(/(^|\s)#.*$/, "").trim();
+      if (!text || text.startsWith("-")) continue; // comments, -r other.txt, -e ., --hash
+      const p = pipSpec(text.split(/\s*;/)[0].replace(/\s+--hash.*$/, ""));
+      if (!p) continue;
+      if (p.want) locked.push({ eco: "pypi", name: p.name, version: p.want, file: via });
+      items.push({ ...p, via });
+    }
+    return { items, locked };
+  }
+  let pkg; try { pkg = JSON.parse(readText(path.join(m.dir, "package.json"))); } catch { return { items, locked }; }
+  if (!pkg || typeof pkg !== "object") return { items, locked };
+  const lockFile = ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"].map(f => path.join(m.dir, f)).find(f => fs.existsSync(f));
+  const lock = lockFile ? readText(lockFile) || "" : "";
+  if (lockFile) for (const p of lockedPackages([{ rel: path.basename(lockFile), text: lock }])) if (p.ecosystem === "npm") locked.push({ eco: "npm", name: p.name, version: p.version, file: p.file });
+  const esc = x => x.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  const held = name => new RegExp(`(?:^|[\\s"'/(])${esc(name)}(?:@|["']\\s*:)`, "m").test(lock) || fs.existsSync(path.join(m.dir, "node_modules", name, "package.json"));
+  for (const [name, spec] of Object.entries({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.optionalDependencies })) {
+    if (typeof spec !== "string" || /^(?:workspace:|file:|link:|portal:|catalog:|patch:|\.{0,2}\/|~\/)/.test(spec) || held(name)) continue;
+    const alias = /^npm:(.+)$/.exec(spec);
+    const p = alias ? npmSpec(alias[1])
+      : /^(?:https?:|git[+:]|ssh:|github:|gitlab:|bitbucket:)|^[\w.-]+\/[\w.-]+(?:#.*)?$/.test(spec) ? { eco: "npm", remote: `${name}@${spec}` }
+      : /^(@[\w.~-]+\/[\w.~-]+|[\w.~-]+)$/.test(name) ? { eco: "npm", name: name.toLowerCase(), want: /^\d+\.\d+\.\d+[\w.+-]*$/.test(spec) ? spec : null, range: spec } : null;
+    if (p) items.push({ ...p, via: "package.json" });
+  }
+  return { items, locked };
+}
+
+/** Pinned packages with a malware advisory, asked in one request per thousand. null when it could not be asked. */
+async function lockedMalware(fetchFn, locked) {
+  const hits = [];
+  try {
+    for (let i = 0; i < Math.min(locked.length, 5000); i += 1000) {
+      const part = locked.slice(i, i + 1000);
+      const r = await json(fetchFn, "https://api.osv.dev/v1/querybatch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ queries: part.map(p => ({ package: { name: p.name, ecosystem: p.eco === "npm" ? "npm" : "PyPI" }, version: p.version })) }) });
+      (r.body?.results || []).forEach((res, k) => { const ids = (res?.vulns || []).map(v => v.id).filter(id => /^MAL-/.test(id)); if (ids.length && part[k]) hits.push({ ...part[k], ids }); });
+    }
+  } catch { return null; }
+  return hits;
+}
+
+// The newest release a ^ or ~ range allows: what the installer would pick.
+function rangeVersion(doc, range) {
+  const m = /^([\^~])\s*(\d+)\.(\d+)(?:\.(\d+))?/.exec(String(range).trim());
+  if (!m) return null;
+  const lo = [+m[2], +m[3], +(m[4] || 0)], sameMinor = m[1] === "~" || lo[0] === 0;
+  let best = null;
+  for (const v of Object.keys(doc.versions || {})) {
+    const x = parts(v);
+    if (PRE.test(v) || x[0] !== lo[0] || (sameMinor && x[1] !== lo[1]) || newer(lo.join("."), v)) continue;
+    if (!best || newer(v, best)) best = v;
+  }
+  return best;
+}
+
 // ---- the whole command ----------------------------------------------------------------------
 
 /** Checks every package a shell line would fetch. Returns { decision, message, results }. */
 export async function guard(line, deps = {}) {
   const items = parseInstalls(line, deps), results = [];
+  // Lines taken from a configuration file are programs the agent will start later, again and again.
+  if (deps.config) for (const it of items) it.mcp = true;
   let decision = "allow";
   const raise = d => { if (RANK[d] > RANK[decision]) decision = d; };
+  // An install that names no package takes its list from the project: look at what was added
+  // since the lockfile was written (names with no reputation first), and ask once whether
+  // anything the lockfile pins is reported as malware.
+  const locked = [];
+  for (const m of parseManifests(line, deps)) {
+    const f = fromManifest(m), rep = it => (it.eco === "npm" ? KNOWN_NPM : KNOWN_PYPI).has(it.name) ? 1 : 0;
+    items.push(...f.items.sort((a, b) => rep(a) - rep(b)));
+    locked.push(...f.locked.filter(p => !deps.isPrivate?.(p)));
+  }
+  const pinned = locked.length ? lockedMalware(deps.fetch || fetch, locked) : null;
   const seen = new Set(), pending = [];
+  let skipped = 0;
   for (const it of items) {
     if (it.pipe) { results.push({ decision: "ask", reasons: [`This pipes ${it.pipe} straight into a shell: whatever that address serves runs with your rights. Download it, read it, then run it.`] }); raise("ask"); continue; }
     if (it.index) { results.push({ decision: "ask", reasons: [`This installs from another package index (${it.index}). A package there can shadow one of the same name on PyPI.`] }); raise("ask"); continue; }
+    if (it.server) { results.push({ decision: "ask", reasons: [`This adds an MCP server at an address that needs a look. ${it.why}`] }); raise("ask"); continue; }
     if (it.remote) { results.push({ decision: "ask", reasons: [`${it.remote} is fetched from a repository or URL, not from the registry, so it cannot be checked before it runs. Clone it and scan it with vetcode first.`] }); raise("ask"); continue; }
     const key = `${it.eco}:${it.name}@${it.want || ""}`;
-    if (seen.has(key) || seen.size >= (deps.limit ?? 12)) continue;
+    if (seen.has(key)) continue;
+    if (seen.size >= (deps.limit ?? 12)) { skipped++; continue; }
     seen.add(key);
-    pending.push(checkPackage(it, deps));
+    pending.push(checkPackage(it, deps).then(r => {
+      // A server or hook started through npx or uvx fetches whatever is newest each time, long after this check.
+      if (it.mcp && !/^\d/.test(it.want || "")) r.notes.push(`the agent will fetch it again every time it starts this, at whatever version is newest then; pin the version checked now (${r.name}${it.eco === "npm" ? "@" : "=="}${r.version || "x.y.z"})`);
+      return r;
+    }));
   }
   for (const r of await Promise.all(pending)) { results.push(r); raise(r.decision); }
+  for (const h of (await pinned) || []) { results.push({ decision: "deny", reasons: [`${h.file} pins ${h.name}@${h.version}, which is reported as malware (${h.ids.slice(0, 3).join(", ")}). Remove it or move to a clean version before installing.`] }); raise("deny"); }
   const strict = deps.mode === "strict" && decision === "ask";
   if (strict) decision = "deny";
   const lines = results.filter(r => r.decision !== "allow").flatMap(r => r.reasons);
   const notes = results.filter(r => r.decision === "allow" && r.notes?.length && !(r.notes.length === 1 && /nothing serious/.test(r.notes[0]))).map(r => `${r.name}: ${r.notes.join("; ")}`);
-  return { decision, message: lines.length ? `vetcode: ${lines.join(" ")}` : "", notes, results, checked: results.filter(r => r.name).length };
+  if (skipped) notes.push(`${skipped} more package${skipped === 1 ? " was" : "s were"} not looked at one by one (the guard checks ${deps.limit ?? 12} per command)`);
+  return { decision, message: lines.length ? `vetcode: ${lines.join(" ")}` : "", notes, results, checked: results.filter(r => r.name).length, pinned: locked.length };
 }
 
 // ---- the real scan: download the archive, unpack it, read it, delete it -----------------------
@@ -322,7 +495,7 @@ export async function scanArchive(eco, url, _size, { fetch: fetchFn = fetch, vet
     const un = file.endsWith(".zip") ? spawnSync("unzip", ["-qq", "-o", file, "-d", into]) : spawnSync("tar", ["-xzf", file, "-C", into, "--no-same-owner"]);
     if (un.status !== 0 && !fs.readdirSync(into).length) return null;
     const top = fs.readdirSync(into), root = top.length === 1 && fs.statSync(path.join(into, top[0])).isDirectory() ? path.join(into, top[0]) : into;
-    const res = await vet(root, { tools: false, noIgnore: true, log: () => {} });
+    const res = await vet(root, { tools: false, noIgnore: true, verifyTools: true, log: () => {} });
     return Object.assign(res.findings, { stats: res.stats });
   } catch { return null; }
   finally { spawnSync("chmod", ["-R", "u+rwX", dir]); fs.rmSync(dir, { recursive: true, force: true }); }

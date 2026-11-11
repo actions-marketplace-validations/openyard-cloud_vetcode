@@ -85,6 +85,30 @@ if (TOOL === "skill-scanner" && ONLY.includes("skills")) {
     falseAlarms: rows.filter(r => r.label === "benign" && r.verdicts[best[0].replace("sev_", "")]).map(r => ({ id: r.id, rules: r.rules.slice(0, 5) })), errors: rows.filter(r => r.error).length });
   console.error(`skill-scanner skills: ${rows.length} samples · best F1 ${(metrics.high.f1 * 100).toFixed(1)}% (${best[0]}) · ${Object.entries(metrics).filter(([k]) => k !== "high").map(([k, m]) => `${k} ${(m.f1 * 100).toFixed(1)} (recall ${(m.recall * 100).toFixed(1)}, fpr ${(m.fpr * 100).toFixed(1)})`).join(", ")} · errors ${results.at(-1).errors}`);
 }
+// The held-out skills set: both sides come as collections, one sample per folder holding SKILL.md.
+if (TOOL === "skill-scanner" && ONLY.includes("skills-heldout")) {
+  const rows = [];
+  for (const [kind, label] of [["malicious-collections", "malicious"], ["benign-collections", "benign"]]) {
+    const col = path.join(CACHE, "skills-heldout", kind);
+    for (const f of fs.existsSync(col) ? fs.readdirSync(col).sort() : []) {
+      const dir = path.join(work, `held-${label}-${f}`);
+      if (!unpack(path.join(col, f), dir)) continue;
+      for (const [i, d] of skillDirs(dir).entries()) if (i % SHARDS === SHARD) rows.push({ id: `${f}:${path.basename(d)}`, label, ...skillScanner(d) });
+      remove(dir);
+    }
+  }
+  const metrics = {};
+  for (const v of ["high", "medium", "any"]) {
+    const c = { tp: 0, fn: 0, fp: 0, tn: 0 };
+    for (const r of rows) c[r.label === "malicious" ? (r.verdicts[v] ? "tp" : "fn") : (r.verdicts[v] ? "fp" : "tn")]++;
+    const p = c.tp / (c.tp + c.fp || 1), rc = c.tp / (c.tp + c.fn || 1);
+    metrics[`sev_${v}`] = { ...c, precision: p, recall: rc, f1: 2 * p * rc / (p + rc || 1), accuracy: (c.tp + c.tn) / (rows.length || 1), fpr: c.fp / (c.fp + c.tn || 1) };
+  }
+  const best = Object.entries(metrics).sort((a, b) => b[1].f1 - a[1].f1)[0];
+  metrics.high = { ...best[1], verdict: best[0] };
+  results.push({ name: "skills-heldout", samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, rulesOnMalicious: [], rulesOnBenign: [], missed: [], falseAlarms: [], errors: rows.filter(r => r.error).length });
+  console.error(`skill-scanner skills-heldout: ${rows.length} samples · ${Object.entries(metrics).filter(([k]) => k !== "high").map(([k, m]) => `${k} F1 ${(m.f1 * 100).toFixed(1)} (recall ${(m.recall * 100).toFixed(1)}, fpr ${(m.fpr * 100).toFixed(1)})`).join(", ")} · errors ${results.at(-1).errors}`);
+}
 for (const eco of ["npm", "pypi"].filter(e => ONLY.includes(e) && TOOL === "guarddog")) {
   const rows = [];
   for (const label of ["malicious", "benign"]) {

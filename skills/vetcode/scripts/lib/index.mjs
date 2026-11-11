@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
 import { profiles, purposeMismatches } from "./profile.mjs";
 import { npmHistory } from "./npmhistory.mjs";
-import { scanLines, scanFile, options, rank, SEVERITIES, TEST, VENDORED, LOCALE, DEVTOOL, DEVSTACK } from "./engine.mjs";
+import { scanLines, scanFile, options, rank, finding, SEVERITIES, TEST, VENDORED, LOCALE, DEVTOOL, DEVSTACK, TOOLCHAIN } from "./engine.mjs";
 import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
 import { MALWARE_RULES, MALWARE_FILE_RULES } from "./malware.mjs";
 import { WEB_RULES } from "./web.mjs";
@@ -21,7 +21,27 @@ import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 import { decoded, payloads, stashed } from "./normalize.mjs";
 
-export const VERSION = "0.6.0";
+const YARN_COPY = { id: "committed-package-manager", category: "supply-chain", severity: "low", confidence: "high", title: "The project runs a committed copy of Yarn",
+  why: "With yarnPath set, every yarn command runs this file, on each developer's machine and in CI. It is far too large to review by eye, so a changed copy would go unnoticed.",
+  fix: "Compare it with the official release: run vetcode with --online, or run `yarn set version <the same version>` and confirm git shows no change." };
+
+/** Each committed Yarn release against the file Yarn publishes for that version (--online). */
+async function yarnCopiesAreOfficial(copies, out, log) {
+  const sha = buf => crypto.createHash("sha256").update(buf.toString("latin1").replace(/\r\n/g, "\n"), "latin1").digest("hex");
+  for (const y of copies.slice(0, 5)) {
+    try {
+      const r = await fetch(`https://repo.yarnpkg.com/${y.version}/packages/yarnpkg-cli/bin/yarn.js`, { signal: AbortSignal.timeout(30000) });
+      if (!r.ok) continue;
+      const official = sha(Buffer.from(await r.arrayBuffer())), mine = sha(fs.readFileSync(y.abs));
+      if (official === mine) { log(`${y.rel} is the official Yarn ${y.version}`); continue; }
+      out.push(finding({ id: "package-manager-tampered", category: "supply-chain", severity: "critical", confidence: "high", title: `The committed Yarn ${y.version} is not the file Yarn published`,
+        why: "This file runs on every yarn command. A copy that differs from the official release of the same version was changed by someone, and the change is hidden in megabytes of minified code.",
+        fix: "Do not run yarn in this project. Replace the file with the official one (`yarn set version` from a clean machine) and find out who changed it and when (git log on the file)." }, y.rel, 1, `sha256 ${mine.slice(0, 16)}…, official ${official.slice(0, 16)}…`));
+    } catch { /* could not be compared: say nothing */ }
+  }
+}
+
+export const VERSION = "0.7.0";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -94,13 +114,25 @@ export async function vet(target, opts = {}) {
   const findings = [];
   const files = [];
   const partial = [];
+  const yarnCopies = [];
+  // Only a file as big as the real thing: a small script under .yarn/ is read like any other.
+  const committedTool = (file, from) => {
+    if (!TOOLCHAIN.test(file.rel) || !(file.partial || file.text.length > 200_000)) return false;
+    for (let i = from; i < findings.length; i++) findings[i].confidence = "low";
+    const yarn = /(^|\/)\.yarn\/releases\/yarn-(\d+\.\d+\.\d+)\.cjs$/.exec(file.rel);
+    if (yarn) { findings.push(finding(YARN_COPY, file.rel, 1, `yarn ${yarn[2]}`)); yarnCopies.push({ rel: file.rel, abs: file.abs, version: yarn[2] }); }
+    return true;
+  };
   for (const file of walk(root, { ignore, only: listed, ...(listed ? {} : { skipDirs: SKIP_DIRS_NO_GIT }) })) {
     if (file.partial) {
       // Too big to read whole: secrets and malware checks on its first and last 256 KB.
-      partial.push({ file: file.rel, bytes: file.partial });
+      const from = findings.length;
       scanSecrets(file, file.text, findings);
       scanLines(file, file.text, MALWARE_RULES, findings);
       scanFile(file, file.text, MALWARE_FILE_RULES, findings);
+      // A committed package manager is expected to be this big; it is checked by comparison below, not by reading.
+      if (committedTool(file, from)) continue;
+      partial.push({ file: file.rel, bytes: file.partial });
       continue;
     }
     files.push(file);
@@ -132,6 +164,10 @@ export async function vet(target, opts = {}) {
     // suspicious (that is how obfuscated payloads look), so those keep their confidence.
     if (/\.(c|m)?js$/.test(file.rel) && (/\.min\.|[-.]bundle\.|(^|\/)(dist|out)\//.test(file.rel) || file.text.length / (file.text.split("\n").length || 1) > 300))
       for (let i = mark; i < findings.length; i++) if (findings[i].confidence === "medium") findings[i].confidence = "low";
+    // A committed package manager matches every pattern and none of it means anything; its
+    // findings stay visible but decide nothing. What matters is whether the file is the
+    // official one, and that is a comparison (--online), not a pattern.
+    committedTool(file, mark);
   }
   log(`${files.length} files read`);
   supabaseTablesWithoutRls(files, findings);
@@ -171,6 +207,8 @@ export async function vet(target, opts = {}) {
     catch (e) { osv = `failed (${e.message})`; log(`OSV lookup failed: ${e.message}`); }
     await npmHistory(files, findings, log);
   }
+  // The guard asks for this alone: it already uses the network, and sends nothing about the project.
+  if (opts.online || opts.verifyTools) await yarnCopiesAreOfficial(yarnCopies, findings, log);
 
   // Same rule on the same line from two sources (e.g. built-in + gitleaks) is reported once.
   const seen = new Set();

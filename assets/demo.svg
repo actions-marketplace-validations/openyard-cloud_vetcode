@@ -4,7 +4,7 @@
 <rect width="880" height="36" rx="12" fill="#161b22"/><rect y="24" width="880" height="12" fill="#161b22"/>
 <circle cx="22" cy="18" r="6" fill="#ff5f57"/><circle cx="42" cy="18" r="6" fill="#febc2e"/><circle cx="62" cy="18" r="6" fill="#28c840"/>
 <text x="440" y="23" fill="#8b949e" text-anchor="middle" style="font-size:12px">vetcode</text>
-<text class="l" x="24" y="62" fill="#e6edf3" style="animation-delay:0.30s">$ npx @openyard/vetcode ./color-strng</text>
+<text class="l" x="24" y="62" fill="#e6edf3" style="animation-delay:0.30s">$ npx github:openyard-cloud/vetcode ./color-strng</text>
 <text class="l" x="24" y="84" fill="#8b949e" style="animation-delay:0.42s">vetcode: 3 files read · 0.1 s</text>
 <text class="l" x="24" y="128" fill="#e6edf3" style="font-weight:700;animation-delay:0.66s">Findings: critical 2 · high 3 · medium 0</text>
 <text class="l" x="24" y="172" fill="#8b949e" style="animation-delay:0.90s">What it says vs what it does</text>

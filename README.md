@@ -19,15 +19,15 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.6.0 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.7.0 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between, and every claim below is measured ([how](bench/README.md)):
 
 - **It steps in before the damage.** In Claude Code a [guard](#the-guard-checked-before-your-agent-installs) looks at every install command before it runs and at every repository right after it is cloned. Asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3; with the guard it installed the previous settled version every time. Shown malware as if nobody had reported it yet, the guard blocked or questioned 95% of 1,000 malicious npm packages and 88% of 300 PyPI ones.
-- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps that no rule was tuned on (33,000 files) it reports 9 findings per thousand files and calls one of them dangerous, the one that does ship agent hooks. On malware benchmarks it raises fewer false alarms than GuardDog (3.3% against 4.3% on npm, 8.1% against 22.9% on PyPI) and Cisco skill-scanner (3.0% against 15.9%).
+- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps it had never been run on (37,000 files), 0.6.0 reported 9 findings per thousand files and wrongly called two of them dangerous; 0.7.0 fixes what that showed and reports 7 per thousand and none. On malware benchmarks it raises fewer false alarms than GuardDog (3.3% against 4.3% on npm, 8.1% against 22.9% on PyPI) and Cisco skill-scanner (0.1% against 5.4% on the same 1,029 clean skills).
 - **Catches more malware than the best open-source detector, and is harder to fool.** Both tools on the same 2,000 npm packages: F1 95.8 against GuardDog's 92.8. On PyPI: 90.5 against 81.8. After 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`) it still catches 99–100% of what it caught; GuardDog loses up to 10%.
-- **Knows what attacks on agents look like.** Poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders, a "required" tool to install from a throwaway host.
+- **Knows what attacks on agents look like.** Poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders, a "required" tool to install from a throwaway host. On 157 malicious skills from marketplaces it had never seen, rules alone catch 58% and wrongly flag 1 of 1,029 clean ones.
 - **One run, everything else too.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, in 8 languages.
 - **Reads, never runs.** Nothing from the target is installed, built or executed. Node 18+ and nothing else.
 
@@ -57,7 +57,17 @@ Both tools ran on GitHub Actions on the same sample (seed 31), whose malicious p
 | **vetcode** | **29.9%** | **3.0%** |
 | Cisco skill-scanner | 23.5% | 15.9% |
 
-Those numbers were measured before any rule was written from this dataset. Version 0.4.1 adds rules for what the misses had in common (a "required" tool to install from a throwaway host, an MCP or API endpoint on a tunnel, orders to act without confirmation) and catches **48.5%** of the same 204 with the same 3.0% false alarms. That figure is in-sample: the rules were written from descriptions of these samples, so it will be measured again on skills added to the dataset later.
+Those numbers were measured before any rule was written from this dataset. Version 0.4.1 adds rules for what the misses had in common (a "required" tool to install from a throwaway host, an MCP or API endpoint on a tunnel, orders to act without confirmation) and catches **48.5%** of the same 204 with the same 3.0% false alarms. That figure is in-sample: the rules were written from descriptions of these samples, so it does not count as evidence. 0.7.0 stands at 50.0% (102 of 204) with 0.8% false alarms on this set.
+
+**On skills it had never seen.** Because that figure is in-sample, 0.7.0 was also run on a second set that no rule was written from and whose misses are never described to anyone (the benchmark refuses to): 157 skills found malicious on two skill marketplaces ([MaliciousAgentSkillsBench](https://github.com/protectskills/MaliciousSkillBench)), against 1,029 skills from four public collections (GitHub's awesome-copilot, Microsoft's, wshobson/agents and K-Dense's scientific skills).
+
+| Held-out skills | Caught | False alarms | F1 |
+|---|---|---|---|
+| **vetcode 0.7.0** | 58.0% (91 of 157) | **0.1%** (1 of 1,029) | **73.1** |
+| vetcode 0.7.0 at first look, before its false alarms on the clean side were read | 59.9% (94) | 2.6% (27) | 67.6 |
+| Cisco skill-scanner 2.3.2, its best verdict | **64.3%** (101 of 157) | 5.4% (56 of 1,029) | 64.3 |
+
+Cisco's scanner catches a few more of these; vetcode wrongly flags far fewer clean skills, which is what an agent pays for on every skill it loads. The clean collections are public, so their false alarms were read and fixed (that cost three catches, and it means vetcode's 0.1% is a tuned number where Cisco's 5.4% is not; the first-look row is the like-for-like one); the malicious side stays unread.
 
 Rules alone catch a minority of malicious skills for every tool; most of them are ordinary-looking instructions that need reading. That reading is the agent's step in vetcode's `SKILL.md` and is not part of these numbers.
 
@@ -70,12 +80,18 @@ Rules alone catch a minority of malicious skills for every tool; most of them ar
 
 **On real applications.** A scanner that cries wolf costs an agent tokens on every run, so false alarms are measured too: twelve well-known open-source apps (about 14,000 files, pinned to a commit) that handle tokens, passwords and API keys all day.
 
-| Findings at medium or above | 0.3.1 | 0.6.0 |
+| Findings at medium or above | First look | 0.7.0 |
 |---|---|---|
-| The twelve apps the rules were tuned on | 2,024 | **96** |
+| The twelve apps the first rules were tuned on (14,000 files) | 2,024 (0.3.1) | **96** |
 | Wrongly given a high or critical malware or supply-chain finding | 3 | **0** |
-| Twelve other apps, never used for tuning (33,000 files) | 477 (0.5.0) | **298** |
-| Wrongly flagged among those | 5 (0.5.0) | **1**, which does ship agent hooks |
+| Twelve other apps (33,000 files) | 477 (0.5.0) | **286** |
+| Wrongly flagged among those | 5 | **1**, which does ship agent hooks |
+| Twelve more apps (37,000 files) | 340 (0.6.0) | **247** |
+| Wrongly flagged among those | 2 | **0** |
+
+The report itself got shorter too, which is what an agent pays for: on the first twelve apps the text an agent has to read went from 131 KB to 45 KB in total (median per app 11 KB to 4 KB), and on the third twelve from 147 KB to 79 KB. Fewer findings account for most of it; low and informational findings are now one line per rule, with the detail in the JSON report.
+
+"First look" is the version that met the apps before any rule was changed because of them, so that column is the honest one: each new set of apps has cost about 9 findings per thousand files on first contact since 0.6.0, and one or two wrong verdicts in twelve.
 
 Detection did not pay for this: on a malware sample no rule was written from, 0.6.0 catches slightly more than 0.5.0 (npm 944 → 949 of 1,000, PyPI 247 → 262 of 300) with the same false alarms. Run the noise check yourself with `node bench/noise.mjs` (no model, no cost); details in [`bench/README.md`](bench/README.md#false-alarms-on-real-applications).
 
@@ -110,6 +126,8 @@ claude plugin marketplace add openyard-cloud/vetcode && claude plugin install ve
 ```
 
 Everything else (MCP, claude.ai, CI, a whole team) is below. All forms need Node.js 18+.
+
+**vetcode is not on npm.** Every command on this page runs it from this repository, pinned to a release. If you come across a package called `vetcode` on npm or PyPI, it is not this project.
 
 | Your agent | Use |
 |---|---|
@@ -164,7 +182,7 @@ Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settin
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.6.0", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.7.0", "vetcode-mcp"] }
   }
 }
 ```
@@ -172,7 +190,7 @@ Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settin
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.6.0", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.7.0", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -180,7 +198,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.6.0", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.7.0", "vetcode-mcp"]
 ```
 
 Then ask your agent to "use vetcode to review this project". The agent should call `vetcode_guide` once; the server also tells it to.
@@ -192,7 +210,7 @@ For tools that read `AGENTS.md` (or `.cursorrules`, `CONVENTIONS.md`…) but nei
 ```markdown
 ## The guard: checked before your agent installs
 
-An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code plugin, vetcode looks at every install command **before** it runs and answers allow, ask or deny:
+An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code plugin, vetcode looks at every install command **before** it runs, and at every MCP server before it is registered, and answers allow, ask or deny:
 
 | The command would… | Answer |
 |---|---|
@@ -202,11 +220,23 @@ An agent decides to install a package in a second: a name it remembered wrong, a
 | install a name one letter from a popular package (`expres`, `reqeusts`) | ask |
 | install a release less than 72 hours old, or one that lost its provenance or gained an install script | ask |
 | pipe a download into a shell, or install from another index, a repository or a URL | ask |
+| add an MCP server at a tunnel address (ngrok, trycloudflare…) or over plain HTTP to another machine | ask |
 | install well-known packages at settled versions | allow, silently |
+
+The same answers apply wherever a package is about to be fetched, not only when the command names it:
+
+| Where | What is checked |
+|---|---|
+| `npm install x`, `npx x`, `pip install x`, `uvx x`, also inside `bash -c "…"` | the packages named |
+| `npm install`, `npm ci`, `pnpm install`, `yarn`, `bun install`, `pip install -r requirements.txt` | the dependencies added since the lockfile was written (what an agent just put into `package.json`), one by one; and everything the lockfile or requirements file pins, against malware advisories in one request |
+| `claude mcp add … -- npx x`, `codex mcp add`, `gemini mcp add` | the package the server would run, and the server's address |
+| writing `.mcp.json`, `claude_desktop_config.json`, agent `settings.json` or Codex `config.toml` | the same, for every server or hook command in the text being written |
+
+A server started through `npx` or `uvx` without a version is fetched again at every start, long after the check; the guard says so and names the version to pin.
 
 **After a clone.** When the agent runs `git clone`, `gh repo clone` or `npx degit`, the guard reads the folder that arrived (nothing is run) and, if it holds signs of malware or of an attack on coding agents (a poisoned `CLAUDE.md`, hooks in project settings, an install script that decodes and runs code), tells the agent before it installs, builds or runs anything from it. A clean clone gets no message.
 
-It reads `npm`, `pnpm`, `yarn` and `bun` installs, `npx` and friends, `pip`, `uv`, `uvx`, `pipx` and `poetry`. Other shell commands cost one regex. "Ask" shows you the reason and waits for your answer; in a run with nobody to ask (`claude -p`) it stops the command and tells the agent why.
+It reads `npm`, `pnpm`, `yarn` and `bun` installs, `npx` and friends, `pip`, `uv`, `uvx`, `pipx` and `poetry`. Other shell commands and other files cost one regex. "Ask" shows you the reason and waits for your answer; in a run with nobody to ask (`claude -p`) it stops the command and tells the agent why.
 
 ```bash
 node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
@@ -218,9 +248,9 @@ Agents without hooks can call the same check as the MCP tool `vetcode_guard`, or
 
 **Settings** (environment variables): `VETCODE_GUARD=off` turns it off, `VETCODE_GUARD=strict` turns every ask into deny, `VETCODE_GUARD_MIN_AGE_HOURS=72` sets how old a release must be.
 
-**What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
+**What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. For an install that names no package, the names and versions in the lockfile or requirements file go to OSV.dev. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
 
-**Limits:** the clone check reports what the scanner sees at high or critical; it does not stop the agent by force, it tells it. For packages, it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable cannot be tested live; on the malware datasets, put to the guard as if no advisory existed yet, it blocks or questions about 95% of malicious npm packages and 88% of PyPI ones, and 3% of clean npm packages ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)).
+**Limits:** the clone check reports what the scanner sees at high or critical; it does not stop the agent by force, it tells it. For packages, it reads the code of the packages named and of new direct dependencies, up to 12 per command; what those packages depend on in turn is checked against malware advisories once it is in a lockfile, but its code is not read (scan the project for that). `bun.lock` is used to tell which dependencies are new, but its pins are not checked against advisories; `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml` and requirements files are. Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable cannot be tested live; on the malware datasets, put to the guard as if no advisory existed yet, it blocks or questions about 95% of malicious npm packages and 88% of PyPI ones, and 3% of clean npm packages ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)).
 
 ## Security reviews
 When asked to check code for security problems or malware, follow `../vetcode/skills/vetcode/SKILL.md`
@@ -241,7 +271,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.6.0 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.7.0 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options] # from a clone
 ```
 

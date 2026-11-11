@@ -34,6 +34,9 @@ export const VENDORED = /(^|\/)(vendor|vendors|third[_-]party|bower_components)\
 export const LOCALE = /(^|\/)(locales?|i18n|l10n|lang|langs|languages|translations?)\/|\.(po|pot|arb|xlf|xliff|strings|resx)$|(^|\/)(messages|strings|translations?)[._-][\w-]+\.(json|ya?ml|properties)$/i;
 // Scripts a maintainer runs by hand, and the containers used to develop or test. Nothing a
 // visitor sends reaches them.
+// A package manager committed into the project (Yarn's own release and plugins, Plug'n'Play
+// loaders): generated, megabytes of minified code in which every pattern matches something.
+export const TOOLCHAIN = /(^|\/)\.yarn\/(?:releases|plugins|sdks)\/|(^|\/)\.pnp\.(?:c?js|loader\.mjs)$/;
 export const DEVTOOL = /(^|\/)(scripts?|extra|release|hack|ci|\.ci|\.devcontainer|\.github|devtools|benchmarks?|migrations?|alembic)\//i;
 export const DEVSTACK = /(^|\/)\.(?:devcontainer|ci|circleci)\/|(^|\/)(?:docker-)?compose[\w.-]*[.-](?:dev|tests?|local|e2e|ci)[\w.-]*\.ya?ml$|(^|\/)[\w.-]*test[\w.-]*\//i;
 

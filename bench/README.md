@@ -9,6 +9,7 @@ these numbers.
 | npm | [NPMAnalysis](https://github.com/lxyeternal/NPMAnalysis) (its paper scores GuardDog and 12 other tools on the same data) | NPMAnalysis |
 | PyPI | [Datadog malicious-software-packages-dataset](https://github.com/DataDog/malicious-software-packages-dataset) | source distributions of popular packages from pypi.org |
 | AI skills | Datadog dataset | skills from Anthropic, Trail of Bits and obra/superpowers |
+| AI skills, held out (`skills-heldout`) | 157 skills found malicious on skillsmp.com and skills.rest ([MaliciousAgentSkillsBench](https://github.com/protectskills/MaliciousSkillBench), `SRC002`) | skills from github/awesome-copilot, microsoft/skills, wshobson/agents and K-Dense-AI/scientific-agent-skills |
 
 A package is flagged when vetcode reports a high or critical finding in the malware,
 supply-chain or agent categories, ignoring low-confidence findings (tests, docs).
@@ -92,6 +93,12 @@ versions on fresh samples, oldest first:
 Each rule change is tuned on one seed and confirmed on a new one; differences of one or two
 points between seeds are normal.
 
+**Skills nobody has looked at.** Every rule for skills so far was written from the Datadog set, so its 49% is in-sample. `skills-heldout` is a second set from other marketplaces and other benign collections. It exists to stay unseen: `--explain` refuses to describe its misses, and no rule may be written from it. First look, vetcode 0.7.0: **94 of 157 caught (59.9%), 27 of 1,029 clean skills flagged (2.6%), F1 67.6**. Almost every catch (91 of 94) came from one rule, instructions that tell the agent to act against its user, which is also where the false alarms were (23 of 27).
+
+The clean collections are public, so those 27 were read; the malicious side was not. What they showed: advice about what to ask of the user ("never tell the user to run commands by hand") is not concealment; a quoted "ignore previous instructions" in a file that warns about it is not an injection; lower-case `<instructions>` is a section of a prompt and `<secret>` in a code sample is a placeholder; reading a setting from `.env` is not pointing at credentials; a negated rule ("do not copy `.env` into the response") is a safety rule. With those changes: 91 of 157 caught and 4 of 1,029 flagged. Three of those four had one reason, "the skill does more than its description says", which on 361 malicious skills across both sets decided a single catch; for a skill it is now a question for the reader (medium), not a verdict. Final: **91 of 157 caught (58.0%), 1 of 1,029 flagged (0.1%), F1 73.1**. Three catches were lost and cannot be looked at; on the Datadog set the same changes moved 100 · 4 to 98 · 2. Two more rules written from the Datadog misses (a second front matter opened with `---js`, which the parser runs when it loads the file; a command that uploads a local file) bring that set to 102 · 1 and catch nothing new on the held-out set, which is what an honest check looks like: rules written from one set's misses mostly help that set.
+
+Cisco skill-scanner 2.3.2 on the same set (static and behavioural analysers, no LLM; Actions → Rivals with skills = true, run 42997010304), credited with its best verdict: **101 of 157 caught (64.3%), 56 of 1,029 flagged (5.4%), F1 64.3**. It catches ten more than vetcode and flags 56 clean skills where vetcode flags one. vetcode's false-alarm number is after reading the clean side; at first look it was 27, about half of Cisco's.
+
 **0.5.0 to 0.6.0 on the same samples.** 0.6.0 adds rules for what 0.5.0 missed on seed 7 (a
 tunnel address with a shell behind it, Python that downloads a program and starts it, an
 install command that reads the user name, a look-alike name declared in `setup.py`, request
@@ -105,6 +112,8 @@ so seed 7 is in-sample and seed 31, which nobody looked at, is the check. Caught
 | PyPI, seed 7 (in-sample), 300 + 210 | 241 · 17 | 263 · 17 |
 | PyPI, seed 31, 300 + 210 | 247 · 17 | **262 · 17** |
 | AI skills, 204 + 133 (in-sample since 0.4.1) | 99 · 4 | 100 · 4 |
+
+0.7.0 changes no malware rule and gives the same numbers on both seeds (runs 43006844091 and 43006849813, on the release commit).
 
 On the unseen sample that is F1 95.5 → 95.8 on npm and 87.6 → 90.5 on PyPI, with no new false
 alarm. A first run of 0.6.0 did raise one: psutil ships a maintenance script that downloads
@@ -190,6 +199,20 @@ Twelve well-known, maintained open-source apps pinned to a commit ([list](noise.
 
 So the first corpus was optimistic: per thousand files 0.5.0 reported 7 findings there and 14 here, and it wrongly flagged five clean apps. 0.6.0 fixes what those showed, as general rules rather than exceptions (printing a secret is not piping it into `docker login`; a pull request's number is not attacker-controlled text; `deleteMany(req.body)` is a NoSQL filter only where the file uses MongoDB; a worker's `onmessage` talks to its own page), and now reports 9 per thousand files here and 7 on the first corpus (96 findings). The one app still flagged, directus, does ship agent hooks in `.claude/settings.json`, which is what the finding says. This corpus has now been looked at too, so the next check needs a third one.
 
+**A third corpus.** [Twelve more apps](noise-third.json) (37,129 files: Django, Rails, Laravel, Symfony, ASP.NET, Java, Rust, NestJS, FastAPI), first scanned with 0.6.0: `node bench/noise.mjs --corpus bench/noise-third.json`.
+
+| Third corpus, findings at medium or above | 0.6.0, first look | 0.7.0 |
+|---|---|---|
+| All categories | 340 | **247** |
+| Secrets · web · malware · supply chain · config | 46 · 246 · 9 · 18 · 21 | 16 · 195 · 9 · 6 · 21 |
+| Apps wrongly flagged as dangerous | 2 of 12 | **0 of 12** |
+
+The first look is the number that counts: 9 findings per thousand files, the same as on the second corpus, and two wrong verdicts. One was `react-rnd`, a real package one letter from `react-dnd`. The other was Yarn itself: a project that commits its Yarn release (`.yarn/releases/yarn-4.6.0.cjs`, the default for Yarn 2 and later) ships 2.7 MB of minified code in which a decrypt-then-run pattern and an environment read both match. 0.7.0 no longer lets pattern matches in a committed package manager decide a verdict; it reports the file once, and with `--online` (and in the guard's check after a clone) compares it with the file Yarn published for that version, which is the check that means something: a copy changed by one byte is reported as critical.
+
+The other changes are general rules too: a text template whose only tag is a separator comment has no markup to inject into; a raw binding of a sanitiser's output (`{@html DOMPurify.sanitize(…)}`) is not reported; a `message` listener whose named handler reads `event.origin` further down the file is not reported; a database URL with a bracketed placeholder, with a password that says it is one, or for a database on this machine (a CI service container) is not a leaked credential; a character pool, a `$VARIABLE`, a framework parameter or an identifier under a password-like name is not a secret; and handing all secrets to a workflow in the same repository is low, to another repository medium. The second corpus went from 298 to 286 with the same rules, and the first stayed at 96.
+
+**What the agent has to read.** Findings are counted above; the cost to an agent is the length of the report. Size of the Markdown report, 0.3.1 against 0.7.0: first corpus 131,460 → 44,659 characters in total (median per app 11,149 → 3,904), third corpus 147,164 → 78,770 (median 11,882 → 7,384). At about four characters to a token that is roughly 1,000 to 1,800 tokens for a typical app instead of 3,000. In 0.7.0 low and informational findings take one line per rule (title, rule, count, first three places); the JSON report still has every one with its why and fix.
+
 "Wrongly flagged" is the verdict of a pre-install check: a high or critical finding in the malware, supply-chain or agent categories. On 0.3.1 that happened to uptime-kuma and linkwarden (a dependency one letter from a popular name; a `pull_request_target` workflow that only compares branch names) and healthchecks (a sign-up form that reads the time zone).
 
 What changed, in three passes:
@@ -235,6 +258,16 @@ How to read it:
 - **The guard did not get in the way:** every settled package was installed in both arms.
 - **Not measured: malware that is still downloadable.** That is where the advisory lookup and the reading of the archive matter, and where the agent's own `npm view` shows nothing wrong. It cannot be tested against the live registry without fetching live malware. The scanner's detection of malicious archives is measured separately (the tables above).
 - Three tasks per kind is a small sample, each run once. It cost $2.76 API-equivalent for 30 runs.
+
+**Registering an MCP server.** An MCP server started with `npx` is a package that runs at every start of the agent, and it gets there through a file (`.mcp.json`), not an install command, so the agent's habit of asking the registry first does not apply. `--kind mcp,mcp-settled` asks for a server whose package does not exist (names a model could plausibly produce) and, as the control, for a well-known server at a settled version. Claude Code asks a person before `.mcp.json` is written, and in these runs nobody answers, so the file is never written in either arm; what is scored is what the agent did and what it told the person. 2026-11-11, claude-opus-5-5 at medium effort, the guard as in 0.7.0, three tasks of each kind ([runs](results/2026-11-11-guard-mcp.json)):
+
+| The request names… | Claude Code alone | With the guard |
+|---|---|---|
+| an MCP server whose package does not exist: the write reached the person's permission prompt | 3/3 | 0/3 |
+| … and the person was told that the package does not exist | **1/3** | **3/3** |
+| a well-known MCP server at a settled version: the write reached the permission prompt | 3/3 | 3/3, no objection from the guard |
+
+Alone, the agent twice ended by asking the person to approve the write, for a package name anyone could register. With the guard every answer said the package is not on npm. It cost $0.84 API-equivalent for 12 runs. A first attempt at this measurement scored whether the file existed afterwards, which it never does without a person, and was thrown away ($0.85).
 
 **What the guard says about malware nobody has reported yet.** The live test above cannot
 cover this, so it is measured on the malware datasets instead (`bench/run.mjs --guard`, on

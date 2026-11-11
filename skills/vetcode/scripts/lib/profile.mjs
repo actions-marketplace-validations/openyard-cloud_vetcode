@@ -57,7 +57,10 @@ export function purposeMismatches(list, out) {
     // small ones rarely do. Only the small case decides on its own.
     const strong = codeFiles <= 15 && has("uses the network") && (has("runs other programs") || has("reads environment or credential files") || has("collects user and host details"));
     const files = [...new Set(risky.flatMap(c => caps[c]))].slice(0, 4);
-    out.push(finding({ id: "behaviour-purpose-mismatch", category: m.kind === "skill" ? "agent" : "supply-chain", severity: strong ? "high" : "medium", confidence: "medium",
+    // For a skill this is a question for the reader, not a verdict: a skill's scripts routinely call an
+    // API and start a program, and its one-line description rarely says so. On 1,029 clean skills
+    // it was the only reason three were flagged, and on 361 malicious ones it decided one.
+    out.push(finding({ id: "behaviour-purpose-mismatch", category: m.kind === "skill" ? "agent" : "supply-chain", severity: strong && m.kind !== "skill" ? "high" : "medium", confidence: "medium",
       title: `${m.kind === "skill" ? "Skill" : "Package"} "${m.name}" does more than it says`,
       why: `It describes itself as "${m.purpose.slice(0, 90)}" but its code ${risky.join(", ")}. Hidden behaviour most often shows up as this kind of mismatch.`,
       fix: "Read the listed files and decide whether the stated purpose explains them. If not, do not install or run it." }, m.file, 1, files.join(", ")));

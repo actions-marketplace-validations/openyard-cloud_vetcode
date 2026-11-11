@@ -44,15 +44,26 @@ function checkSettings(file, text, out) {
 // Text aimed at a model rather than a person. Each hit is a candidate: real instruction files
 // legitimately say "always" and "never"; these patterns are the ones attacks use.
 const INJECTION = [
-  [/\b(ignore|disregard|forget)\s+(all\s+|any\s+)?(previous|prior|above|earlier)\s+(instructions|rules|prompts?)/i, "tells the model to drop its instructions"],
-  [/\b(do\s+not|don'?t|never)\s+(tell|inform|mention|reveal|show)\b[^.\n]{0,40}\b(the\s+)?(user|human|developer|reviewer)/i, "asks the model to hide something from the user"],
-  [/<\s*(IMPORTANT|SYSTEM|INSTRUCTIONS?|ADMIN|secret)\s*>/i, "fake system/priority tag"],
-  [/\b(?:without|never|don'?t|do not)\s+(?:ask(?:ing)?|prompt(?:ing)?|notify(?:ing)?|tell(?:ing)?|inform(?:ing)?|confirm(?:ing)?\s+with)\s+(?:the\s+)?(?:user|human|developer|them)\b[^.\n]{0,80}\b(?:run|execute|install|download|send|upload|delete|push|post|curl|wget)\b|\b(?:silently|secretly|quietly|covertly)\s+(?:run|execute|install|download|send|upload|exfiltrate|post|copy)\b/i, "tells the model to act without the user knowing"],
+  // Not the phrase in quotation marks: a file that warns about "ignore previous instructions" is quoting it.
+  [/(?<!["“‘'`]\s?)\b(ignore|disregard|forget)\s+(all\s+|any\s+)?(previous|prior|above|earlier)\s+(instructions|rules|prompts?)/i, "tells the model to drop its instructions"],
+  // Keeping something from the person: "do not tell the user", "never mention it to the user". Not advice about
+  // what to ask of them ("never tell the user to run commands by hand"), about a kind of content
+  // ("developer-only"), or about timing and chattiness ("until validation passes", "about each tool call").
+  [/\b(do\s+not|don'?t|never)\s+(?:(?:tell|inform|show|notify|alert)\s+(?:the\s+)?(?:user|human|developer|reviewer)s?\b(?!-|\s+to\b|\s+about\s+(?:each|every)\b|[^.\n]{0,60}\b(?:until|unless|before|yet)\b)|(?:mention|reveal|disclose|report|show)\b[^.\n]{0,40}\bto\s+(?:the\s+)?(?:user|human|developer|reviewer)s?\b(?!-))/i, "asks the model to hide something from the user"],
+  // Lying about itself: asked what it was told, the model is to answer as if nothing were unusual.
+  [/\b(?:if|when)\s+(?:the\s+)?(?:user|human|developer|anyone|someone)\s+(?:asks?|tries|wants|requests?)\b[^.\n]{0,100}\b(?:system\s+prompt|instructions|skills|rules|this\s+(?:skill|file))\b[^.\n]{0,100}\b(?:as\s+if|as\s+though|pretend|deny|nothing\s+(?:is\s+)?(?:unusual|special|different)|just\s+a\s+(?:standard|normal|regular))/i, "tells the model to deny its instructions when asked"],
+  // Tags that imitate the harness or shout priority. `<instructions>` in lower case is an ordinary
+  // section of a prompt, and `<secret>` inside a code sample is a placeholder.
+  [/<\s*(?:IMPORTANT|SYSTEM|INSTRUCTIONS?|ADMIN|SECRET)\s*>|^[ \t]*<\s*(?:system|system-reminder|important|secret)\s*>[ \t]*$/m, "fake system/priority tag"],
+  // "Without asking the user, run…". Not "do not ask the user to run them": that is the agent doing the work itself.
+  [/\b(?:without|never|don'?t|do not)\s+(?:ask(?:ing)?|prompt(?:ing)?|notify(?:ing)?|tell(?:ing)?|inform(?:ing)?|confirm(?:ing)?\s+with)\s+(?:the\s+)?(?:user|human|developer|them)\b(?!\s+to\b)[^.\n]{0,80}\b(?:run|execute|install|download|send|upload|delete|push|post|curl|wget)\b/i, "tells the model to act without the user knowing"],
+  [/\b(silently|secretly|quietly|covertly)\s+(?:run|execute|install|download|send|upload|exfiltrate|post|copy)\b/i, "tells the model to act without the user knowing", true],
   [/\b(?:execute|run|act|operate|perform|make (?:changes|decisions))\b[^.\n]{0,40}\b(?:without (?:any )?(?:confirmation|permission|approval)|completely silently)\b/i, "tells the model to act without confirmation"],
   [/\b(this|the)\s+(file|code|package|repo(sitory)?)\s+(is|has\s+been)\s+(safe|verified|audited|trusted)\b[^.\n]{0,60}\b(skip|do\s+not|don'?t|no\s+need)/i, "tells a reviewer to skip checking"],
-  [/\b(read|cat|open|send|upload|post|include|copy|print|attach|append|exfiltrate|collect)\b[^.\n]{0,60}(~\/\.ssh|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.git-credentials|\.env\b)|\b(send|upload|post|exfiltrate|forward)\b[^.\n]{0,40}\b(the\s+)?(tokens?|secrets?|credentials?|api[_ ]?keys?|env(ironment)? variables)\b[^.\n]{0,40}\b(to|at)\b[^.\n]{0,30}(https?:\/\/|webhook|server|endpoint)/i, "points the model at credentials", true],
-  [/\b(curl|wget)\b[^\n]*\|\s*(ba|z)?sh\b|--dangerously-skip-permissions|--yolo\b|--trust-all-tools|bypassPermissions/i, "asks the model to run downloaded code or skip permission prompts"],
-  [/extract(?:ed)?\s+(?:it\s+)?(?:using|with)\s+(?:the\s+)?pass(?:word)?|\(pass(?:word)?:\s*`?[\w-]+`?\)|\b(?:download|install)\b[^\n]{0,160}\.(?:zip|exe|dmg|pkg|msi|appimage)\b[^\n]{0,160}\b(?:run|execute|open|launch)\b|\b(?:run|execute|launch)\s+the\s+(?:executable|installer|binary|installation command)|\b(?:glot\.io|pastebin\.com|paste\.ee|rentry\.co|hastebin\.com|controlc\.com)\/|must be (?:installed|running) before (?:using|you use) this skill[^\n]{0,200}https?:\/\//i, "tells you to download and run an outside program"],
+  // Reading a setting from .env is ordinary development; sending the file somewhere is not.
+  [/\b(read|cat|open|send|upload|post|include|copy|print|attach|append|exfiltrate|collect)\b[^.\n]{0,60}(~\/\.ssh|id_rsa|id_ed25519|\.aws\/credentials|\.npmrc|\.git-credentials)|\b(send|upload|post|attach|append|exfiltrate|forward|copy)\b[^.\n]{0,60}(?<![\w/])\.env\b|\b(send|upload|post|exfiltrate|forward)\b[^.\n]{0,40}\b(the\s+)?(tokens?|secrets?|credentials?|api[_ ]?keys?|env(ironment)? variables)\b[^.\n]{0,40}\b(to|at)\b[^.\n]{0,30}(https?:\/\/|webhook|server|endpoint)/i, "points the model at credentials", true],
+  [/\b(curl|wget)\b(?![^\n|]*https:\/\/(?:(?:deb|rpm)\.nodesource\.com|get\.docker\.com|sh\.rustup\.rs|install\.python-poetry\.org|bun\.sh\/install|get\.pnpm\.io|astral\.sh\/|deno\.land\/install|get\.helm\.sh|aspire\.dev\/install|aka\.ms\/|raw\.githubusercontent\.com\/(?:nvm-sh\/nvm|Homebrew\/install)\/|claude\.ai\/install))[^\n]*\|\s*(ba|z)?sh\b|--dangerously-skip-permissions|--yolo\b|--trust-all-tools|bypassPermissions/i, "asks the model to run downloaded code or skip permission prompts"],
+  [/extract(?:ed)?\s+(?:it\s+)?(?:using|with)\s+(?:the\s+)?pass(?:word)?|\(pass(?:word)?:\s*`?[\w-]+`?\)|\b(?:download|install)\b[^\n]{0,160}\.(?:zip|exe|dmg|pkg|msi|appimage)\b[^\n]{0,160}\b(?:run|execute|open|launch)\b|\b(?:download|install|extract|unzip|unpack)\b[^\n]{0,200}\b(?:run|execute|launch)\s+the\s+(?:executable|installer|binary|installation command)|\b(?:run|execute|launch)\s+the\s+(?:installer|installation command)|\b(?:glot\.io|pastebin\.com|paste\.ee|rentry\.co|hastebin\.com|controlc\.com)\/|must be (?:installed|running) before (?:using|you use) this skill[^\n]{0,200}https?:\/\//i, "tells you to download and run an outside program"],
 ];
 
 // Hosts nobody ships real software from: free app hosting, throwaway domains, paste sites,
@@ -82,11 +93,28 @@ function checkDestinations(file, text, out) {
 
 function checkInstructions(file, text, out) {
   checkDestinations(file, text, out);
+  // Front matter opened with `---js` is not data: the front-matter parser most tools use (gray-matter)
+  // evaluates it as JavaScript the moment the file is loaded, before any agent reads a word.
+  if (/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?$/im.test(text)) {
+    out.push(finding(rule({ id: "agent-frontmatter-code", severity: "critical", confidence: "high", title: "Front matter that is code, run when the file is parsed",
+      why: "A file that opens with `---js` has its front matter executed by the parser that loads skills and instruction files. Nothing has to follow the instructions: listing or loading the skill is enough.",
+      fix: "Do not load this file with any tool. Front matter is YAML; code there has no honest use." }), file.rel, lineOf(text, text.search(/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?$/im)), text.split("\n").slice(0, 3).join(" ⏎ ")));
+  }
+  // A command that sends a local file to a server: `curl … --data-binary @notes https://…`.
+  // Not a table row that lists the pattern, and not a server on this machine.
+  for (const m of text.matchAll(/^(?![ \t]*\|)[^\n]*\bcurl\b[^|\n]*(?:--data-binary|--upload-file|\s-T|\s-F|--form|\s-d|--data)[ \t]+["']?[^"'\s]*@(?![{<])[~.\/$\w][^\s"']*[^|\n]*$/gm)) {
+    const url = /https?:\/\/[^\s"'`)>]+/.exec(m[0]);
+    if (!url || /^https?:\/\/(?:localhost|127\.0\.0\.1|\[?::1\]?|0\.0\.0\.0|\$|\{|<)/i.test(url[0])) continue;
+    out.push(finding(rule({ id: "agent-upload-file", severity: "high", title: "Agent instruction file has a command that uploads a local file",
+      why: "Following the instruction sends a file from this machine to someone's server. In a skill that is how notes, source code or credentials leave without anyone deciding to share them.",
+      fix: "Find out which file it is and who runs the server. Remove the instruction unless sending that file there is the whole point of the skill and you chose it." }), file.rel, lineOf(text, m.index), m[0].trim()));
+    break;
+  }
   for (const [re, what, negatable] of INJECTION) {
     const m = re.exec(text);
     if (!m) continue;
     // "Never print secrets or read ~/.ssh" is a safety rule, not an attack.
-    if (negatable && /\b(never|not|don'?t|no|avoid|without)\b[^\n]{0,60}$/i.test(text.slice(Math.max(0, m.index - 70), m.index + m[1]?.length))) continue;
+    if (negatable && /\b(never|not|cannot|can'?t|won'?t|don'?t|no|avoid|without)\b[^\n]{0,60}$/i.test(text.slice(Math.max(0, m.index - 70), m.index + m[0].search(/\s|$/)))) continue;
     out.push(finding(rule({ id: "agent-instruction-injection", severity: "high", title: `Agent instruction file ${what}`,
       why: "Coding agents follow these files. Instructions planted in them (or in a skill or MCP tool description) make the agent act against you: leak secrets, run code, or hide what it did.",
       fix: "Read the file as a person would; remove anything you did not write. Treat a repository that contains this as hostile." }), file.rel, lineOf(text, m.index), text.split("\n")[lineOf(text, m.index) - 1]));

@@ -1,0 +1,62 @@
+[
+  {
+    "repo": "paperless-ngx/paperless-ngx",
+    "sha": "d05e96cda26449cf46c6fcaaf5d1f8941dc7276f",
+    "about": "Python (Django) + Angular; document archive with API tokens and mail accounts"
+  },
+  {
+    "repo": "outline/outline",
+    "sha": "309dd022f6ff5c67ce5d264e081fd6c559243163",
+    "about": "TypeScript (Node + React); team wiki with OAuth, API keys and webhooks"
+  },
+  {
+    "repo": "documenso/documenso",
+    "sha": "f32ab10dc7189d3c375fc112469cbb156c9adb6f",
+    "about": "TypeScript (Next.js); document signing with signing certificates and API tokens"
+  },
+  {
+    "repo": "knadh/listmonk",
+    "sha": "d57ececb1718eccb239d98db8a57819e7bdff643",
+    "about": "Go + Vue; newsletter manager with SMTP credentials"
+  },
+  {
+    "repo": "monicahq/monica",
+    "sha": "dab74273acc5c9e0ba713a9f7c2c71c24ab16993",
+    "about": "PHP (Laravel) + Vue; personal CRM with OAuth and 2FA"
+  },
+  {
+    "repo": "kimai/kimai",
+    "sha": "70127d85c0005bc98af323e898ae63b25769edf7",
+    "about": "PHP (Symfony); time tracking with API tokens, LDAP and SAML"
+  },
+  {
+    "repo": "mastodon/mastodon",
+    "sha": "cc76f85b9afc02b1265e68e6ee6c24ab266771b4",
+    "about": "Ruby (Rails) + React; social network with OAuth apps and web push keys"
+  },
+  {
+    "repo": "Kareadita/Kavita",
+    "sha": "a9cdf1cad9ae14f88a295c3a6fc7993f9823d59d",
+    "about": "C# (ASP.NET) + Angular; reading server with JWT and API keys"
+  },
+  {
+    "repo": "traccar/traccar",
+    "sha": "5575f4063c53f2260b32f82f9eddb102d54c8b29",
+    "about": "Java; GPS tracking server with device tokens, LDAP and OpenID"
+  },
+  {
+    "repo": "dani-garcia/vaultwarden",
+    "sha": "17b159beff4b892f07f61f38ce2fe452e55251c1",
+    "about": "Rust; password manager server, secrets everywhere by design"
+  },
+  {
+    "repo": "immich-app/immich",
+    "sha": "3b2f4642882189260d11fb529bbf8b9021a075ff",
+    "about": "TypeScript (NestJS + Svelte) + Dart; photo server with API keys and OAuth"
+  },
+  {
+    "repo": "open-webui/open-webui",
+    "sha": "b0e6098e940942281d9c83f3529ea117287a3a22",
+    "about": "Python (FastAPI) + Svelte; chat front end that stores provider API keys"
+  }
+]

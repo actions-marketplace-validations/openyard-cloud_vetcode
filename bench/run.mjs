@@ -85,12 +85,12 @@ function unpack(file, into) {
   return r.status === 0 || fs.readdirSync(into).length > 0;
 }
 
-// One benign sample per skill folder (a directory holding SKILL.md) in the collections.
-function benignSkills(work) {
-  const dir = path.join(CACHE, "skills", "benign-collections"), out = [];
+// One sample per skill folder (a directory holding SKILL.md) in the collections of a dataset.
+function benignSkills(work, dataset = "skills", kind = "benign-collections") {
+  const dir = path.join(CACHE, dataset, kind), out = [];
   if (!fs.existsSync(dir)) return out;
   for (const f of fs.readdirSync(dir)) {
-    const into = path.join(work, "collections", f);
+    const into = path.join(work, `${dataset}-${kind}`, f);
     if (!unpack(path.join(dir, f), into)) continue;
     const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) { if (fs.existsSync(path.join(p, "SKILL.md"))) out.push({ id: `${f}:${e.name}`, dir: p }); else walk(p); } } };
     walk(into);
@@ -105,9 +105,10 @@ async function score(name, items) {
     // Same as --fail-on: low-confidence findings (tests, docs) do not decide the verdict.
     const hits = res.findings.filter(f => CATS.has(f.category) && f.confidence !== "low");
     const worst = hits.reduce((m, f) => Math.min(m, RANK[f.severity]), 9);
-    const decision = GUARD && name !== "skills" ? await guardDecision(name, it, res).catch(() => "error") : undefined;
+    const decision = GUARD && !name.startsWith("skills") ? await guardDecision(name, it, res).catch(() => "error") : undefined;
     rows.push({ id: it.id, label: it.label, worst, decision, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
-    if (EXPLAIN && it.label === "malicious" && worst > 1) (explained[name] ||= []).push({ id: it.id, ...explain(it.dir, res) });
+    // The held-out set stays unseen: no description of its misses is ever written.
+    if (EXPLAIN && name !== "skills-heldout" && it.label === "malicious" && worst > 1) (explained[name] ||= []).push({ id: it.id, ...explain(it.dir, res) });
     if (it.cleanup) remove(it.dir);
   }
   const metrics = {};
@@ -117,7 +118,7 @@ async function score(name, items) {
     const p = tp / (tp + fp || 1), rcl = tp / (tp + fn || 1);
     metrics[t] = { tp, fn, fp, tn, precision: p, recall: rcl, f1: 2 * p * rcl / (p + rcl || 1), accuracy: (tp + tn) / rows.length, fpr: fp / (fp + tn || 1) };
   }
-  const guard = GUARD && name !== "skills" ? Object.fromEntries(["malicious", "benign"].map(l => [l, Object.fromEntries(["deny", "ask", "allow", "error"].map(d => [d, rows.filter(r => r.label === l && r.decision === d).length]))])) : undefined;
+  const guard = GUARD && !name.startsWith("skills") ? Object.fromEntries(["malicious", "benign"].map(l => [l, Object.fromEntries(["deny", "ask", "allow", "error"].map(d => [d, rows.filter(r => r.label === l && r.decision === d).length]))])) : undefined;
   if (guard) console.error(`${name} guard: malicious ${JSON.stringify(guard.malicious)} · benign ${JSON.stringify(guard.benign)}`);
   const ruleCount = label => Object.entries(rows.filter(r => r.label === label).flatMap(r => r.rules).reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
   console.error(`${name}: ${rows.length} samples · F1 ${(metrics.high.f1 * 100).toFixed(1)}% (high) · ${(metrics.critical.f1 * 100).toFixed(1)}% (critical)`);
@@ -140,6 +141,10 @@ for (const eco of ["npm", "pypi"].filter(e => ONLY.includes(e))) {
 }
 const skillItems = ONLY.includes("skills") ? [...unpacked(archives("skills", "malicious")), ...mine(benignSkills(work)).map(s => ({ ...s, label: "benign" }))] : [];
 if (skillItems.length) results.push(await score("skills", skillItems));
+if (ONLY.includes("skills-heldout")) {
+  const held = [...mine(benignSkills(work, "skills-heldout", "malicious-collections")).map(s => ({ ...s, label: "malicious" })), ...mine(benignSkills(work, "skills-heldout", "benign-collections")).map(s => ({ ...s, label: "benign" }))];
+  if (held.length) results.push(await score("skills-heldout", held));
+}
 remove(work);
 
 fs.mkdirSync(OUT, { recursive: true });

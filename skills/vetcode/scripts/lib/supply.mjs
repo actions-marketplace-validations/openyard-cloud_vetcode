@@ -301,7 +301,14 @@ function checkWorkflow(file, text, out) {
         why: "An attacker-controlled value can set environment variables (LD_PRELOAD, NODE_OPTIONS) or PATH for every later step.", fix: "Never write event data there; pass it through step outputs or env." }), file.rel, i + 1, line));
     }
     if (/\bsecrets\s*:\s*inherit\b|toJSON\(\s*secrets\s*\)|ACTIONS_ALLOW_UNSECURE_COMMANDS/.test(line)) {
-      out.push(finding(rule({ id: "gha-secrets-overexposed", severity: "medium", confidence: "high", title: "Workflow hands out all secrets or re-enables unsafe commands",
+      // Handing every secret to a workflow in the same repository keeps them where they already are;
+      // a workflow from another repository is the case to read.
+      const depth = l => l.search(/\S/), mine = depth(line);
+      // The job's own `uses:`: the nearest one at the same depth, without leaving the job.
+      let uses = null;
+      for (const step of [-1, 1]) for (let k = i + step; !uses && k >= 0 && k < lines.length && (depth(lines[k]) < 0 || depth(lines[k]) >= mine); k += step) if (depth(lines[k]) === mine && /^\s*uses\s*:/.test(lines[k])) uses = lines[k];
+      const local = /\bsecrets\s*:\s*inherit\b/.test(line) && /^\s*uses\s*:\s*["']?\.\//.test(uses || "");
+      out.push(finding(rule({ id: "gha-secrets-overexposed", severity: local ? "low" : "medium", confidence: "high", title: local ? "Workflow passes all its secrets to another workflow in this repository" : "Workflow hands out all secrets or re-enables unsafe commands",
         why: "Every secret becomes available to the called workflow or step, or old `set-env` commands can be injected through logs.", fix: "Pass only the secrets a job needs; remove ACTIONS_ALLOW_UNSECURE_COMMANDS." }), file.rel, i + 1, line.trim()));
     }
     if (/github\.actor\s*==\s*['"](?:dependabot|renovate|github-actions)\[bot\]['"]/.test(line)) {

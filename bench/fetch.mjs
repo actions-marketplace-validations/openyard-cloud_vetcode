@@ -90,6 +90,16 @@ async function skills() {
   await download(repos.map(r => ({ url: `https://codeload.github.com/${r}/tar.gz/HEAD`, to: path.join(CACHE, "skills", "benign-collections", r.replace("/", "__") + ".tar.gz") })), "skills benign");
 }
 
+// A second skills set that no rule was written from, and that nobody may look into (run.mjs
+// refuses --explain on it): 157 skills found malicious in the wild on two skill marketplaces
+// (MaliciousAgentSkillsBench, arXiv 2602.06547, packaged by the MaliciousSkillBench project),
+// against four large public skill collections none of the rules were tuned on.
+async function skillsHeldout() {
+  await download([{ url: "https://raw.githubusercontent.com/protectskills/MaliciousSkillBench/main/packages/SRC002_packages.tar.gz", to: path.join(CACHE, "skills-heldout", "malicious-collections", "SRC002_packages.tar.gz") }], "skills-heldout malicious");
+  const repos = ["github/awesome-copilot", "microsoft/skills", "wshobson/agents", "K-Dense-AI/scientific-agent-skills"];
+  await download(repos.map(r => ({ url: `https://codeload.github.com/${r}/tar.gz/HEAD`, to: path.join(CACHE, "skills-heldout", "benign-collections", r.replace("/", "__") + ".tar.gz") })), "skills-heldout benign");
+}
+
 fs.mkdirSync(CACHE, { recursive: true });
 // Stop early rather than fill the disk.
 const freeGb = +spawnSync("df", ["-k", CACHE], { encoding: "utf8" }).stdout.trim().split("\n").pop().split(/\s+/)[3] / 1024 / 1024;
@@ -97,4 +107,5 @@ if (freeGb < 5) { console.error(`Only ${freeGb.toFixed(1)} GB free; need 5 GB. N
 if (ONLY.includes("npm")) await npm();
 if (ONLY.includes("pypi")) await pypi();
 if (ONLY.includes("skills")) await skills();
+if (ONLY.includes("skills-heldout")) await skillsHeldout();
 console.error(`cache: ${CACHE}`);

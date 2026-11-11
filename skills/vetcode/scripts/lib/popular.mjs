@@ -26,7 +26,7 @@ object-assign core-js regenerator-runtime tslib rxjs-compat zustand jotai recoil
 chart-js echarts leaflet mapbox-gl socket-io-parser engine-io colorette ansi-styles strip-ansi string-width wrap-ansi
 supports-color has-flag escape-string-regexp is-number kind-of isarray safe-buffer buffer events util process path-browserify
 crypto-browserify stream-browserify node-gyp node-pre-gyp nan bindings prebuild-install esm ts-jest babel-jest jest-cli
-recharts nextra vitepress react-dnd tslint react-is cookies color server prompt next-auth class-transformer prismjs
+recharts nextra vitepress react-dnd react-rnd tslint react-is cookies color server prompt next-auth class-transformer prismjs
 nx turbo lerna husky lint-staged commitizen semantic-release np standard-version vercel netlify-cli wrangler miniflare args-parser
 `);
 

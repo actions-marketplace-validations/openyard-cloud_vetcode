@@ -20,6 +20,7 @@ import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
 import { ANOMALY_FILE_RULES, scanBinaries, surprises } from "./anomaly.mjs";
 import { decoded, payloads, stashed } from "./normalize.mjs";
+import { verdict } from "./verdict.mjs";
 
 const YARN_COPY = { id: "committed-package-manager", category: "supply-chain", severity: "low", confidence: "high", title: "The project runs a committed copy of Yarn",
   why: "With yarnPath set, every yarn command runs this file, on each developer's machine and in CI. It is far too large to review by eye, so a changed copy would go unnoticed.",
@@ -41,7 +42,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
   }
 }
 
-export const VERSION = "0.7.1";
+export const VERSION = "0.8.0";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -132,6 +133,8 @@ export async function vet(target, opts = {}) {
       scanFile(file, file.text, MALWARE_FILE_RULES, findings);
       // A committed package manager is expected to be this big; it is checked by comparison below, not by reading.
       if (committedTool(file, from)) continue;
+      // More than a megabyte of JavaScript in one file is build output: its matches stay visible and decide nothing.
+      if (/\.(c|m)?js$/.test(file.rel)) for (let i = from; i < findings.length; i++) if (findings[i].confidence === "medium") findings[i].confidence = "low";
       partial.push({ file: file.rel, bytes: file.partial });
       continue;
     }
@@ -162,7 +165,7 @@ export async function vet(target, opts = {}) {
     // visible but let only high-confidence ones decide.
     // Only JavaScript ships that way on purpose: a one-line Python file or setup.py is itself
     // suspicious (that is how obfuscated payloads look), so those keep their confidence.
-    if (/\.(c|m)?js$/.test(file.rel) && (/\.min\.|[-.]bundle\.|(^|\/)(dist|out)\//.test(file.rel) || file.text.length / (file.text.split("\n").length || 1) > 300))
+    if (/\.(c|m)?js$/.test(file.rel) && (/\.min\.|[-.]bundle\.|\.dart\.js$|(^|\/)(dist|out)\//.test(file.rel) || file.text.length / (file.text.split("\n").length || 1) > 300))
       for (let i = mark; i < findings.length; i++) if (findings[i].confidence === "medium") findings[i].confidence = "low";
     // A committed package manager matches every pattern and none of it means anything; its
     // findings stay visible but decide nothing. What matters is whether the file is the
@@ -174,7 +177,10 @@ export async function vet(target, opts = {}) {
   scanBinaries(root, listed, findings);
   const prof = profiles(files);
   purposeMismatches(prof, findings);
-  scanProjectInstallEntries(root, files, findings);
+  const atInstall = scanProjectInstallEntries(root, files, findings);
+  // Where a finding sits matters as much as what it is: code an install script starts runs
+  // before anyone chose to run it. The verdict counts that as evidence of its own.
+  for (const f of findings) if (atInstall.has(f.file) || f.file === "setup.py") f.atInstall = true;
   scanPythonImportTime(files, findings);
   if (!only) hardeningAdvice(root, files, findings);
   const mcpLock = opts.mcpLock ? checkMcpLock(opts.mcpLock, files, findings) : null;
@@ -224,7 +230,10 @@ export async function vet(target, opts = {}) {
     baselined = unique.length - reported.length;
   }
   const counts = Object.fromEntries(SEVERITIES.map(s => [s, reported.filter(f => f.severity === s).length]));
+  // The answer to "is this safe to install or run": a verdict, or the places to read when there is none.
+  const v = verdict(reported), brief = f => ({ rule: f.rule, severity: f.severity, file: f.file, line: f.line, title: f.title });
   return {
+    verdict: { level: v.level, decided: v.decided.map(brief), leads: v.leads.map(brief) },
     version: VERSION, target: root, mode: only ? `diff${opts.diff ? ` vs ${opts.diff}` : ""}` : "full",
     stats: { files: files.length, packages, ms: Date.now() - started, counts, tools, osv, history: !!opts.history,
       ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },

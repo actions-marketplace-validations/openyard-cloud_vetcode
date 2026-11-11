@@ -97,7 +97,7 @@ export const LANG_RULES = [
     re: new RegExp(String.raw`(?:sendRedirect|redirect_to|Redirect|http\.Redirect)\s*\(?\s*(?:[^\n]*(?:${JVM_IN}|${CS_IN}|${GO_IN})|${RB_IN}\[|"redirect:"\s*\+)`),
     unless: /LocalRedirect|IsLocalUrl|allow_other_host:\s*false|url_from\(/,
     why: "Attackers use your domain to send people to phishing pages." }),
-  rule({ id: "xss-framework-raw", severity: "medium", title: "Unescaped output in a server template", files: /\.(cshtml|razor|erb|haml|slim|go)$/i, fix: "Let the template escape it; sanitise first if HTML is really needed.",
+  rule({ id: "xss-framework-raw", severity: "medium", perFile: true, title: "Unescaped output in a server template", files: /\.(cshtml|razor|erb|haml|slim|go)$/i, fix: "Let the template escape it; sanitise first if HTML is really needed.",
     re: new RegExp(String.raw`@Html\.Raw\s*\(|<%==|\braw\s*\(?\s*${RB_IN}|${RB_IN}\[[^\]]+\]\.html_safe|template\.HTML\s*\(\s*(?:${GO_IN})`),
     why: "Values written without escaping can carry script (XSS)." }),
   rule({ id: "csrf-disabled", severity: "medium", title: "CSRF protection turned off", files: /\.(java|kt|cs|rb)$/i, perFile: true, fix: "Keep CSRF protection on for cookie-authenticated endpoints.",

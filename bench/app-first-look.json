@@ -1,0 +1,17 @@
+{
+  "about": "Clean apps where a rule was the reason for a wrong verdict the first time a corpus was scanned (bench/noise*.json), before any rule was changed because of it. Counted per app.",
+  "rules": {
+    "dep-typosquat": 5,
+    "gha-script-injection": 3,
+    "mal-oast-endpoint": 2,
+    "gha-pwn-request": 1,
+    "anom-targeted-payload": 1,
+    "mal-decrypt-then-run": 1,
+    "mal-env-exfil": 1,
+    "mal-recon-exfil": 1,
+    "mal-download-chmod-run": 1,
+    "anom-homoglyph-identifier": 1,
+    "setup-py-runs-code": 1,
+    "mal-hex-escapes": 1
+  }
+}

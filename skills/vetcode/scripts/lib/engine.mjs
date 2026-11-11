@@ -26,10 +26,10 @@ export const rank = s => SEVERITIES.indexOf(s);
 
 // Docs and tests describe attacks without being them; their findings are kept but marked.
 export const DOC = /\.(md|mdx|markdown|rst|txt|adoc)$/i;
-export const TEST = /(^|\/)(tests?|testdata|__tests__|spec|specs|fixtures?|__fixtures__|__mocks__|examples?|samples?)\/|(^|\/)(?:[\w.]+[-_])?(?:tests|specs|e2e|cypress|playwright)\/|(^|\/)tests?[-_](?:utils?|helpers?|data|support)\/|\.(test|spec)\.\w+$|_test\.\w+$|(^|\/)test_\w+\.py$/i;
+export const TEST = /(^|\/)(tests?|testdata|__tests__|spec|specs|fixtures?|__fixtures__|__mocks__|examples?|samples?)\/|(^|\/)(?:[\w.]+[-_])?(?:tests|specs|e2e|cypress|playwright)\/|(^|\/)tests?[-_](?:utils?|helpers?|data|support)\/|\.(test|spec)\.\w+$|_test\.\w+$|(^|\/)test_[\w-]+\.\w+$/i;
 
 // Third-party code copied into the repository, as opposed to the project's own.
-export const VENDORED = /(^|\/)(vendor|vendors|third[_-]party|bower_components)\/|(^|\/)(public|static|assets|resources)\/(?:.*\/)?(lib|libs|vendor)\/|\.min\.(?:js|css)$|(^|\/)assets\/[\w.-]+-[A-Za-z0-9_-]{8}\.(?:js|css)$|(^|\/)(?:vue|jquery|bootstrap|angular|lodash|underscore|d3|moment|leaflet|tinymce|codemirror|popper|alpine|htmx|chart|three|axios)(?:[.-][\w.-]*)?\.js$/i;
+export const VENDORED = /(^|\/)(vendor|vendors|third[_-]party|bower_components)\/|(^|\/)(public|static|assets|resources)\/(?:.*\/)?(lib|libs|vendor)\/|\.min\.(?:js|css)$|\.dart\.js$|(^|\/)assets\/[\w.-]+-[A-Za-z0-9_-]{8}\.(?:js|css)$|(^|\/)(?:vue|jquery|bootstrap|angular|lodash|underscore|d3|moment|leaflet|tinymce|codemirror|popper|alpine|htmx|chart|three|axios)(?:[.-][\w.-]*)?\.js$/i;
 // Translated text: every sentence about passwords and hashes is a string here.
 export const LOCALE = /(^|\/)(locales?|i18n|l10n|lang|langs|languages|translations?)\/|\.(po|pot|arb|xlf|xliff|strings|resx)$|(^|\/)(messages|strings|translations?)[._-][\w-]+\.(json|ya?ml|properties)$/i;
 // Scripts a maintainer runs by hand, and the containers used to develop or test. Nothing a
@@ -37,7 +37,7 @@ export const LOCALE = /(^|\/)(locales?|i18n|l10n|lang|langs|languages|translatio
 // A package manager committed into the project (Yarn's own release and plugins, Plug'n'Play
 // loaders): generated, megabytes of minified code in which every pattern matches something.
 export const TOOLCHAIN = /(^|\/)\.yarn\/(?:releases|plugins|sdks)\/|(^|\/)\.pnp\.(?:c?js|loader\.mjs)$/;
-export const DEVTOOL = /(^|\/)(scripts?|extra|release|hack|ci|\.ci|\.devcontainer|\.github|devtools|benchmarks?|migrations?|alembic)\//i;
+export const DEVTOOL = /(^|\/)(scripts?|extra|release|hack|ci|\.ci|\.devcontainer|\.github|devtools|benchmarks?|migrations?|migrate|alembic)\//i;
 export const DEVSTACK = /(^|\/)\.(?:devcontainer|ci|circleci)\/|(^|\/)(?:docker-)?compose[\w.-]*[.-](?:dev|tests?|local|e2e|ci)[\w.-]*\.ya?ml$|(^|\/)[\w.-]*test[\w.-]*\//i;
 
 const clip = (s, n = 160) => { s = s.trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
@@ -93,7 +93,7 @@ export function scanLines(file, text, rules, out) {
 export function scanFile(file, text, rules, out) {
   for (const r of rules) {
     if ((r.files && !r.files.test(file.rel)) || (r.skip && r.skip.test(file.rel))) continue;
-    for (const hit of r.test(text, file) || []) out.push(finding(r, file.rel, hit.line, hit.evidence));
+    for (const hit of r.test(text, file) || []) out.push(finding(r, file.rel, hit.line, hit.evidence, hit.extra));
   }
 }
 

@@ -1,0 +1,62 @@
+[
+  {
+    "repo": "strapi/strapi",
+    "sha": "0f7f271b85856b43c42da9dfb737d3bc5c874501",
+    "about": "TypeScript (Node + React); headless CMS with API tokens, roles and webhooks"
+  },
+  {
+    "repo": "nocodb/nocodb",
+    "sha": "89fba10af81d0ce6de3b2af266e0df4316a7cb32",
+    "about": "TypeScript (NestJS + Vue); database front end with API tokens and connection strings"
+  },
+  {
+    "repo": "frappe/frappe",
+    "sha": "4c73618e20fc2a8bffa0c6a29e754a461204dae6",
+    "about": "Python + JavaScript; web framework behind ERPNext, with OAuth, API keys and 2FA"
+  },
+  {
+    "repo": "HumanSignal/label-studio",
+    "sha": "73262def09a2da4f95ef32c5203dc917c7511fea",
+    "about": "Python (Django) + React; data labelling with API tokens and cloud storage credentials"
+  },
+  {
+    "repo": "gogs/gogs",
+    "sha": "43017045492c85e201536bfc7af49fa9f74b0069",
+    "about": "Go; Git hosting with tokens, webhooks and LDAP"
+  },
+  {
+    "repo": "caddyserver/caddy",
+    "sha": "f458aa0081f55445b09fae9799d40ed98ed4b3b7",
+    "about": "Go; web server with automatic TLS and an admin API"
+  },
+  {
+    "repo": "flarum/framework",
+    "sha": "bdb0dcb74fcce85f7b5cb99bd05838ed1144347f",
+    "about": "PHP + TypeScript; forum software with API keys and extensions"
+  },
+  {
+    "repo": "invoiceninja/invoiceninja",
+    "sha": "15ea35ea63f367eba33c04b7acd9ab1227853537",
+    "about": "PHP (Laravel); invoicing with payment gateways and API tokens"
+  },
+  {
+    "repo": "forem/forem",
+    "sha": "a4e82ef8a9839944b4346944fcc4066a4cc19e0f",
+    "about": "Ruby (Rails) + Preact; community platform behind dev.to, with OAuth and API secrets"
+  },
+  {
+    "repo": "kestra-io/kestra",
+    "sha": "a719e79c991aff9341ac63ba20a0c787aaf75ee5",
+    "about": "Java + Vue; workflow orchestrator with secrets, plugins and an API"
+  },
+  {
+    "repo": "bitwarden/server",
+    "sha": "7615a1d7255bbff839a3aab764eb008826976bf7",
+    "about": "C# (.NET); password manager server, secrets and keys by design"
+  },
+  {
+    "repo": "atuinsh/atuin",
+    "sha": "b6ed849cdca4d151cfb1403d9d61b32747a1d8df",
+    "about": "Rust; shell history sync with encryption keys and session tokens"
+  }
+]

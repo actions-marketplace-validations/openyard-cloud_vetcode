@@ -3,7 +3,7 @@ name: vetcode
 license: MIT
 compatibility: Works with any agent that loads Agent Skills and can run shell commands. The scanner needs Node.js 18+; without it, follow the checklists by hand.
 metadata:
-  version: "0.7.1"
+  version: "0.8.0"
   homepage: https://github.com/openyard-cloud/vetcode
 description: Security check for apps, websites and servers. Finds malware and supply-chain attacks (malicious packages, install scripts, typosquats, booby-trapped repos, risky MCP servers and extensions), leaked secrets, and vulnerabilities in web/API code and server configuration, then confirms each finding by reading the code. Use when the user asks to check code for security problems, malware, vulnerabilities or leaked keys; before installing, cloning, opening or running an unfamiliar repository, package, extension or MCP server; before deploying or publishing; or to review a diff or PR for security. Also triggers on the same requests in any language.
 ---
@@ -48,7 +48,7 @@ If Node is not available, skip to step 5 and review by hand with the reference c
 
 ## 3. Triage every candidate
 
-Work from the JSON, most severe first. For each finding open the file around the line (and follow the data):
+Start with `verdict` in the JSON. `level` set (`critical` or `high`) means rules with a measured record, or two rules agreeing on one file, say it is malicious: stop, do not install or run it, and report `decided`. `level` null with entries in `leads` means signs that one rule alone does not settle: read each of those places before anything else, they are where a wrong call in either direction is most likely. Then work from the findings, most severe first. For each finding open the file around the line (and follow the data):
 
 - **Injection / XSS / SSRF / path / redirect:** where does the value come from? Trace it back to a request, URL, file, message or database field a user controls. Parameterised, allow-listed, escaped or constant → false positive. Reachable from user input → confirmed.
 - **Secrets:** is it real (not a placeholder, test fixture, public-by-design key like a Supabase anon key or Firebase web key)? Is the file tracked by git or shipped to the browser? Real + exposed → confirmed.

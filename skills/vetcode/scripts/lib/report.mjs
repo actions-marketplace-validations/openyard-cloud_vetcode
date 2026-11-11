@@ -5,6 +5,16 @@ const ICON = { critical: "🟥", high: "🟧", medium: "🟨", low: "🟦", info
 const PER_RULE = 15;
 const code = s => "`" + String(s).replace(/`/g, "ˋ") + "`";
 
+// What the malware, supply-chain and agent findings add up to. A verdict takes a rule with a
+// measured record or two rules on one file; one unproven rule matching somewhere is a place to read.
+function verdictLines(v) {
+  if (!v) return [];
+  const at = f => `${code(f.line ? `${f.file}:${f.line}` : f.file)} ${f.title}`;
+  if (v.level) return [``, `**Verdict: ${v.level === "critical" ? "malicious" : "likely malicious"}.** Do not install, build or run it. Decided by: ${v.decided.slice(0, 4).map(at).join("; ")}${v.decided.length > 4 ? `; and ${v.decided.length - 4} more` : ""}.`];
+  if (v.leads.length) return [``, `**No verdict.** ${v.leads.length} sign${v.leads.length === 1 ? "" : "s"} of malware or of an attack on agents that one rule alone does not settle: read ${v.leads.slice(0, 4).map(at).join("; ")}${v.leads.length > 4 ? `; and ${v.leads.length - 4} more` : ""}.`];
+  return [``, `**No verdict and no sign of malware.** That covers what patterns can see, not logic flaws or new techniques.`];
+}
+
 export function markdown(result) {
   const { stats, findings } = result;
   const c = stats.counts;
@@ -14,6 +24,7 @@ export function markdown(result) {
     `**Target:** ${code(result.target)} · **mode:** ${result.mode} · **files:** ${stats.files}${stats.packages ? ` · **installed packages:** ${stats.packages}` : ""} · ${(stats.ms / 1000).toFixed(1)} s`,
     ``,
     `**Findings:** ${SEVERITIES.map(s => `${ICON[s]} ${s} ${c[s]}`).join(" · ")}`,
+    ...verdictLines(result.verdict),
     ``,
     `Checks: built-in rules${stats.tools.length ? ` + ${stats.tools.join(", ")}` : ""} · OSV lookup: ${stats.osv} · git history: ${stats.history ? "yes" : "no"}`,
   ];

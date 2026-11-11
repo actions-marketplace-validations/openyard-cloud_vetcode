@@ -13,6 +13,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { vet, VERSION } from "../skills/vetcode/scripts/lib/index.mjs";
 import { checkPackage } from "../skills/vetcode/scripts/lib/guard.mjs";
+import { verdict } from "../skills/vetcode/scripts/lib/verdict.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const CACHE = path.resolve(arg("--cache", path.join(os.tmpdir(), "vetcode-bench")));
@@ -106,7 +107,9 @@ async function score(name, items) {
     const hits = res.findings.filter(f => CATS.has(f.category) && f.confidence !== "low");
     const worst = hits.reduce((m, f) => Math.min(m, RANK[f.severity]), 9);
     const decision = GUARD && !name.startsWith("skills") ? await guardDecision(name, it, res).catch(() => "error") : undefined;
-    rows.push({ id: it.id, label: it.label, worst, decision, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
+    // Three ways to call a sample: any sign (the broad tier), a verdict (a trusted rule, or two rules on one file), and a verdict where the two rules may sit anywhere in the sample.
+    const strict = verdict(res.findings).level, loose = verdict(res.findings, { anywhere: true }).level, placed = verdict(res.findings, { install: false }).level;
+    rows.push({ id: it.id, label: it.label, worst, decision, strict, loose, placed, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
     // The held-out set stays unseen: no description of its misses is ever written.
     if (EXPLAIN && name !== "skills-heldout" && it.label === "malicious" && worst > 1) (explained[name] ||= []).push({ id: it.id, ...explain(it.dir, res) });
     if (it.cleanup) remove(it.dir);
@@ -118,11 +121,24 @@ async function score(name, items) {
     const p = tp / (tp + fp || 1), rcl = tp / (tp + fn || 1);
     metrics[t] = { tp, fn, fp, tn, precision: p, recall: rcl, f1: 2 * p * rcl / (p + rcl || 1), accuracy: (tp + tn) / rows.length, fpr: fp / (fp + tn || 1) };
   }
+  for (const [t, key] of [["verdict", "strict"], ["verdictAnywhere", "loose"], ["verdictNoInstall", "placed"]]) {
+    const tp = rows.filter(r => r.label === "malicious" && r[key]).length, fn = rows.filter(r => r.label === "malicious" && !r[key]).length;
+    const fp = rows.filter(r => r.label === "benign" && r[key]).length, tn = rows.filter(r => r.label === "benign" && !r[key]).length;
+    const p = tp / (tp + fp || 1), rcl = tp / (tp + fn || 1);
+    metrics[t] = { tp, fn, fp, tn, precision: p, recall: rcl, f1: 2 * p * rcl / (p + rcl || 1), accuracy: (tp + tn) / rows.length, fpr: fp / (fp + tn || 1) };
+  }
   const guard = GUARD && !name.startsWith("skills") ? Object.fromEntries(["malicious", "benign"].map(l => [l, Object.fromEntries(["deny", "ask", "allow", "error"].map(d => [d, rows.filter(r => r.label === l && r.decision === d).length]))])) : undefined;
   if (guard) console.error(`${name} guard: malicious ${JSON.stringify(guard.malicious)} · benign ${JSON.stringify(guard.benign)}`);
+  // Per rule: how many samples it helped decide, and how many it decided alone. This is what says
+  // which rules can be trusted to give a verdict by themselves and which need a second signal.
+  const ruleStats = {};
+  for (const r of rows) for (const id of r.rules) {
+    const st = ruleStats[id] ||= { malicious: 0, maliciousAlone: 0, benign: 0, benignAlone: 0 };
+    st[r.label]++; if (r.rules.length === 1) st[`${r.label}Alone`]++;
+  }
   const ruleCount = label => Object.entries(rows.filter(r => r.label === label).flatMap(r => r.rules).reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
   console.error(`${name}: ${rows.length} samples · F1 ${(metrics.high.f1 * 100).toFixed(1)}% (high) · ${(metrics.critical.f1 * 100).toFixed(1)}% (critical)`);
-  return { name, samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, guard, rulesOnMalicious: ruleCount("malicious"), rulesOnBenign: ruleCount("benign"), missed: rows.filter(r => r.label === "malicious" && r.worst > 1).map(r => r.id), falseAlarms: rows.filter(r => r.label === "benign" && r.worst <= 1).map(r => ({ id: r.id, rules: r.rules })) };
+  return { name, samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, guard, ruleStats, rulesOnMalicious: ruleCount("malicious"), rulesOnBenign: ruleCount("benign"), missed: rows.filter(r => r.label === "malicious" && r.worst > 1).map(r => r.id), falseAlarms: rows.filter(r => r.label === "benign" && r.worst <= 1).map(r => ({ id: r.id, rules: r.rules })) };
 }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-bench-work-"));

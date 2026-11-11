@@ -96,7 +96,7 @@ async function callTool(name, args = {}) {
         { type: "text", text: "Findings (JSON):\n" + JSON.stringify(findings) },
         { type: "text", text: "Next: confirm each finding by reading the code (vetcode_guide, step 3) before reporting it." },
       ],
-      structuredContent: { stats: result.stats, findings },
+      structuredContent: { verdict: result.verdict, stats: result.stats, findings },
     };
   }
   throw rpcError(-32602, `Unknown tool: ${name}`);

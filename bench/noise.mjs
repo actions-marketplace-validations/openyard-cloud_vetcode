@@ -49,8 +49,10 @@ for (const c of CORPUS) {
   const by = k => real.reduce((m, f) => (m[f[k]] = (m[f[k]] || 0) + 1, m), {});
   // What decides the verdict of a pre-install check: a high or critical finding in the malware,
   // supply-chain or agent categories, low-confidence ones aside. On a clean app that is a wrong verdict.
-  const flagged = [...new Set(r.findings.filter(f => ["malware", "supply-chain", "agent"].includes(f.category) && SEV[f.severity] >= 3 && f.confidence !== "low").map(f => f.rule))];
-  rows.push({ repo: c.repo, sha: c.sha.slice(0, 10), files: r.stats?.files || 0, total: real.length, flagged, categories: by("category"), rules: by("rule") });
+  // Wrongly flagged: a verdict (lib/verdict.mjs). signs: every high sign, which is what counted before 0.8.
+  const v = JSON.parse(spawnSync("node", ["--input-type=module", "-e", `import { verdict } from ${JSON.stringify(path.join(path.dirname(SCANNER), "lib/verdict.mjs"))}; let s = ""; for await (const c of process.stdin) s += c; const v = verdict(JSON.parse(s)); console.log(JSON.stringify({ decided: [...new Set(v.decided.map(f => f.rule))], signs: [...new Set(v.signs.map(f => f.rule))] }));`], { input: JSON.stringify(r.findings), encoding: "utf8", maxBuffer: 64 << 20 }).stdout || '{"decided":[],"signs":[]}');
+  const flagged = v.decided, signs = v.signs;
+  rows.push({ repo: c.repo, sha: c.sha.slice(0, 10), files: r.stats?.files || 0, total: real.length, flagged, signs, categories: by("category"), rules: by("rule") });
   const show = arg("--show", "");
   if (show) for (const f of r.findings.filter(f => f.rule === show)) console.log(`${c.repo} ${f.file}:${f.line} [${f.severity}] ${String(f.evidence || "").trim().slice(0, 140)}`);
 }
@@ -62,6 +64,8 @@ console.log(`| **${rows.length} repositories** | ${rows.reduce((n, r) => n + r.f
 const rules = {}; for (const r of rows) for (const [k, v] of Object.entries(r.rules)) rules[k] = (rules[k] || 0) + v;
 const wrong = rows.filter(r => r.flagged.length);
 console.log(`\nWrongly flagged as dangerous: ${wrong.length}/${rows.length}${wrong.length ? ` (${wrong.map(r => `${r.repo.split("/")[1]}: ${r.flagged.join(", ")}`).join("; ")})` : ""}.`);
+const signed = rows.filter(r => r.signs.length);
+console.log(`With at least one high sign (the verdict before 0.8): ${signed.length}/${rows.length}${signed.length ? ` (${signed.map(r => `${r.repo.split("/")[1]}: ${r.signs.join(", ")}`).join("; ")})` : ""}.`);
 console.log(`Noisiest rules: ${Object.entries(rules).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${v}`).join(", ")}.`);
 const base = arg("--baseline", "");
 if (base) {

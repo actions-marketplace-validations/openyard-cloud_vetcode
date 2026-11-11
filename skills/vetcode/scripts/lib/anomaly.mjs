@@ -66,7 +66,7 @@ export const ANOMALY_FILE_RULES = [
       // Reading the locale or time zone and then calling the network is what every sign-up form
       // and i18n loader does. It takes a named target, or an action that destroys or runs something.
       const after = text.slice(where.index, where.index + 400);
-      const named = /["'](?:Europe|Asia|America|Africa|Australia)\/[A-Za-z_]+["']|["'][a-z]{2}[-_][A-Z]{2}["']|country(?:_?code|Name)?\s*[!=]={1,2}\s*["'][A-Z]{2}["']|ipinfo\.io|ip-api\.com|ipapi\.co|geoip|ipgeolocation/.test(text.slice(Math.max(0, where.index - 200), where.index + 400));
+      const named = /["'](?:Europe|Asia|America|Africa|Australia)\/[A-Za-z_]+["']|["'][a-z]{2}[-_][A-Z]{2}["']|country(?:_?code|Name)?\s*[!=]={1,2}\s*["'][A-Z]{2}["']|ipinfo\.io|ip-api\.com|ipapi\.co|ipgeolocation\.io|api\.ipify\.org/.test(text.slice(Math.max(0, where.index - 200), where.index + 400));
       return (/\b(?:rmSync|rmdirSync|unlinkSync|rimraf|writeFileSync|fs\.rm\b|shutil\.rmtree|os\.remove|\bexec(?:Sync)?\s*\(|subprocess\.\w+\(|os\.system\(|process\.exit\()/.test(after) || (named && /fetch\s*\(|https?\.request\(/.test(after)))
         ? [{ line: lineOf(text, where.index), evidence: where[0].slice(0, 120) }] : [];
     } },

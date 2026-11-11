@@ -84,6 +84,25 @@ ones vetcode lost. F1 · precision · recall · false alarms:
 Each rule change is tuned on one seed and confirmed on a new one; differences of one or two
 points between seeds are normal.
 
+**0.5.0 to 0.6.0 on the same samples.** 0.6.0 adds rules for what 0.5.0 missed on seed 7 (a
+tunnel address with a shell behind it, Python that downloads a program and starts it, an
+install command that reads the user name, a look-alike name declared in `setup.py`, request
+catchers as drop points). They were written from descriptions of the misses (`--explain`),
+so seed 7 is in-sample and seed 31, which nobody looked at, is the check. Caught · false alarms:
+
+| Sample | 0.5.0 | 0.6.0 |
+|---|---|---|
+| npm, seed 7 (in-sample), 1,000 + 999 | 919 · 37 | 926 · 37 |
+| npm, seed 31, 1,000 + 1,000 | 944 · 33 | **949 · 33** |
+| PyPI, seed 7 (in-sample), 300 + 210 | 241 · 17 | 263 · 17 |
+| PyPI, seed 31, 300 + 210 | 247 · 17 | **262 · 17** |
+| AI skills, 204 + 133 (in-sample since 0.4.1) | 99 · 4 | 100 · 4 |
+
+On the unseen sample that is F1 95.5 → 95.8 on npm and 87.6 → 90.5 on PyPI, with no new false
+alarm. A first run of 0.6.0 did raise one: psutil ships a maintenance script that downloads
+`get-pip.py` and runs it, which the new Python rule took for a dropper; the rule now leaves
+the Python toolchain's own installers alone.
+
 ## Evasion: does it still catch the sample once it is disguised?
 
 `mutate.mjs` rewrites malicious samples the way attackers do to get past scanners, without
@@ -153,6 +172,16 @@ Twelve well-known, maintained open-source apps pinned to a commit ([list](noise.
 | Config | 35 | 35 | 20 | 5 |
 | Apps wrongly flagged as dangerous | 3 of 12 | 3 of 12 | 0 of 12 | **0 of 12** |
 
+**Does it hold on apps no rule was tuned on?** Tuning on twelve apps and reporting on the same twelve flatters the result, so there is a second corpus ([list](noise-heldout.json), `node bench/noise.mjs --corpus bench/noise-heldout.json`): twelve other apps, about 33,000 files, never looked at while the rules above were written.
+
+| Held-out apps, findings at medium or above | 0.5.0 | 0.6.0 |
+|---|---|---|
+| All categories | 477 | **298** |
+| Secrets · web · malware · supply chain · config | 38 · 369 · 21 · 21 · 27 | 26 · 237 · 8 · 14 · 12 |
+| Apps wrongly flagged as dangerous | 5 of 12 | **1 of 12** |
+
+So the first corpus was optimistic: per thousand files 0.5.0 reported 7 findings there and 14 here, and it wrongly flagged five clean apps. 0.6.0 fixes what those showed, as general rules rather than exceptions (printing a secret is not piping it into `docker login`; a pull request's number is not attacker-controlled text; `deleteMany(req.body)` is a NoSQL filter only where the file uses MongoDB; a worker's `onmessage` talks to its own page), and now reports 9 per thousand files here and 7 on the first corpus (96 findings). The one app still flagged, directus, does ship agent hooks in `.claude/settings.json`, which is what the finding says. This corpus has now been looked at too, so the next check needs a third one.
+
 "Wrongly flagged" is the verdict of a pre-install check: a high or critical finding in the malware, supply-chain or agent categories. On 0.3.1 that happened to uptime-kuma and linkwarden (a dependency one letter from a popular name; a `pull_request_target` workflow that only compares branch names) and healthchecks (a sign-up form that reads the time zone).
 
 What changed, in three passes:
@@ -198,6 +227,25 @@ How to read it:
 - **The guard did not get in the way:** every settled package was installed in both arms.
 - **Not measured: malware that is still downloadable.** That is where the advisory lookup and the reading of the archive matter, and where the agent's own `npm view` shows nothing wrong. It cannot be tested against the live registry without fetching live malware. The scanner's detection of malicious archives is measured separately (the tables above).
 - Three tasks per kind is a small sample, each run once. It cost $2.76 API-equivalent for 30 runs.
+
+**What the guard says about malware nobody has reported yet.** The live test above cannot
+cover this, so it is measured on the malware datasets instead (`bench/run.mjs --guard`, on
+the throwaway runner). Each sample is put to the guard as if an agent were installing it
+before any advisory existed: the stand-in registry lists the package, the advisory database
+knows nothing, and the release is past the waiting period. What is left is the name and the
+code in the archive. Seed 31, vetcode 0.6.0:
+
+| Package | Blocked | Agent told to ask the user | Let through |
+|---|---|---|---|
+| npm, 1,000 malicious | 587 | 361 | 52 |
+| npm, 1,000 clean | 2 | 30 | 968 |
+| PyPI, 300 malicious | 126 | 137 | 37 |
+
+So about 95% of unreported malicious npm packages and 88% of PyPI ones do not install
+silently, and 3% of clean npm packages cause a question or a block. The clean PyPI side is
+210 of the most popular packages; the guard passes names with that reputation without
+reading the archive, so all 210 pass and the row says nothing about false alarms. In the live
+test above, an agent that got that answer did not go on with the install (3 of 3).
 
 ## The agent step: authorization and business logic
 

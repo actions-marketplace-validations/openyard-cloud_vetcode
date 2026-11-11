@@ -20,6 +20,9 @@ on:
       explain:
         description: Also describe the malicious samples that were missed (true or false)
         default: "false"
+      guard:
+        description: Also record the guard's answer for each package, as if it were being installed unreported (true or false)
+        default: "false"
 permissions:
   contents: read
 jobs:
@@ -45,7 +48,8 @@ jobs:
         env:
           ONLY: ${{ inputs.only }}
           EXPLAIN: ${{ inputs.explain }}
-        run: node bench/run.mjs --cache "$RUNNER_TEMP/bench" --out bench-results --only "$ONLY" $([ "$EXPLAIN" = "true" ] && echo --explain)
+          GUARD: ${{ inputs.guard }}
+        run: node bench/run.mjs --cache "$RUNNER_TEMP/bench" --out bench-results --only "$ONLY" $([ "$EXPLAIN" = "true" ] && echo --explain) $([ "$GUARD" = "true" ] && echo --guard)
       - name: Summary
         run: node bench/summary.mjs bench-results >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

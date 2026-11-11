@@ -37,6 +37,8 @@ export const WEB_RULES = [
     fix: "Check how each fragment is built; values belong in the query arguments." }),
   rule({ id: "sql-unsafe-raw", severity: "high", title: "Raw SQL method that does not escape", files: JS,
     re: /\$(?:queryRawUnsafe|executeRawUnsafe)\s*\(|\bsequelize\.literal\s*\([^)]*\$\{|\bknex\.raw\s*\(\s*`[^`]*\$\{|\.whereRaw\s*\(\s*`[^`]*\$\{/,
+    // Placeholders in the text and a list of bindings after it: the values are bound, the rest is the dialect.
+    unless: /`[^`]*\?[^`]*`\s*,\s*\[|\$(?:queryRawUnsafe|executeRawUnsafe)\s*\(\s*[\w.]+\s*,/,
     why: "These APIs pass the string to the database as-is.", fix: SQL }),
   rule({ id: "sql-concat", severity: "high", title: "SQL built by string concatenation", files: SERVER,
     re: /["'`]\s*(?:SELECT\b[^"'`]*\bFROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b[^"'`]*["'`]\s*(?:\+|\.)\s*\$?[A-Za-z_]/i,
@@ -49,6 +51,7 @@ export const WEB_RULES = [
     why: "The query text is put together from pieces (conditions, placeholders, a clause). That is safe when every piece is made of column names and placeholders, and injectable if one of them carries a value.",
     fix: "Check how each fragment is built; values belong in the query arguments." }),
   rule({ id: "sql-python-format", severity: "high", title: "SQL built with f-string, % or .format()", files: PY,
+    unless: /^(?:(?!\{).)*(?:\{[\w.]*(?:__tablename__|[Tt]able\w*|\w*[Cc]lause\w*|assignments|columns|cols|fields|placeholders|schema)\}(?:(?!\{).)*)+$/,
     re: /\.(?:execute|executemany|executescript|raw|extra)\s*\(\s*(?:f["'][^"']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b|["'][^"']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^"']*["']\s*(?:%|\.format\())|\btext\s*\(\s*f["'][^"']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b/i,
     why: "Formatting values into SQL text allows SQL injection.", fix: "Use `cursor.execute(sql, params)` / SQLAlchemy bound parameters." }),
   rule({ id: "sql-php-input", severity: "critical", confidence: "high", title: "Request data inside a SQL call", files: PHP,
@@ -59,6 +62,8 @@ export const WEB_RULES = [
     re: /\.(?:Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext|Raw|Where)\s*\(\s*(?:ctx\s*,\s*)?fmt\.Sprintf\(/,
     why: "Formatted SQL is injectable.", fix: "Pass values as query arguments (`db.Query(sql, a, b)`)." }),
   rule({ id: "nosql-injection", severity: "high", title: "Request object used directly as a database filter", files: JS,
+    // A method called deleteMany on a service class is not a MongoDB filter.
+    requires: /mongoose|mongodb|MongoClient|\bObjectId\b|\.collection\s*\(|new\s+Schema\s*\(/,
     re: new RegExp(String.raw`\.(?:find|findOne|findOneAndUpdate|findOneAndDelete|updateOne|updateMany|deleteOne|deleteMany|countDocuments|aggregate)\s*\(\s*${USER_JS}\s*[,)]`),
     why: "An attacker can send operators like `{\"$ne\": null}` to match any record (NoSQL injection).", fix: "Pick the fields you expect and validate their types before querying." }),
   rule({ id: "cmd-injection-js", severity: "high", title: "Shell command built from strings", files: JS,
@@ -85,7 +90,7 @@ export const WEB_RULES = [
   // XSS
   rule({ id: "xss-inner-html", severity: "medium", title: "HTML set from a variable", files: JS,
     re: /\.(?:innerHTML|outerHTML)\s*\+?=\s*(?!\s*["'`][^"'`$]*["'`]\s*;?\s*$)(?!\s*["']\s*;)|\.insertAdjacentHTML\s*\([^,]+,\s*(?!["'`][^"'`$]*["'`]\s*\))|\bdocument\.write(?:ln)?\s*\(/,
-    unless: /DOMPurify|sanitize|escapeHtml|escape\(|textContent|\.createHTML\(/,
+    unless: /DOMPurify|sanitize|escapeHtml|escape\(|textContent|\.createHTML\(|^\s*(?:\/\/|\*)|\.(?:innerHTML|outerHTML)\s*=\s*\(?\s*(?:["'`]{2}\s*[;)]?|[\w.]*(?:[Ii]con|ICON|[Ss]vg|SVG)\w*(?:\s+as\s+\w+)?\)?\s*;?)\s*\)?\s*$/,
     why: "If any part comes from a user (or the URL), it can run script in your users' browsers (XSS).", fix: "Use `textContent`, build nodes with createElement, or sanitise with DOMPurify." }),
   rule({ id: "xss-react-dangerous", severity: "medium", title: "dangerouslySetInnerHTML with a variable", files: JS,
     re: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!["'`])/, unless: /DOMPurify|sanitize|__html\s*:\s*JSON\.stringify/,
@@ -97,13 +102,13 @@ export const WEB_RULES = [
     // A template with no HTML in it (a text message, an email subject) has nothing to inject into.
     // In Blade, a raw variable or request data is the case to read; a helper call is the rule below.
     requires: /<[a-z!][^>]*>/i,
-    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[^!]*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
+    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[\w>\[\]'"-]+\s*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`{{ }}`, `<%=`), or sanitise before marking safe." }),
   // `<%-` prints raw HTML in EJS; in ERB it only trims whitespace.
   rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: /\.ejs$/i, re: /<%-(?!-)/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`<%=`), or sanitise before printing." }),
   rule({ id: "xss-template-raw-helper", severity: "low", title: "Template prints a helper's output without escaping", files: TEMPLATE,
-    re: /\{!!\s*(?![\s$])[^!]*!!\}/, unless: /\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE)/,
+    re: /\{!!\s*(?![\s$])[^!]*!!\}|\{!!\s*\$[^!]*\)\s*!!\}/, unless: /\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE)/,
     why: "Form builders, translations and formatters return HTML on purpose. It is XSS only if the helper passes user text through unescaped.",
     fix: "Check what the helper does with its arguments, and escape them inside it." }),
   rule({ id: "xss-php-echo", severity: "high", title: "Request data echoed into the page", files: PHP,
@@ -193,7 +198,8 @@ export const WEB_RULES = [
     why: "A crafted XML file can read local files or call internal URLs (XXE).", fix: "Disable entity resolution and DTD loading; in Python use defusedxml." }),
   rule({ id: "postmessage-no-origin", severity: "medium", confidence: "low", title: "message listener (check that it verifies event.origin)", files: JS,
     // A BroadcastChannel only carries messages from the same origin.
-    re: /addEventListener\(\s*["']message["']\s*,|\bonmessage\s*=/, unless: /origin|[Cc]hannel\??\.(?:addEventListener|onmessage)|\b(?:worker|port|socket|ws|eventSource|es)\w*\??\.(?:addEventListener|onmessage)/i,
+    re: /addEventListener\(\s*["']message["']\s*,|\bonmessage\s*=/, skip: /(^|\/)(?:sw|service-?worker)\.[jt]s$|\.worker\.[jt]s$|(^|\/)workers?\//i,
+    unless: /origin|\bself\.(?:addEventListener|onmessage)|^\s*onmessage\s*=|[Ww]orker\w*(?:\.\w+)*\.(?:addEventListener|onmessage)|[Cc]hannel\??\.(?:addEventListener|onmessage)|\b(?:worker|port|socket|ws|eventSource|es)\w*\??\.(?:addEventListener|onmessage)/i,
     why: "Any page that can open or frame yours can send it messages; without an origin check they are trusted.", fix: "Compare `event.origin` to an exact allow-list before acting on the data." }),
   rule({ id: "prototype-pollution", severity: "medium", title: "Deep merge of request data", files: JS,
     re: new RegExp(String.raw`\b(?:merge|mergeWith|defaultsDeep|extend|deepmerge|set|setWith)\s*\([^;\n]*${USER_JS}`), unless: /Object\.create\(null\)|hasOwn|__proto__/,

@@ -1,0 +1,62 @@
+[
+ {
+  "repo": "gotify/server",
+  "sha": "01086b95a8b69ee87383f6e8bcae601d8c33384b",
+  "about": "Go + React; push notifications with app tokens"
+ },
+ {
+  "repo": "go-shiori/shiori",
+  "sha": "aebb4021a56048eed4c8feb325399be5f46e5470",
+  "about": "Go; bookmarks with accounts"
+ },
+ {
+  "repo": "excalidraw/excalidraw",
+  "sha": "701b901a0f1ba3d0b390d9cdf63d112e25abac4b",
+  "about": "TypeScript, React"
+ },
+ {
+  "repo": "mealie-recipes/mealie",
+  "sha": "95c462d61b14481b9a939ff87d91a093e6b9582b",
+  "about": "Python (FastAPI) + Vue"
+ },
+ {
+  "repo": "getredash/redash",
+  "sha": "f561a53dc55eeb3f20615be951560dc78bb23f4c",
+  "about": "Python (Flask) + React; stores data-source credentials"
+ },
+ {
+  "repo": "BookStackApp/BookStack",
+  "sha": "0b6b667e0d84ebb3406de6de9fadbf4230c29c0b",
+  "about": "PHP, Laravel"
+ },
+ {
+  "repo": "koel/koel",
+  "sha": "80a21bb34c5f8e6ac5c848821833affc4d01176c",
+  "about": "PHP, Laravel + Vue"
+ },
+ {
+  "repo": "chatwoot/chatwoot",
+  "sha": "e5832c3ff568161cc503dffa7076724079d074c5",
+  "about": "Ruby on Rails + Vue"
+ },
+ {
+  "repo": "hoppscotch/hoppscotch",
+  "sha": "55908a76a1d0555c9bbb5d74244c14173df95b06",
+  "about": "TypeScript; an API client full of tokens and keys"
+ },
+ {
+  "repo": "wagtail/wagtail",
+  "sha": "030168a7dc42d5450c4cfbac3c68881b63b2d466",
+  "about": "Python, Django"
+ },
+ {
+  "repo": "directus/directus",
+  "sha": "afb324195edb9e17ef59be0aa2c173bec358a5dd",
+  "about": "TypeScript, Node + Vue"
+ },
+ {
+  "repo": "mattermost/focalboard",
+  "sha": "a84bbb65e32edf972856b329417096ac413518e9",
+  "about": "Go + React"
+ }
+]

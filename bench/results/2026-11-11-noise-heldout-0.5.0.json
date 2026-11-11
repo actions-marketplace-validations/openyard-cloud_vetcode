@@ -1,0 +1,298 @@
+{
+ "scanner": "0.5.0",
+ "repos": [
+  {
+   "repo": "gotify/server",
+   "sha": "01086b95a8",
+   "files": 256,
+   "total": 0,
+   "flagged": [],
+   "categories": {},
+   "rules": {}
+  },
+  {
+   "repo": "go-shiori/shiori",
+   "sha": "aebb4021a5",
+   "files": 466,
+   "total": 19,
+   "flagged": [
+    "gha-github-env-injection",
+    "gha-secret-echo"
+   ],
+   "categories": {
+    "supply-chain": 3,
+    "config": 7,
+    "malware": 4,
+    "web": 5
+   },
+   "rules": {
+    "gha-github-env-injection": 1,
+    "gha-secret-echo": 2,
+    "compose-literal-password": 5,
+    "compose-db-exposed": 2,
+    "mal-credential-paths": 4,
+    "xss-inner-html": 3,
+    "code-eval-dynamic": 1,
+    "xss-framework-raw": 1
+   }
+  },
+  {
+   "repo": "excalidraw/excalidraw",
+   "sha": "701b901a0f",
+   "files": 1040,
+   "total": 19,
+   "flagged": [],
+   "categories": {
+    "web": 13,
+    "secrets": 6
+   },
+   "rules": {
+    "firebase-open-rules": 3,
+    "secret-file-committed": 2,
+    "secret-google-api-key": 2,
+    "secret-env-not-ignored": 1,
+    "secret-assignment": 1,
+    "postmessage-no-origin": 5,
+    "xss-react-dangerous": 1,
+    "xss-inner-html": 3,
+    "insecure-random": 1
+   }
+  },
+  {
+   "repo": "mealie-recipes/mealie",
+   "sha": "95c462d61b",
+   "files": 1681,
+   "total": 27,
+   "flagged": [
+    "gha-github-env-injection"
+   ],
+   "categories": {
+    "supply-chain": 1,
+    "web": 25,
+    "config": 1
+   },
+   "rules": {
+    "gha-github-env-injection": 1,
+    "sql-python-format": 12,
+    "weak-password-hash": 2,
+    "compose-literal-password": 1,
+    "xss-framework-raw": 9,
+    "cookie-flags-off": 1,
+    "zip-slip": 1
+   }
+  },
+  {
+   "repo": "getredash/redash",
+   "sha": "f561a53dc5",
+   "files": 1497,
+   "total": 23,
+   "flagged": [],
+   "categories": {
+    "secrets": 9,
+    "web": 9,
+    "config": 2,
+    "malware": 1,
+    "supply-chain": 2
+   },
+   "rules": {
+    "secret-db-url": 2,
+    "secret-file-committed": 1,
+    "sql-concat": 1,
+    "path-traversal": 1,
+    "compose-literal-password": 2,
+    "mal-exfil-endpoint": 1,
+    "secret-assignment": 6,
+    "dep-remote-source": 1,
+    "lock-foreign-source": 1,
+    "postmessage-no-origin": 2,
+    "xss-template-unescaped": 1,
+    "xss-inner-html": 1,
+    "xss-framework-raw": 1,
+    "xss-react-dangerous": 2
+   }
+  },
+  {
+   "repo": "BookStackApp/BookStack",
+   "sha": "0b6b667e0d",
+   "files": 2603,
+   "total": 58,
+   "flagged": [],
+   "categories": {
+    "config": 3,
+    "malware": 2,
+    "web": 53
+   },
+   "rules": {
+    "compose-literal-password": 3,
+    "mal-base64-blob": 2,
+    "xss-inner-html": 35,
+    "postmessage-no-origin": 1,
+    "xss-template-unescaped": 17
+   }
+  },
+  {
+   "repo": "koel/koel",
+   "sha": "80a21bb34c",
+   "files": 3033,
+   "total": 16,
+   "flagged": [],
+   "categories": {
+    "secrets": 1,
+    "web": 15
+   },
+   "rules": {
+    "secret-assignment": 1,
+    "postmessage-no-origin": 4,
+    "xss-framework-raw": 8,
+    "xss-inner-html": 3
+   }
+  },
+  {
+   "repo": "chatwoot/chatwoot",
+   "sha": "e5832c3ff5",
+   "files": 9755,
+   "total": 93,
+   "flagged": [
+    "anom-targeted-payload"
+   ],
+   "categories": {
+    "malware": 13,
+    "web": 69,
+    "secrets": 9,
+    "config": 2
+   },
+   "rules": {
+    "mal-eval-decoded": 1,
+    "code-eval-input": 1,
+    "anom-targeted-payload": 1,
+    "secret-file-committed": 1,
+    "mass-assignment": 5,
+    "sql-concat": 14,
+    "tls-verify-off": 3,
+    "weak-password-hash": 1,
+    "cmd-injection": 1,
+    "compose-db-exposed": 2,
+    "mal-download-exec-script": 2,
+    "mal-persistence": 8,
+    "mal-exfil-endpoint": 1,
+    "secret-assignment": 7,
+    "secret-twilio": 1,
+    "csrf-disabled": 4,
+    "postmessage-no-origin": 6,
+    "xss-inner-html": 4,
+    "xss-framework-raw": 1,
+    "xss-template-unescaped": 29
+   }
+  },
+  {
+   "repo": "hoppscotch/hoppscotch",
+   "sha": "55908a76a1",
+   "files": 2432,
+   "total": 39,
+   "flagged": [
+    "gha-secret-echo"
+   ],
+   "categories": {
+    "secrets": 7,
+    "supply-chain": 7,
+    "web": 22,
+    "config": 2,
+    "malware": 1
+   },
+   "rules": {
+    "secret-private-key": 1,
+    "secret-github-token": 1,
+    "secret-aws-key": 1,
+    "secret-google-oauth": 1,
+    "gha-secret-echo": 3,
+    "tls-verify-off": 1,
+    "weak-password-hash": 4,
+    "secret-in-client-env": 1,
+    "compose-literal-password": 2,
+    "mal-exfil-endpoint": 1,
+    "secret-assignment": 2,
+    "secret-slack-webhook": 1,
+    "dep-remote-source": 4,
+    "xss-framework-raw": 5,
+    "xss-inner-html": 4,
+    "postmessage-no-origin": 5,
+    "insecure-random": 1,
+    "cookie-flags-off": 1
+   }
+  },
+  {
+   "repo": "wagtail/wagtail",
+   "sha": "030168a7dc",
+   "files": 4142,
+   "total": 37,
+   "flagged": [],
+   "categories": {
+    "web": 35,
+    "config": 1,
+    "secrets": 1
+   },
+   "rules": {
+    "debug-enabled": 1,
+    "django-allowed-hosts": 1,
+    "secret-slack-webhook": 1,
+    "xss-inner-html": 17,
+    "postmessage-no-origin": 3,
+    "xss-template-unescaped": 14
+   }
+  },
+  {
+   "repo": "directus/directus",
+   "sha": "afb324195e",
+   "files": 4633,
+   "total": 126,
+   "flagged": [
+    "agent-project-hooks"
+   ],
+   "categories": {
+    "agent": 1,
+    "web": 111,
+    "config": 8,
+    "supply-chain": 6
+   },
+   "rules": {
+    "agent-project-hooks": 1,
+    "sql-unsafe-raw": 54,
+    "nosql-injection": 19,
+    "path-traversal": 1,
+    "compose-literal-password": 8,
+    "gha-once-compromised-action": 4,
+    "behaviour-purpose-mismatch": 1,
+    "dep-typosquat": 1,
+    "mass-assignment": 21,
+    "jwt-decode-auth": 3,
+    "xss-inner-html": 9,
+    "xss-framework-raw": 3,
+    "postmessage-no-origin": 1
+   }
+  },
+  {
+   "repo": "mattermost/focalboard",
+   "sha": "a84bbb65e3",
+   "files": 1601,
+   "total": 20,
+   "flagged": [],
+   "categories": {
+    "config": 1,
+    "secrets": 5,
+    "web": 12,
+    "supply-chain": 2
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "secret-db-url": 3,
+    "sql-go-sprintf": 2,
+    "secret-assignment": 1,
+    "secret-google-api-key": 1,
+    "ext-broad-permissions": 1,
+    "dep-remote-source": 1,
+    "xss-react-dangerous": 9,
+    "xss-inner-html": 1
+   }
+  }
+ ]
+}

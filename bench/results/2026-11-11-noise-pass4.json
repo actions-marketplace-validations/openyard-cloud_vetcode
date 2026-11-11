@@ -1,0 +1,192 @@
+{
+ "scanner": "0.5.0",
+ "repos": [
+  {
+   "repo": "AmintaCCCP/GithubStarsManager",
+   "sha": "776ea89e38",
+   "files": 1009,
+   "total": 6,
+   "flagged": [],
+   "categories": {
+    "web": 6
+   },
+   "rules": {
+    "xss-inner-html": 2,
+    "xss-react-dangerous": 3,
+    "postmessage-no-origin": 1
+   }
+  },
+  {
+   "repo": "louislam/uptime-kuma",
+   "sha": "fb8ef0fa82",
+   "files": 916,
+   "total": 11,
+   "flagged": [],
+   "categories": {
+    "web": 9,
+    "secrets": 2
+   },
+   "rules": {
+    "tls-verify-off": 2,
+    "secret-assignment": 2,
+    "weak-cipher": 1,
+    "xss-framework-raw": 6
+   }
+  },
+  {
+   "repo": "usememos/memos",
+   "sha": "9ee06fdc47",
+   "files": 1352,
+   "total": 6,
+   "flagged": [],
+   "categories": {
+    "web": 4,
+    "malware": 2
+   },
+   "rules": {
+    "tls-verify-off": 1,
+    "mal-download-exec-script": 2,
+    "xss-inner-html": 3
+   }
+  },
+  {
+   "repo": "gethomepage/homepage",
+   "sha": "91b28e8a6e",
+   "files": 1479,
+   "total": 4,
+   "flagged": [],
+   "categories": {
+    "web": 4
+   },
+   "rules": {
+    "tls-verify-off": 2,
+    "weak-password-hash": 2
+   }
+  },
+  {
+   "repo": "miniflux/v2",
+   "sha": "9447aaeceb",
+   "files": 661,
+   "total": 3,
+   "flagged": [],
+   "categories": {
+    "config": 1,
+    "web": 2
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "weak-password-hash": 1,
+    "tls-verify-off": 1
+   }
+  },
+  {
+   "repo": "umami-software/umami",
+   "sha": "559e3c607c",
+   "files": 1701,
+   "total": 4,
+   "flagged": [],
+   "categories": {
+    "web": 3,
+    "config": 1
+   },
+   "rules": {
+    "sql-unsafe-raw": 3,
+    "compose-literal-password": 1
+   }
+  },
+  {
+   "repo": "healthchecks/healthchecks",
+   "sha": "255075ce65",
+   "files": 1127,
+   "total": 20,
+   "flagged": [],
+   "categories": {
+    "web": 20
+   },
+   "rules": {
+    "csrf-disabled": 5,
+    "xss-template-unescaped": 11,
+    "xss-inner-html": 4
+   }
+  },
+  {
+   "repo": "linkwarden/linkwarden",
+   "sha": "24adcc146b",
+   "files": 910,
+   "total": 6,
+   "flagged": [],
+   "categories": {
+    "web": 5,
+    "secrets": 1
+   },
+   "rules": {
+    "secret-in-client-env": 1,
+    "secret-assignment": 1,
+    "xss-inner-html": 2,
+    "xss-react-dangerous": 2
+   }
+  },
+  {
+   "repo": "louislam/dockge",
+   "sha": "0329dabb50",
+   "files": 148,
+   "total": 3,
+   "flagged": [],
+   "categories": {
+    "config": 3
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "compose-db-exposed": 1,
+    "compose-literal-password": 1
+   }
+  },
+  {
+   "repo": "pocketbase/pocketbase",
+   "sha": "7f2773ec23",
+   "files": 889,
+   "total": 2,
+   "flagged": [],
+   "categories": {
+    "web": 2
+   },
+   "rules": {
+    "xss-inner-html": 2
+   }
+  },
+  {
+   "repo": "maybe-finance/maybe",
+   "sha": "77b5469832",
+   "files": 1604,
+   "total": 11,
+   "flagged": [],
+   "categories": {
+    "web": 11
+   },
+   "rules": {
+    "weak-password-hash": 1,
+    "csrf-disabled": 2,
+    "xss-inner-html": 4,
+    "prototype-pollution": 1,
+    "xss-template-unescaped": 3
+   }
+  },
+  {
+   "repo": "firefly-iii/firefly-iii",
+   "sha": "d65e916130",
+   "files": 2183,
+   "total": 20,
+   "flagged": [],
+   "categories": {
+    "web": 18,
+    "supply-chain": 2
+   },
+   "rules": {
+    "weak-password-hash": 1,
+    "gha-unpinned-action": 2,
+    "xss-inner-html": 8,
+    "xss-template-unescaped": 9
+   }
+  }
+ ]
+}

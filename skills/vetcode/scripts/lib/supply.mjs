@@ -221,11 +221,21 @@ function stealerKit(file, text, out) {
 
 function checkSetupPy(file, text, out) {
   stealerKit(file, text, out);
+  // The package being vetted: a name one letter from a popular one, or a version number chosen
+  // to outrank a private package of the same name, with code that runs on install.
+  const name = /\bname\s*=\s*["']([A-Za-z0-9][\w.-]*)["']/.exec(text), version = /\bversion\s*=\s*["'](\d+)[\w.]*["']/.exec(text);
+  const like = name && lookalike(name[1], TARGET_PYPI, POPULAR_SCOPES, KNOWN_PYPI);
+  if (like) out.push(finding(rule({ id: "package-name-typosquat", severity: "high", title: "This package's name imitates a popular package",
+    why: "Typosquats borrow a popular name with a small change so people install them by mistake.", fix: "Install the real package instead; treat this one as hostile." }), file.rel, lineOf(text, name.index), `"${name[1]}" looks like "${like}"`));
+  if (version && +version[1] >= 90 && (/cmdclass/.test(text) || /\b(?:subprocess\.|os\.system|urlopen|requests\.|exec\s*\(|eval\s*\()/.test(text)) && !(name && KNOWN_PYPI.has(name[1].toLowerCase().replace(/[-_.]+/g, "-"))))
+    out.push(finding(rule({ id: "dep-confusion-version", severity: "high", title: `Version ${version[0].replace(/^version\s*=\s*/, "")} with code that runs on install`,
+      why: "Dependency-confusion packages use version numbers like 99.x so they win over a private package of the same name, and install-time code to call home.",
+      fix: "Check that this package really comes from the index you expect; pin private packages to your own index." }), file.rel, lineOf(text, version.index), version[0]));
   if (INSTALL_CMD.test(text) && /cmdclass/.test(text)) {
     // Compiling extensions with subprocess is normal; an install-time command that talks to the
     // network, runs decoded code, posts to a webhook or starts an .exe is not.
     const onInstall = /class\s+\w+\s*\(\s*(?:\w+\.)?(?:install|develop|egg_info)\s*\)/.test(text);
-    const acts = onInstall && /\b(?:requests\.|urllib|urlopen|urlretrieve|socket\.|exec\s*\(|eval\s*\(|startfile|Webhook|webhook|curl|wget|\.exe\b|powershell|Fernet|b64decode)/.exec(text);
+    const acts = onInstall && /\b(?:requests\.|urllib|urlopen|urlretrieve|socket\.|exec\s*\(|eval\s*\(|startfile|Webhook|webhook|curl|wget|\.exe\b|powershell|Fernet|b64decode|whoami|hostname|getpass\.getuser|os\.getlogin|platform\.node)/.exec(text);
     out.push(finding(rule({ id: "setup-py-install-command", severity: acts ? "high" : "medium", confidence: acts ? "high" : "medium",
       title: acts ? "setup.py overrides the install command to run code" : "setup.py overrides the install command",
       why: "A custom install command runs during `pip install` with your rights; malicious packages use it to download, beacon or start a payload before any code is imported.",
@@ -285,7 +295,8 @@ function checkWorkflow(file, text, out) {
         why: "pull_request_target, workflow_run and issue_comment run with write tokens and secrets; building or running the attacker's PR code there hands them over.",
         fix: "Use `pull_request` for building untrusted code, or never run the checked-out code in the privileged job." }), file.rel, i + 1, line));
     }
-    if (/\$\{\{[^}]*github\.event\.[^}]*\}\}[^\n]*>>\s*"?\$\{?GITHUB_(?:ENV|PATH)\b/.test(line)) {
+    // Text an outsider writes (a title, a branch name, a comment), not a number or the maintainers' own tag.
+    if (GH_INPUT.test(line) && />>\s*"?\$\{?GITHUB_(?:ENV|PATH)\b/.test(line)) {
       out.push(finding(rule({ id: "gha-github-env-injection", severity: "high", confidence: "high", title: "Event data written to GITHUB_ENV / GITHUB_PATH",
         why: "An attacker-controlled value can set environment variables (LD_PRELOAD, NODE_OPTIONS) or PATH for every later step.", fix: "Never write event data there; pass it through step outputs or env." }), file.rel, i + 1, line));
     }
@@ -301,7 +312,7 @@ function checkWorkflow(file, text, out) {
       out.push(finding(rule({ id: "gha-write-all", severity: "medium", confidence: "high", title: "Workflow token has write access to everything",
         why: "Any compromised step can push code, create releases or change settings.", fix: "Grant only what the job needs (`contents: read`, ...)." }), file.rel, i + 1, line));
     }
-    if (/\becho\b[^\n]*\$\{\{\s*secrets\./.test(line)) {
+    if (/\becho\b[^\n]*\$\{\{\s*secrets\./.test(line) && !/\$\{\{\s*secrets\.[^}]*\}\}[^\n|>]*["']?\s*(?:\||>)/.test(line)) {
       out.push(finding(rule({ id: "gha-secret-echo", severity: "high", confidence: "high", title: "Secret printed in a workflow",
         why: "Masking is easy to bypass (encoding, splitting); printed secrets end up in logs.", fix: "Never print secrets; pass them via env to the tool that needs them." }), file.rel, i + 1, line));
     }

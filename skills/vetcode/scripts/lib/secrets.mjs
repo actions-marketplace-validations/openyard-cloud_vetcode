@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { DOC, TEST, LOCALE, finding, suppressedHere, presentIn } from "./engine.mjs";
+import { DOC, TEST, LOCALE, DEVSTACK, finding, suppressedHere, presentIn } from "./engine.mjs";
 
 const ROTATE = "Revoke and rotate it at the provider first (assume it is already copied), then move it to an environment variable or secret store and remove it from the code and git history.";
 
@@ -122,7 +122,9 @@ export function scanSecrets(file, text, out) {
     if (PLACEHOLDER.test(value) || /process\.env|os\.environ|getenv|import\.meta\.env|\$\{|\{\{|ENV\[|config\(|secrets\.|\benv\(/.test(line)) continue;
     if (entropy(value) < 3.2 || /^[a-z]+$/i.test(value) || /^(https?:|\/|\.\/)/.test(value)) continue;
     if (NAME_KEY.test(m[1]) || NAME_VALUE.test(value) || /[^\x00-\x7F]/.test(value)) continue;
-    out.push(finding(GENERIC, file.rel, i + 1, line.replace(value, redact(value))));
+    // A commented-out example, a value built at run time, or the search-only key a docs site publishes on purpose.
+    if (/^\s*(?:#|\/\/|\*|--|;)/.test(line) || /#\{|\$\{|%[sd]|\{\w*\}/.test(value) || (/^api_?key$/i.test(m[1]) && /algolia|docsearch|docusaurus|vitepress/i.test(file.rel + text.slice(0, 4000)))) continue;
+    out.push(finding(GENERIC, file.rel, i + 1, line.replace(value, redact(value)), DEVSTACK.test(file.rel) ? { severity: "low", title: "Secret-looking value in a development or CI stack" } : {}));
   }
 }
 

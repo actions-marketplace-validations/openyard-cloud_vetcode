@@ -9,6 +9,7 @@ these numbers.
 | npm | [NPMAnalysis](https://github.com/lxyeternal/NPMAnalysis) (its paper scores GuardDog and 12 other tools on the same data) | NPMAnalysis |
 | PyPI | [Datadog malicious-software-packages-dataset](https://github.com/DataDog/malicious-software-packages-dataset) | source distributions of popular packages from pypi.org |
 | AI skills | Datadog dataset | skills from Anthropic, Trail of Bits and obra/superpowers |
+| AI skills, held out (`skills-heldout`) | 157 skills found malicious on skillsmp.com and skills.rest ([MaliciousAgentSkillsBench](https://github.com/protectskills/MaliciousSkillBench), `SRC002`) | skills from github/awesome-copilot, microsoft/skills, wshobson/agents and K-Dense-AI/scientific-agent-skills |
 
 A package is flagged when vetcode reports a high or critical finding in the malware,
 supply-chain or agent categories, ignoring low-confidence findings (tests, docs).
@@ -92,6 +93,8 @@ versions on fresh samples, oldest first:
 Each rule change is tuned on one seed and confirmed on a new one; differences of one or two
 points between seeds are normal.
 
+**Skills nobody has looked at.** Every rule for skills so far was written from the Datadog set, so its 49% is in-sample. `skills-heldout` is a second set from other marketplaces and other benign collections. It exists to stay unseen: `--explain` refuses to describe its misses, and no rule may be written from it. First and only look, vetcode 0.7.0: **94 of 157 caught (59.9%), 27 of 1,029 clean skills flagged (2.6%), F1 67.6**. Almost every catch (91 of 94) comes from one rule, instructions that tell the agent to act against its user, which is also where the false alarms are (23 of 27). The clean collections are public and may be read to fix those; the malicious side may not.
+
 **0.5.0 to 0.6.0 on the same samples.** 0.6.0 adds rules for what 0.5.0 missed on seed 7 (a
 tunnel address with a shell behind it, Python that downloads a program and starts it, an
 install command that reads the user name, a look-alike name declared in `setup.py`, request
@@ -105,6 +108,8 @@ so seed 7 is in-sample and seed 31, which nobody looked at, is the check. Caught
 | PyPI, seed 7 (in-sample), 300 + 210 | 241 · 17 | 263 · 17 |
 | PyPI, seed 31, 300 + 210 | 247 · 17 | **262 · 17** |
 | AI skills, 204 + 133 (in-sample since 0.4.1) | 99 · 4 | 100 · 4 |
+
+0.7.0 changes no malware rule and gives the same numbers on both seeds (runs 42993645871 and 42993652110).
 
 On the unseen sample that is F1 95.5 → 95.8 on npm and 87.6 → 90.5 on PyPI, with no new false
 alarm. A first run of 0.6.0 did raise one: psutil ships a maintenance script that downloads
@@ -189,6 +194,18 @@ Twelve well-known, maintained open-source apps pinned to a commit ([list](noise.
 | Apps wrongly flagged as dangerous | 5 of 12 | **1 of 12** |
 
 So the first corpus was optimistic: per thousand files 0.5.0 reported 7 findings there and 14 here, and it wrongly flagged five clean apps. 0.6.0 fixes what those showed, as general rules rather than exceptions (printing a secret is not piping it into `docker login`; a pull request's number is not attacker-controlled text; `deleteMany(req.body)` is a NoSQL filter only where the file uses MongoDB; a worker's `onmessage` talks to its own page), and now reports 9 per thousand files here and 7 on the first corpus (96 findings). The one app still flagged, directus, does ship agent hooks in `.claude/settings.json`, which is what the finding says. This corpus has now been looked at too, so the next check needs a third one.
+
+**A third corpus.** [Twelve more apps](noise-third.json) (37,129 files: Django, Rails, Laravel, Symfony, ASP.NET, Java, Rust, NestJS, FastAPI), first scanned with 0.6.0: `node bench/noise.mjs --corpus bench/noise-third.json`.
+
+| Third corpus, findings at medium or above | 0.6.0, first look | 0.7.0 |
+|---|---|---|
+| All categories | 340 | **247** |
+| Secrets · web · malware · supply chain · config | 46 · 246 · 9 · 18 · 21 | 16 · 195 · 9 · 6 · 21 |
+| Apps wrongly flagged as dangerous | 2 of 12 | **0 of 12** |
+
+The first look is the number that counts: 9 findings per thousand files, the same as on the second corpus, and two wrong verdicts. One was `react-rnd`, a real package one letter from `react-dnd`. The other was Yarn itself: a project that commits its Yarn release (`.yarn/releases/yarn-4.6.0.cjs`, the default for Yarn 2 and later) ships 2.7 MB of minified code in which a decrypt-then-run pattern and an environment read both match. 0.7.0 no longer lets pattern matches in a committed package manager decide a verdict; it reports the file once, and with `--online` (and in the guard's check after a clone) compares it with the file Yarn published for that version, which is the check that means something: a copy changed by one byte is reported as critical.
+
+The other changes are general rules too: a text template whose only tag is a separator comment has no markup to inject into; a raw binding of a sanitiser's output (`{@html DOMPurify.sanitize(…)}`) is not reported; a `message` listener whose named handler reads `event.origin` further down the file is not reported; a database URL with a bracketed placeholder, with a password that says it is one, or for a database on this machine (a CI service container) is not a leaked credential; a character pool, a `$VARIABLE`, a framework parameter or an identifier under a password-like name is not a secret; and handing all secrets to a workflow in the same repository is low, to another repository medium. The second corpus went from 298 to 286 with the same rules, and the first stayed at 96.
 
 "Wrongly flagged" is the verdict of a pre-install check: a high or critical finding in the malware, supply-chain or agent categories. On 0.3.1 that happened to uptime-kuma and linkwarden (a dependency one letter from a popular name; a `pull_request_target` workflow that only compares branch names) and healthchecks (a sign-up form that reads the time zone).
 

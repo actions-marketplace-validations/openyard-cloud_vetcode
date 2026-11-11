@@ -41,7 +41,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
   }
 }
 
-export const VERSION = "0.6.0";
+export const VERSION = "0.7.0";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */

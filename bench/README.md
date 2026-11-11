@@ -159,4 +159,47 @@ Results from 2026-11-10, Claude Code with its default model, 2 runs per app:
 
 The agent also reported one further real weakness on a fixed app: a password reset that leaves existing sessions valid. In the first run, it showed that the first "fixed" checkout still let a negative quantity lower the total. The case was corrected so that each app has exactly one bug, and that case was run again. The cost was about $0.33 per review.
 
-**Read this as a check that the review step works, not as a detection rate.** We wrote these apps ourselves. Each holds one bug in about 20 lines, which is far easier than a real codebase, and the model may have seen similar textbook examples. The independent measure is real advisories with their fix commits, published after the model's training cutoff. That is the next step.
+**Read this as a check that the review step works, not as a detection rate.** We wrote these apps ourselves. Each holds one bug in about 20 lines, which is far easier than a real codebase, and the model may have seen similar textbook examples. The independent measure is real advisories with their fix commits, published after the model's training cutoff: the next section.
+
+## The agent step on real advisories
+
+```bash
+git worktree add --detach ../vetcode-0.3.1 v0.3.1        # pin the version under test
+node bench/advisories.mjs --plugin ../vetcode-0.3.1 --jobs 1
+node bench/advisories.mjs --rescore                      # score saved answers again
+node bench/judge.mjs                                     # stricter score: does a finding describe the bug?
+node bench/advisories.mjs --no-plugin --side bad --out bench/results/advisories-baseline --only GHSA-…   # control
+```
+
+49 authorization and business-logic advisories from the GitHub Advisory Database (CWE 639, 862, 863, 284, 285, 915, 840, 841, 269, 566), each with a fix commit dated after the model's training cutoff, in 8 ecosystems: npm 10, Go 9, Composer 9, PyPI 8, Maven 7, Rust 3, RubyGems 2, NuGet 1 ([list](advisories.json)). Each advisory is reviewed twice: at the commit before the fix (vulnerable) and at the fix.
+
+The review is what a user gets: Claude Code with vetcode loaded as a plugin, asked only to "do a security review of the code in this folder before we ship it". It is not told the bug class, the file or the advisory. The code is never built or run, agent instructions shipped with the target (`.claude/`, `CLAUDE.md`, `AGENTS.md`, `.mcp.json`) are removed, and tools that write or reach the network are switched off. Every review runs on claude-opus-5-5 at medium effort. The agent reads and searches as it does in normal use of Claude Code, which includes shell commands such as `grep` and `sed`, small analysis scripts of its own, and subagents; in the 2026-11-10 runs it was not restricted further than the user's own settings. We read the transcripts of those runs: 27 commands started an interpreter other than the scanner, all of them the agent's own scripts reading files, none running code from a target. The harness now records such commands for every review.
+
+A vulnerable case is **caught** when the agent reports a finding (confirmed or likely, medium or above) within 20 lines of a hunk the fix changed. A fixed case is **flagged again** when it reports one at the same place on the fixed code.
+
+Results from 2026-11-10, vetcode 0.3.1, claude-opus-5-5 ([scores](results/2026-11-10-advisories.json)):
+
+| | Result |
+|---|---|
+| Caught near the fix | **18/49** (37%, roughly 25–51% at 95%) |
+| A finding describes the advisory's bug (judged, medium or above) | 20/49 (41%) |
+| A finding in a file the fix changed | 23/49 |
+| Same place flagged on the fixed code | 3/49 |
+| Median time per review | 1.4 min |
+| API-equivalent cost | $201 for 98 reviews (run on a subscription) |
+
+By ecosystem, caught/scored: Composer 6/9, Go 5/9, PyPI 3/8, npm 2/10, RubyGems 1/2, Maven 1/7, Rust 0/3, NuGet 0/1.
+
+What it catches: a missing permission check on a handler or endpoint, and one user reaching another user's or project's object (FileGator, OpenChoreo, Rucio, Spree, Open WebUI, Winter, Neko, Traefik). What it misses: bugs that need the semantics of a library or server, such as a delimiter or wildcard that crosses a tenant boundary (Mem0, Moquette, LangGraph), an identity the caller only claims (OpenDJ), a sandbox boundary (vm2), type-handling rules in a serializer (jackson-databind), or field-level access in a CMS (Payload, WPGraphQL). Most misses are in libraries, SDKs and servers, where the skill's route-by-route checklist does not apply; the review guidance for that is [#35](https://github.com/openyard-cloud/vetcode/issues/35).
+
+How to read it:
+
+- **Against Claude Code alone, vetcode shows no gain here.** On 15 of these advisories (8 it caught and 7 it missed, picked before the run, vulnerable code only, same model and effort), Claude Code without the plugin caught 7 and with vetcode 8; judged by whether a finding describes the bug the count is also 7 and 8. Two were caught only with vetcode, one only without. That difference is within chance, and each case ran once per side. On these bugs the review is the model's, not the skill's.
+- **Why: the checklists were not read.** In 103 reviews with vetcode the skill was loaded and the scanner run in 102, but a checklist under `references/` was opened in 2. The scanner has nothing to say about a missing permission check, so the agent was reviewing on its own. In several reviews it wrote its own script to list routes and their guards. Changing that is the current work: the review method moves into the skill itself, and the scanner gets a map of entry points and guards.
+- **The first 28 caught 13; the last 21 caught 5.** The later cases are mostly libraries and servers. Both parts ran the same skill: the first from the working tree, the rest from the tag `v0.3.1` (`--plugin`), with identical skill files and a similar number of turns per review.
+- **Only the folders the fix touched are reviewed**, which points the agent at the right area. A user reviews the whole repository.
+- **"Near the fix" is rough, so there is a second score.** `bench/judge.mjs` has a cheaper model (claude-sonnet-5-5) read the public advisory and the findings and name those that describe the same vulnerability. It agrees on 16 cases, rejects 2 that were only near the fix, and accepts 4 reported at another place (a caller, a controller): 20/49 at medium or above, 21/49 at any severity. The verdicts are a model's; check a sample by hand ([#36](https://github.com/openyard-cloud/vetcode/issues/36)).
+- **"Flagged on the fixed code"** can be a false alarm or a fix that is incomplete; these 3 are not checked yet.
+- **Selection.** The first pick of 50 had 27 fixes from before the cutoff, so selection moved to fix-commit dates; two trial advisories run before that change were dropped. One duplicate (Mem0) was removed, leaving 49. One review (vm2, fixed side) also used claude-opus-4-8.
+- **Only scores are published.** The agent's answers stay with whoever ran the benchmark (they are git-ignored): findings on fixed code may be unverified, undisclosed vulnerabilities. If one looks real, report it privately through that project's security policy.
+

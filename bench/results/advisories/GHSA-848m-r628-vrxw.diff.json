@@ -1,0 +1,1 @@
+{"surrealdb/core/src/api/invocation.rs":{"old":[[71,76]],"neu":[[71,92]]},"surrealdb/core/src/iam/auth.rs":{"old":[[65,70],[133,135]],"neu":[[65,98],[161,198]]},"surrealdb/core/src/kvs/ds.rs":{"old":[[4305,4310]],"neu":[[4305,4326]]}}

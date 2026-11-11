@@ -1,0 +1,77 @@
+[
+ {
+  "ghsa": "GHSA-22jm-h49p-29qw",
+  "describes": true,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-2724-6cpj-gf3v",
+  "describes": false,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-2phh-27fw-q4gc",
+  "describes": false,
+  "describesAnySeverity": false
+ },
+ {
+  "ghsa": "GHSA-3p64-6gvh-82v5",
+  "describes": false,
+  "describesAnySeverity": false
+ },
+ {
+  "ghsa": "GHSA-44r8-3p76-84mw",
+  "describes": false,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-g74g-rg72-j2p3",
+  "describes": false,
+  "describesAnySeverity": false
+ },
+ {
+  "ghsa": "GHSA-584p-f93j-wpgc",
+  "describes": true,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-9jjc-fw8x-fmwx",
+  "describes": true,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-3w57-8xmc-8v26",
+  "describes": true,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-4pvx-fwjj-8gpc",
+  "describes": false,
+  "describesAnySeverity": false
+ },
+ {
+  "ghsa": "GHSA-gx83-3vf8-gh7j",
+  "describes": false,
+  "describesAnySeverity": false
+ },
+ {
+  "ghsa": "GHSA-42cj-m3vj-89wv",
+  "describes": true,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-mhm7-754m-9p8w",
+  "describes": false,
+  "describesAnySeverity": false
+ },
+ {
+  "ghsa": "GHSA-9rg8-2wvr-fgjh",
+  "describes": true,
+  "describesAnySeverity": true
+ },
+ {
+  "ghsa": "GHSA-5j9r-fx4x-rpvg",
+  "describes": true,
+  "describesAnySeverity": true
+ }
+]

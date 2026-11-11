@@ -57,7 +57,7 @@ Both tools ran on GitHub Actions on the same sample (seed 31), whose malicious p
 | **vetcode** | **29.9%** | **3.0%** |
 | Cisco skill-scanner | 23.5% | 15.9% |
 
-Those numbers were measured before any rule was written from this dataset. Version 0.4.1 adds rules for what the misses had in common (a "required" tool to install from a throwaway host, an MCP or API endpoint on a tunnel, orders to act without confirmation) and catches **48.5%** of the same 204 with the same 3.0% false alarms. That figure is in-sample: the rules were written from descriptions of these samples, so it will be measured again on skills added to the dataset later.
+Those numbers were measured before any rule was written from this dataset. Version 0.4.1 adds rules for what the misses had in common (a "required" tool to install from a throwaway host, an MCP or API endpoint on a tunnel, orders to act without confirmation) and catches **48.5%** of the same 204 with the same 3.0% false alarms. That figure is in-sample: the rules were written from descriptions of these samples, so it does not count as evidence. 0.7.0 stands at 50.0% (102 of 204) with 1.5% false alarms on this set.
 
 **On skills it had never seen.** Because that figure is in-sample, 0.7.0 was also run on a second set that no rule was written from and whose misses are never described to anyone (the benchmark refuses to): 157 skills found malicious on two skill marketplaces ([MaliciousAgentSkillsBench](https://github.com/protectskills/MaliciousSkillBench)), against 1,029 skills from four public collections (GitHub's awesome-copilot, Microsoft's, wshobson/agents and K-Dense's scientific skills).
 

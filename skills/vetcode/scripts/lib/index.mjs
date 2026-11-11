@@ -12,7 +12,7 @@ import { WEB_RULES } from "./web.mjs";
 import { LANG_RULES } from "./langs.mjs";
 import { ECOSYSTEM_FILE_RULES } from "./ecosystems.mjs";
 import { CONFIG_RULES, CONFIG_FILE_RULES, supabaseTablesWithoutRls } from "./config.mjs";
-import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, scanPythonImportTime, hardeningAdvice } from "./supply.mjs";
+import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, scanPythonImportTime, hardeningAdvice, settleLookalikes } from "./supply.mjs";
 import crypto from "node:crypto";
 import { scanAgentFiles } from "./agent.mjs";
 import { lockedPackages, queryOsv } from "./osv.mjs";
@@ -206,6 +206,7 @@ export async function vet(target, opts = {}) {
     try { await queryOsv(pkgs, findings, log); osv = `${pkgs.length} packages`; }
     catch (e) { osv = `failed (${e.message})`; log(`OSV lookup failed: ${e.message}`); }
     await npmHistory(files, findings, log);
+    await settleLookalikes(findings, log);
   }
   // The guard asks for this alone: it already uses the network, and sends nothing about the project.
   if (opts.online || opts.verifyTools) await yarnCopiesAreOfficial(yarnCopies, findings, log);

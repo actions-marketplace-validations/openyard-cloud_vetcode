@@ -27,7 +27,7 @@
 
 const MODE = (process.env.VETCODE_GUARD || "on").toLowerCase();
 // Most shell commands install nothing: decide that before doing any work.
-const MAYBE = /\b(?:npm|pnpm|yarn|bun|npx|bunx|pnpx|pip[\d.]*|uv|uvx|pipx|poetry)\b|\b(?:curl|wget)\b[^|]*\||\bmcp\s+add/;
+const MAYBE = /\b(?:npm|pnpm|yarn|bun|npx|bunx|pnpx|pip[\d.]*|uv|uvx|pipx|poetry)\b|\b(?:curl|wget)\b[^|]*\||\bmcp\s+add|\bcargo\s+(?:add|install)\b|\bgo\s+(?:get|install|run)\b/;
 // Files that tell an agent which programs to start: MCP servers, and hooks in agent settings.
 const AGENT_CONFIG = /(?:^|[\\/])(?:\.?mcp(?:[._-]config)?\.json|claude_desktop_config\.json|\.claude\.json|settings(?:\.local)?\.json|config\.toml)$/i;
 

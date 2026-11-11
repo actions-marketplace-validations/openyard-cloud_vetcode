@@ -132,6 +132,8 @@ export function scanSecrets(file, text, out) {
     if (entropy(value) < 3.2 || /^[a-z]+$/i.test(value) || /^(https?:|\/|\.\/)/.test(value)) continue;
     if (NAME_KEY.test(m[1]) || NAME_VALUE.test(value) || /[^\x00-\x7F]/.test(value)) continue;
     if (NOT_A_VALUE(value) || (UUID.test(value) && !/key|token|secret|credential|auth/i.test(m[1]))) continue;
+    // A key that starts with digits names a record (a migration, a row of checksums), not a secret.
+    if (/^\d{6,}/.test(m[1])) continue;
     // A commented-out example, a value built at run time, or the search-only key a docs site publishes on purpose.
     if (/^\s*(?:#|\/\/|\*|--|;)/.test(line) || /#\{|\$\{|%[sd]|\{\w*\}/.test(value) || (/^api_?key$/i.test(m[1]) && /algolia|docsearch|docusaurus|vitepress/i.test(file.rel + text.slice(0, 4000)))) continue;
     out.push(finding(GENERIC, file.rel, i + 1, line.replace(value, redact(value)), DEVSTACK.test(file.rel) ? { severity: "low", title: "Secret-looking value in a development or CI stack" } : {}));

@@ -1,7 +1,7 @@
 {
   "name": "@openyard/vetcode",
   "version": "0.6.0",
-  "description": "Catch malicious packages, supply-chain attacks and leaked secrets before they reach your machine. Zero dependencies. CLI, MCP server, Agent Skill and GitHub Action.",
+  "description": "The security check an AI coding agent runs before it acts: packages before they install, repositories after a clone, code before it ships. Malware, supply chain, secrets, web and config. Zero dependencies. CLI, MCP server, Agent Skill, Claude Code guard and GitHub Action.",
   "keywords": [
     "security",
     "malware",

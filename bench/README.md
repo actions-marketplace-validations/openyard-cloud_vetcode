@@ -121,6 +121,27 @@ each next to a clean look-alike.
 Samples are generated at run time and carry no working payload. The set was built
 alongside the rules, so it measures coverage, not an independent detection rate.
 
+## False alarms on real applications
+
+```bash
+node bench/noise.mjs                                                    # scan the corpus, no model, no cost
+node bench/noise.mjs --baseline bench/results/2026-11-11-noise-0.3.1.json # what changed since then
+node bench/noise.mjs --show secret-assignment                           # the lines one rule reports
+```
+
+Twelve well-known, maintained open-source apps pinned to a commit ([list](noise.json)): TypeScript, JavaScript, Go, Python, Ruby and PHP, about 14,000 files. They handle tokens, passwords and API keys all day, so those words are everywhere without a secret in the code. Whatever the scanner reports at medium or above is presumed a false alarm until someone shows otherwise. An agent has to read every one of them, so this number is what a scan costs in attention.
+
+| Findings at medium or above | 0.3.1 | Now |
+|---|---|---|
+| All categories | 2,024 | 1,207 |
+| Secrets | 834 | 17 |
+| Web | 1,109 | 1,109 |
+| Malware | 28 | 28 |
+| Supply chain | 18 | 18 |
+| Config | 35 | 35 |
+
+The secret rules were tuned first ([#39](https://github.com/openyard-cloud/vetcode/issues/39)): a secret-looking assignment is not reported in tests and translation files, when the key names a field rather than a value (`secretColumn`, `apiKeyStatus`), or when the value is a name (`api_key_encrypted`, `backend-api-key`) or translated text; a JSON Web Token in a test is information only; and a string shaped like a GitHub token is dropped when its checksum shows it was never issued. Provider tokens with a valid shape are still reported everywhere, tests included. The 17 left are test keys and certificates, `.env` files with public values and database URLs with default local passwords: the next pass. Web rules (815 from one template rule) and the 28 malware signals on clean apps come after that.
+
 ## The agent step: authorization and business logic
 
 ```bash

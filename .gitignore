@@ -7,3 +7,6 @@ vetcode-skill.zip
 bench/results/advisories*/*.json
 !bench/results/advisories*/*.diff.json
 !bench/results/advisories*/judge-summary.json
+
+# Repositories fetched by the benchmarks
+bench/.cache/

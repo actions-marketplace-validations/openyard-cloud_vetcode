@@ -1,0 +1,276 @@
+{
+ "scanner": "0.3.1",
+ "repos": [
+  {
+   "repo": "AmintaCCCP/GithubStarsManager",
+   "sha": "776ea89e38",
+   "files": 1009,
+   "total": 97,
+   "categories": {
+    "secrets": 45,
+    "web": 51,
+    "config": 1
+   },
+   "rules": {
+    "secret-github-token": 1,
+    "sql-template-literal": 7,
+    "docker-root-user": 1,
+    "secret-assignment": 44,
+    "postmessage-no-origin": 5,
+    "xss-inner-html": 36,
+    "xss-react-dangerous": 3
+   }
+  },
+  {
+   "repo": "louislam/uptime-kuma",
+   "sha": "fb8ef0fa82",
+   "files": 916,
+   "total": 115,
+   "categories": {
+    "secrets": 84,
+    "supply-chain": 1,
+    "web": 24,
+    "config": 6
+   },
+   "rules": {
+    "secret-private-key": 3,
+    "secret-db-url": 1,
+    "secret-file-committed": 1,
+    "dep-typosquat": 1,
+    "tls-verify-off": 5,
+    "cmd-injection-js": 9,
+    "sql-concat": 1,
+    "docker-root-user": 4,
+    "docker-download-exec": 1,
+    "compose-db-exposed": 1,
+    "secret-assignment": 79,
+    "xss-inner-html": 1,
+    "zip-slip": 1,
+    "weak-cipher": 1,
+    "xss-framework-raw": 6
+   }
+  },
+  {
+   "repo": "usememos/memos",
+   "sha": "9ee06fdc47",
+   "files": 1352,
+   "total": 193,
+   "categories": {
+    "web": 104,
+    "config": 1,
+    "malware": 13,
+    "secrets": 73,
+    "supply-chain": 2
+   },
+   "rules": {
+    "sql-concat": 85,
+    "tls-verify-off": 1,
+    "sql-go-sprintf": 6,
+    "docker-root-user": 1,
+    "mal-download-exec-script": 2,
+    "mal-base64-blob": 11,
+    "secret-assignment": 73,
+    "gha-persisted-credentials": 2,
+    "xss-inner-html": 9,
+    "postmessage-no-origin": 2,
+    "xss-react-dangerous": 1
+   }
+  },
+  {
+   "repo": "gethomepage/homepage",
+   "sha": "91b28e8a6e",
+   "files": 1479,
+   "total": 15,
+   "categories": {
+    "config": 3,
+    "web": 5,
+    "secrets": 7
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "weak-secret": 1,
+    "tls-verify-off": 2,
+    "weak-password-hash": 2,
+    "docker-root-user": 2,
+    "secret-assignment": 7
+   }
+  },
+  {
+   "repo": "miniflux/v2",
+   "sha": "9447aaeceb",
+   "files": 661,
+   "total": 43,
+   "categories": {
+    "config": 6,
+    "web": 6,
+    "malware": 2,
+    "secrets": 29
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "weak-password-hash": 1,
+    "tls-verify-off": 1,
+    "sql-go-sprintf": 2,
+    "sql-concat": 1,
+    "compose-literal-password": 2,
+    "compose-db-exposed": 1,
+    "docker-root-user": 2,
+    "mal-exfil-endpoint": 2,
+    "secret-assignment": 28,
+    "secret-slack-webhook": 1,
+    "xss-inner-html": 1
+   }
+  },
+  {
+   "repo": "umami-software/umami",
+   "sha": "559e3c607c",
+   "files": 1701,
+   "total": 65,
+   "categories": {
+    "secrets": 52,
+    "web": 8,
+    "config": 5
+   },
+   "rules": {
+    "secret-db-url": 4,
+    "cmd-injection-js": 1,
+    "weak-secret": 3,
+    "sql-unsafe-raw": 4,
+    "compose-literal-password": 5,
+    "secret-assignment": 48
+   }
+  },
+  {
+   "repo": "healthchecks/healthchecks",
+   "sha": "255075ce65",
+   "files": 1127,
+   "total": 86,
+   "categories": {
+    "malware": 3,
+    "secrets": 4,
+    "web": 79
+   },
+   "rules": {
+    "anom-targeted-payload": 1,
+    "mal-exfil-endpoint": 2,
+    "secret-assignment": 4,
+    "cookie-flags-off": 3,
+    "csrf-disabled": 19,
+    "xss-template-unescaped": 50,
+    "xss-inner-html": 7
+   }
+  },
+  {
+   "repo": "linkwarden/linkwarden",
+   "sha": "24adcc146b",
+   "files": 910,
+   "total": 107,
+   "categories": {
+    "supply-chain": 7,
+    "web": 13,
+    "config": 1,
+    "secrets": 86
+   },
+   "rules": {
+    "gha-pwn-request": 1,
+    "dep-typosquat": 1,
+    "sql-unsafe-raw": 1,
+    "secret-in-client-env": 3,
+    "docker-root-user": 1,
+    "secret-assignment": 86,
+    "gha-persisted-credentials": 5,
+    "xss-inner-html": 6,
+    "xss-react-dangerous": 2,
+    "postmessage-no-origin": 1
+   }
+  },
+  {
+   "repo": "louislam/dockge",
+   "sha": "0329dabb50",
+   "files": 148,
+   "total": 24,
+   "categories": {
+    "config": 6,
+    "web": 2,
+    "secrets": 16
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "tls-verify-off": 2,
+    "docker-root-user": 3,
+    "compose-db-exposed": 1,
+    "compose-literal-password": 1,
+    "secret-assignment": 16
+   }
+  },
+  {
+   "repo": "pocketbase/pocketbase",
+   "sha": "7f2773ec23",
+   "files": 889,
+   "total": 433,
+   "categories": {
+    "secrets": 418,
+    "web": 15
+   },
+   "rules": {
+    "secret-file-committed": 2,
+    "sql-concat": 8,
+    "weak-secret": 3,
+    "secret-jwt": 412,
+    "secret-assignment": 4,
+    "xss-inner-html": 3,
+    "postmessage-no-origin": 1
+   }
+  },
+  {
+   "repo": "maybe-finance/maybe",
+   "sha": "77b5469832",
+   "files": 1604,
+   "total": 44,
+   "categories": {
+    "web": 17,
+    "config": 6,
+    "malware": 3,
+    "secrets": 17,
+    "supply-chain": 1
+   },
+   "rules": {
+    "weak-password-hash": 1,
+    "compose-literal-password": 2,
+    "compose-db-exposed": 2,
+    "docker-root-user": 1,
+    "docker-download-exec": 1,
+    "mal-download-exec-script": 1,
+    "mal-base64-blob": 2,
+    "secret-assignment": 17,
+    "gha-persisted-credentials": 1,
+    "xss-template-unescaped": 9,
+    "csrf-disabled": 2,
+    "xss-inner-html": 4,
+    "prototype-pollution": 1
+   }
+  },
+  {
+   "repo": "firefly-iii/firefly-iii",
+   "sha": "d65e916130",
+   "files": 2183,
+   "total": 802,
+   "categories": {
+    "secrets": 3,
+    "web": 785,
+    "malware": 7,
+    "supply-chain": 7
+   },
+   "rules": {
+    "secret-file-committed": 2,
+    "weak-password-hash": 2,
+    "mal-credential-paths": 1,
+    "mal-exfil-endpoint": 6,
+    "secret-assignment": 1,
+    "gha-unpinned-action": 7,
+    "xss-inner-html": 27,
+    "xss-template-unescaped": 756
+   }
+  }
+ ]
+}

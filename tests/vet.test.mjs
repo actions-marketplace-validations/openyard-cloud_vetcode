@@ -9,11 +9,14 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { vet } from "../skills/vetcode/scripts/lib/index.mjs";
 import { lookalike } from "../skills/vetcode/scripts/lib/supply.mjs";
+import { githubChecksum } from "../skills/vetcode/scripts/lib/secrets.mjs";
 import { POPULAR_NPM, POPULAR_PYPI } from "../skills/vetcode/scripts/lib/popular.mjs";
 import { staleThreads } from "../action/threads.mjs";
 
 const j = (...p) => p.join("");
 const fake = (prefix, n, ch = "a1B2c3D4e5") => prefix + ch.repeat(Math.ceil(n / ch.length)).slice(0, n);
+// The shape of a GitHub token with a correct checksum, so the scanner takes it for one that was issued.
+const ghToken = (random = fake("", 30)) => j("gh", "p_") + random + githubChecksum(random);
 
 function project(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-"));
@@ -47,7 +50,7 @@ test("a clean project has no findings above low", async () => {
 });
 
 test("secrets are found and never printed in full", async () => {
-  const gh = fake(j("gh", "p_"), 36);
+  const gh = ghToken();
   const aws = j("AKIA", "Q3RZ7XKW4TBN2MPL");
   const pem = j("-----BEGIN ", "RSA PRIVATE KEY-----");
   const sr = [Buffer.from('{"alg":"HS256"}').toString("base64url"), Buffer.from('{"iss":"supabase","ref":"abcd","role":"service_role"}').toString("base64url"), "sig_" + "x".repeat(20)].join(".");
@@ -61,6 +64,31 @@ test("secrets are found and never printed in full", async () => {
   for (const id of ["secret-github-token", "secret-aws-key", "secret-private-key", "secret-supabase-service-role", "secret-db-url", "secret-stripe-live", "secret-assignment"]) assert.ok(rules(r).has(id), id);
   const text = JSON.stringify(r);
   assert.ok(!text.includes(gh) && !text.includes(aws) && !text.includes("Xk29fh3kd8") && !text.includes(sr), "a secret leaked into the report");
+});
+
+test("words about secrets are not secrets: tests, translations, names and tokens that were never issued", async () => {
+  const jwt = [Buffer.from('{"alg":"HS256"}').toString("base64url"), Buffer.from('{"sub":"user_1","exp":1}').toString("base64url"), "sig_" + "x".repeat(20)].join(".");
+  const dir = project({
+    "src/locales/de/app.json": '{ "api-key": "API-Schl\u00fcssel", "webdav-password": "WebDAV-Passwort1" }\n',
+    "src/routes/configs.ts": "const cfg = { secretColumn: 'api_key_encrypted', apiKeyStatus: 'decrypted_v2', passwordLabel: 'Pass-word2' };\n",
+    "src/Login.tsx": "<Label htmlFor={mode === 'github' ? 'github-token' : step === 'credentials' ? 'backend-api-key' : 'backend-auth-token'} />\n",
+    "src/authStorage.ts": "const BACKEND_SECRET_SESSION_KEY = 'github-stars-manager.backend-secret';\nconst passwordHint = '\u8a8d\u8a3c\u30c8\u30fc\u30af\u30f3\u3092\u8868\u793a1';\n",
+    "tests/auth.test.ts": `const auth = { authToken: 'token_user2_x9', password: 'proxy-passw0rd' };\nconst headers = { Authorization: "${jwt}" };\n`,
+    "tests/fixtures/vectors.json": `{ "input": "token ${fake(j("gh", "p_"), 36, "a")} in message" }\n`,
+  });
+  const r = await run(dir);
+  assert.deepEqual(r.findings.filter(f => f.severity !== "info").map(f => `${f.rule} ${f.file}:${f.line}`), []);
+});
+
+test("real-looking secrets are still found in tests and next to names", async () => {
+  const jwt = [Buffer.from('{"alg":"HS256"}').toString("base64url"), Buffer.from('{"sub":"user_1","exp":1}').toString("base64url"), "sig_" + "x".repeat(20)].join(".");
+  const dir = project({
+    "tests/client.test.js": `const token = "${ghToken()}";\nconst key = "${fake("sk_live_", 24)}";\n`,
+    "src/config.js": `const dbPassword = "q8Z3xV7mN2pL5kR9tW4y";\nconst session = "${jwt}";\nconst apiKeyName = "X-Api-Key";\n`,
+  });
+  const r = await run(dir);
+  const got = r.findings.filter(f => f.severity !== "info").map(f => `${f.rule} ${f.file}:${f.line}`).sort();
+  assert.deepEqual(got, ["secret-assignment src/config.js:1", "secret-github-token tests/client.test.js:1", "secret-jwt src/config.js:2", "secret-stripe-live tests/client.test.js:2"]);
 });
 
 test("placeholders, env lookups and public-by-design keys are not secrets", async () => {

@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { DOC, finding, suppressedHere, presentIn } from "./engine.mjs";
+import { DOC, TEST, finding, suppressedHere, presentIn } from "./engine.mjs";
 
 const ROTATE = "Revoke and rotate it at the provider first (assume it is already copied), then move it to an environment variable or secret store and remove it from the code and git history.";
 
@@ -51,6 +51,29 @@ const ASSIGN = /\b([A-Za-z0-9_]*?(?:secret|passw(?:or)?d|pwd|api[_-]?key|apikey|
 const GENERIC = { id: "secret-assignment", category: "secrets", severity: "medium", title: "Hard-coded secret value", confidence: "medium",
   why: "A secret written into the code ships with every copy of the code.", fix: ROTATE };
 
+// GitHub tokens end in a checksum (CRC32 of the 30 random characters, base 62, six digits).
+// A string of the right shape that fails it was never issued: an example or a test value.
+const CRC = new Int32Array(256).map((_, n) => { for (let k = 0; k < 8; k++) n = n & 1 ? (n >>> 1) ^ 0xEDB88320 : n >>> 1; return n; });
+const B62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+export function githubChecksum(random) {
+  let c = -1; for (const ch of Buffer.from(random)) c = CRC[(c ^ ch) & 255] ^ (c >>> 8);
+  let n = (c ^ -1) >>> 0, out = "";
+  while (n > 0) { out = B62[n % 62] + out; n = Math.floor(n / 62); }
+  return out.padStart(6, "0");
+}
+const neverIssued = (rule, value) => {
+  const m = rule.id === "secret-github-token" && /^gh[pousr]_([A-Za-z0-9]{30})([A-Za-z0-9]{6})$/.exec(value);
+  return !!m && githubChecksum(m[1]) !== m[2];
+};
+
+// Where a "secret-looking assignment" is not a secret. These files and names hold words about
+// secrets (labels, column names, test values), which is most of what a real application has.
+const LOCALE = /(^|\/)(locales?|i18n|l10n|lang|langs|languages|translations?)\/|\.(po|pot|arb|xlf|xliff|strings|resx)$|(^|\/)(messages|strings|translations?)[._-][\w-]+\.(json|ya?ml|properties)$/i;
+// The key says what a field is called or what state it is in, not what its value is.
+const NAME_KEY = /(?:column|field|name|label|header|param(?:eter)?|path|prop|attr(?:ibute)?|selector|placeholder|title|type|status|state|hint|help|text|message|description|prefix|suffix|env|var(?:iable)?|regex|pattern|format|url|uri|endpoint|file(?:name)?|dir|length|size|count|ttl|expir\w*|algo(?:rithm)?|scheme|mode|kind|event|action|error|required|enabled|visible|strength|policy|rules?|min|max)$/i;
+// A name, not a value: words joined by . _ - : or / (api_key_encrypted, backend-api-key).
+const NAME_VALUE = /^[A-Za-z]+(?:[._:\/-][A-Za-z]+)+$/;
+
 export const redact = v => v.length <= 8 ? "•".repeat(v.length) : `${v.slice(0, 4)}…${v.slice(-2)} (${v.length} chars)`;
 
 // JWTs are only secrets when they grant something; a Supabase service_role key is a master key.
@@ -61,11 +84,12 @@ function jwtClaims(token) {
 const JWT = /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g;
 
 export function scanSecrets(file, text, out) {
-  const doc = DOC.test(file.rel);
+  const doc = DOC.test(file.rel), test = TEST.test(file.rel);
   // Most files hold no secret at all: find which rules can match before reading line by line.
   const rules = SECRET_RULES.filter(r => presentIn(text, r));
   JWT.lastIndex = 0;
-  const jwt = JWT.test(text), assign = !doc && ASSIGN.test(text);
+  // Tests and translations are full of made-up and translated values next to these words.
+  const jwt = JWT.test(text), assign = !doc && !test && !LOCALE.test(file.rel) && ASSIGN.test(text);
   JWT.lastIndex = 0; // matchAll copies lastIndex
 
   if (!rules.length && !jwt && !assign) return;
@@ -76,7 +100,7 @@ export function scanSecrets(file, text, out) {
     let hit = false;
     for (const r of rules) {
       const m = r.re.exec(line);
-      if (!m || (r.unless && r.unless.test(line)) || suppressedHere(lines, i, file.rel, r.id)) continue;
+      if (!m || (r.unless && r.unless.test(line)) || neverIssued(r, m[0]) || suppressedHere(lines, i, file.rel, r.id)) continue;
       hit = true;
       out.push(finding(r, file.rel, i + 1, line.replace(m[1] ?? m[0], redact(m[1] ?? m[0])), doc ? { confidence: "low" } : {}));
     }
@@ -89,7 +113,7 @@ export function scanSecrets(file, text, out) {
         ? { id: "secret-supabase-local", category: "secrets", severity: "info", title: `Supabase local development ${role || ""} key (public default)`, confidence: "high", why: "This is the well-known key of the local Supabase stack; it does not work against a hosted project.", fix: "Nothing to rotate. Make sure production keys come from the environment." }
         : role === "service_role"
         ? { id: "secret-supabase-service-role", category: "secrets", severity: "critical", title: `Supabase service_role key${claims.ref ? ` for project ${claims.ref}` : ""}`, confidence: "high", why: "The service_role key bypasses every Row Level Security policy: full read and write on the database.", fix: ROTATE }
-        : { id: "secret-jwt", category: "secrets", severity: role === "anon" ? "info" : "medium", title: role === "anon" ? "Supabase anon key (public by design)" : "JSON Web Token in the code", confidence: "medium", why: role === "anon" ? "The anon key is meant for browsers; it is only safe if Row Level Security is on for every table." : "A signed token may still be valid and grant access.", fix: role === "anon" ? "Nothing to rotate; make sure RLS is enabled with real policies." : ROTATE };
+        : { id: "secret-jwt", category: "secrets", severity: role === "anon" || test ? "info" : "medium", title: role === "anon" ? "Supabase anon key (public by design)" : "JSON Web Token in the code", confidence: "medium", why: role === "anon" ? "The anon key is meant for browsers; it is only safe if Row Level Security is on for every table." : "A signed token may still be valid and grant access.", fix: role === "anon" ? "Nothing to rotate; make sure RLS is enabled with real policies." : ROTATE };
       out.push(finding(r, file.rel, i + 1, line.replace(m[0], redact(m[0]))));
     }
     if (hit || !assign) continue;
@@ -98,6 +122,7 @@ export function scanSecrets(file, text, out) {
     const value = m[2];
     if (PLACEHOLDER.test(value) || /process\.env|os\.environ|getenv|import\.meta\.env|\$\{|\{\{|ENV\[|config\(|secrets\.|\benv\(/.test(line)) continue;
     if (entropy(value) < 3.2 || /^[a-z]+$/i.test(value) || /^(https?:|\/|\.\/)/.test(value)) continue;
+    if (NAME_KEY.test(m[1]) || NAME_VALUE.test(value) || /[^\x00-\x7F]/.test(value)) continue;
     out.push(finding(GENERIC, file.rel, i + 1, line.replace(value, redact(value))));
   }
 }

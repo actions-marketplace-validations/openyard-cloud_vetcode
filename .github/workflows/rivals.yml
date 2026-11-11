@@ -4,9 +4,6 @@ name: Rivals
 # split into shards that run side by side on throwaway runners; no sample leaves them.
 # Start it by hand: Actions → Rivals → Run workflow. The merged result is the artifact "rivals".
 on:
-  push:
-    branches: [rivals-same-seed]
-    paths: [.github/workflows/rivals.yml]
   workflow_dispatch:
     inputs:
       npm:

@@ -25,9 +25,9 @@ npx github:openyard-cloud/vetcode#v0.7.0 .       # no agent: scan a project, a p
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between, and every claim below is measured ([how](bench/README.md)):
 
 - **It steps in before the damage.** In Claude Code a [guard](#the-guard-checked-before-your-agent-installs) looks at every install command before it runs and at every repository right after it is cloned. Asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3; with the guard it installed the previous settled version every time. Shown malware as if nobody had reported it yet, the guard blocked or questioned 95% of 1,000 malicious npm packages and 88% of 300 PyPI ones.
-- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps it had never been run on (37,000 files), 0.6.0 reported 9 findings per thousand files and wrongly called two of them dangerous; 0.7.0 fixes what that showed and reports 7 per thousand and none. On malware benchmarks it raises fewer false alarms than GuardDog (3.3% against 4.3% on npm, 8.1% against 22.9% on PyPI) and Cisco skill-scanner (0.4% against 5.4% on skills neither was tuned on).
+- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps it had never been run on (37,000 files), 0.6.0 reported 9 findings per thousand files and wrongly called two of them dangerous; 0.7.0 fixes what that showed and reports 7 per thousand and none. On malware benchmarks it raises fewer false alarms than GuardDog (3.3% against 4.3% on npm, 8.1% against 22.9% on PyPI) and Cisco skill-scanner (0.1% against 5.4% on the same 1,029 clean skills).
 - **Catches more malware than the best open-source detector, and is harder to fool.** Both tools on the same 2,000 npm packages: F1 95.8 against GuardDog's 92.8. On PyPI: 90.5 against 81.8. After 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`) it still catches 99–100% of what it caught; GuardDog loses up to 10%.
-- **Knows what attacks on agents look like.** Poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders, a "required" tool to install from a throwaway host. On 157 malicious skills from marketplaces it had never seen, rules alone catch 58% and wrongly flag 4 of 1,029 clean ones.
+- **Knows what attacks on agents look like.** Poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders, a "required" tool to install from a throwaway host. On 157 malicious skills from marketplaces it had never seen, rules alone catch 58% and wrongly flag 1 of 1,029 clean ones.
 - **One run, everything else too.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, in 8 languages.
 - **Reads, never runs.** Nothing from the target is installed, built or executed. Node 18+ and nothing else.
 
@@ -57,17 +57,17 @@ Both tools ran on GitHub Actions on the same sample (seed 31), whose malicious p
 | **vetcode** | **29.9%** | **3.0%** |
 | Cisco skill-scanner | 23.5% | 15.9% |
 
-Those numbers were measured before any rule was written from this dataset. Version 0.4.1 adds rules for what the misses had in common (a "required" tool to install from a throwaway host, an MCP or API endpoint on a tunnel, orders to act without confirmation) and catches **48.5%** of the same 204 with the same 3.0% false alarms. That figure is in-sample: the rules were written from descriptions of these samples, so it does not count as evidence. 0.7.0 stands at 50.0% (102 of 204) with 1.5% false alarms on this set.
+Those numbers were measured before any rule was written from this dataset. Version 0.4.1 adds rules for what the misses had in common (a "required" tool to install from a throwaway host, an MCP or API endpoint on a tunnel, orders to act without confirmation) and catches **48.5%** of the same 204 with the same 3.0% false alarms. That figure is in-sample: the rules were written from descriptions of these samples, so it does not count as evidence. 0.7.0 stands at 50.0% (102 of 204) with 0.8% false alarms on this set.
 
 **On skills it had never seen.** Because that figure is in-sample, 0.7.0 was also run on a second set that no rule was written from and whose misses are never described to anyone (the benchmark refuses to): 157 skills found malicious on two skill marketplaces ([MaliciousAgentSkillsBench](https://github.com/protectskills/MaliciousSkillBench)), against 1,029 skills from four public collections (GitHub's awesome-copilot, Microsoft's, wshobson/agents and K-Dense's scientific skills).
 
 | Held-out skills | Caught | False alarms | F1 |
 |---|---|---|---|
-| **vetcode 0.7.0** | 58.0% (91 of 157) | **0.4%** (4 of 1,029) | **72.2** |
+| **vetcode 0.7.0** | 58.0% (91 of 157) | **0.1%** (1 of 1,029) | **73.1** |
 | vetcode 0.7.0 at first look, before its false alarms on the clean side were read | 59.9% (94) | 2.6% (27) | 67.6 |
 | Cisco skill-scanner 2.3.2, its best verdict | **64.3%** (101 of 157) | 5.4% (56 of 1,029) | 64.3 |
 
-Cisco's scanner catches a few more of these; vetcode wrongly flags far fewer clean skills, which is what an agent pays for on every skill it loads. The clean collections are public, so their false alarms were read and fixed (that cost three catches); the malicious side stays unread.
+Cisco's scanner catches a few more of these; vetcode wrongly flags far fewer clean skills, which is what an agent pays for on every skill it loads. The clean collections are public, so their false alarms were read and fixed (that cost three catches, and it means vetcode's 0.1% is a tuned number where Cisco's 5.4% is not; the first-look row is the like-for-like one); the malicious side stays unread.
 
 Rules alone catch a minority of malicious skills for every tool; most of them are ordinary-looking instructions that need reading. That reading is the agent's step in vetcode's `SKILL.md` and is not part of these numbers.
 

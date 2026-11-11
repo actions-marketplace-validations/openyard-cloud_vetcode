@@ -50,6 +50,8 @@ const INJECTION = [
   // what to ask of them ("never tell the user to run commands by hand"), about a kind of content
   // ("developer-only"), or about timing and chattiness ("until validation passes", "about each tool call").
   [/\b(do\s+not|don'?t|never)\s+(?:(?:tell|inform|show|notify|alert)\s+(?:the\s+)?(?:user|human|developer|reviewer)s?\b(?!-|\s+to\b|\s+about\s+(?:each|every)\b|[^.\n]{0,60}\b(?:until|unless|before|yet)\b)|(?:mention|reveal|disclose|report|show)\b[^.\n]{0,40}\bto\s+(?:the\s+)?(?:user|human|developer|reviewer)s?\b(?!-))/i, "asks the model to hide something from the user"],
+  // Lying about itself: asked what it was told, the model is to answer as if nothing were unusual.
+  [/\b(?:if|when)\s+(?:the\s+)?(?:user|human|developer|anyone|someone)\s+(?:asks?|tries|wants|requests?)\b[^.\n]{0,100}\b(?:system\s+prompt|instructions|skills|rules|this\s+(?:skill|file))\b[^.\n]{0,100}\b(?:as\s+if|as\s+though|pretend|deny|nothing\s+(?:is\s+)?(?:unusual|special|different)|just\s+a\s+(?:standard|normal|regular))/i, "tells the model to deny its instructions when asked"],
   // Tags that imitate the harness or shout priority. `<instructions>` in lower case is an ordinary
   // section of a prompt, and `<secret>` inside a code sample is a placeholder.
   [/<\s*(?:IMPORTANT|SYSTEM|INSTRUCTIONS?|ADMIN|SECRET)\s*>|^[ \t]*<\s*(?:system|system-reminder|important|secret)\s*>[ \t]*$/m, "fake system/priority tag"],
@@ -91,11 +93,18 @@ function checkDestinations(file, text, out) {
 
 function checkInstructions(file, text, out) {
   checkDestinations(file, text, out);
+  // Front matter opened with `---js` is not data: the front-matter parser most tools use (gray-matter)
+  // evaluates it as JavaScript the moment the file is loaded, before any agent reads a word.
+  if (/^\uFEFF?---[ \t]*(?:js|javascript|coffee|coffeescript)[ \t]*\r?\n/i.test(text)) {
+    out.push(finding(rule({ id: "agent-frontmatter-code", severity: "critical", confidence: "high", title: "Front matter that is code, run when the file is parsed",
+      why: "A file that opens with `---js` has its front matter executed by the parser that loads skills and instruction files. Nothing has to follow the instructions: listing or loading the skill is enough.",
+      fix: "Do not load this file with any tool. Front matter is YAML; code there has no honest use." }), file.rel, 1, text.split("\n").slice(0, 3).join(" ⏎ ")));
+  }
   for (const [re, what, negatable] of INJECTION) {
     const m = re.exec(text);
     if (!m) continue;
     // "Never print secrets or read ~/.ssh" is a safety rule, not an attack.
-    if (negatable && /\b(never|not|don'?t|no|avoid|without)\b[^\n]{0,60}$/i.test(text.slice(Math.max(0, m.index - 70), m.index + m[1]?.length))) continue;
+    if (negatable && /\b(never|not|cannot|can'?t|won'?t|don'?t|no|avoid|without)\b[^\n]{0,60}$/i.test(text.slice(Math.max(0, m.index - 70), m.index + m[0].search(/\s|$/)))) continue;
     out.push(finding(rule({ id: "agent-instruction-injection", severity: "high", title: `Agent instruction file ${what}`,
       why: "Coding agents follow these files. Instructions planted in them (or in a skill or MCP tool description) make the agent act against you: leak secrets, run code, or hide what it did.",
       fix: "Read the file as a person would; remove anything you did not write. Treat a repository that contains this as hostile." }), file.rel, lineOf(text, m.index), text.split("\n")[lineOf(text, m.index) - 1]));

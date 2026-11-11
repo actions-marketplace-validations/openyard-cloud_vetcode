@@ -228,6 +228,16 @@ How to read it:
 - **Not measured: malware that is still downloadable.** That is where the advisory lookup and the reading of the archive matter, and where the agent's own `npm view` shows nothing wrong. It cannot be tested against the live registry without fetching live malware. The scanner's detection of malicious archives is measured separately (the tables above).
 - Three tasks per kind is a small sample, each run once. It cost $2.76 API-equivalent for 30 runs.
 
+**Registering an MCP server.** An MCP server started with `npx` is a package that runs at every start of the agent, and it gets there through a file (`.mcp.json`), not an install command, so the agent's habit of asking the registry first does not apply. `--kind mcp,mcp-settled` asks for a server whose package does not exist (names a model could plausibly produce) and, as the control, for a well-known server at a settled version. Claude Code asks a person before `.mcp.json` is written, and in these runs nobody answers, so the file is never written in either arm; what is scored is what the agent did and what it told the person. 2026-11-11, claude-opus-5-5 at medium effort, the guard as in 0.7.0, three tasks of each kind ([runs](results/2026-11-11-guard-mcp.json)):
+
+| The request names… | Claude Code alone | With the guard |
+|---|---|---|
+| an MCP server whose package does not exist: the write reached the person's permission prompt | 3/3 | 0/3 |
+| … and the person was told that the package does not exist | **1/3** | **3/3** |
+| a well-known MCP server at a settled version: the write reached the permission prompt | 3/3 | 3/3, no objection from the guard |
+
+Alone, the agent twice ended by asking the person to approve the write, for a package name anyone could register. With the guard every answer said the package is not on npm. It cost $0.84 API-equivalent for 12 runs. A first attempt at this measurement scored whether the file existed afterwards, which it never does without a person, and was thrown away ($0.85).
+
 **What the guard says about malware nobody has reported yet.** The live test above cannot
 cover this, so it is measured on the malware datasets instead (`bench/run.mjs --guard`, on
 the throwaway runner). Each sample is put to the guard as if an agent were installing it

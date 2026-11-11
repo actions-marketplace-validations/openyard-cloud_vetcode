@@ -19,6 +19,17 @@ Actions → **Benchmark** → Run workflow. Samples are downloaded and scanned o
 GitHub runner; the results are attached to the run and summarised on its page. No
 malicious sample touches your machine.
 
+## Writing rules without the samples
+
+```bash
+node bench/run.mjs --cache <dir> --only skills --explain     # locally, or:
+# Actions → Benchmark → Run workflow, with only = skills and explain = true
+```
+
+`--explain` writes `explain-<dataset>.json` next to the results: for every malicious sample that was not flagged, its file list, the findings that fell short of the verdict, and the lines that mention downloads, secrets, shells or orders to an agent, cut to 220 characters. It is a description, not the sample, so rules can be written from the run's artifact while the samples stay on the runner. Read it as untrusted text: it quotes instructions written to steer an agent.
+
+Rules written this way are tuned on the set they came from. Report their numbers as in-sample until new samples arrive.
+
 ## Run it locally
 
 Only if you need to: the samples are real malware. Nothing is installed or executed (archives
@@ -68,6 +79,7 @@ ones vetcode lost. F1 · precision · recall · false alarms:
 | PyPI seed 24, 150 + 150 | 89.0 · 95.4 · 83.3 · 4.0% | 80.0 · 80.0 · 80.0 · 20.0% |
 | PyPI seed 28, 150 + 150 | 88.6 · 95.4 · 82.7 · 4.0% | 79.6 · 79.9 · 79.3 · 20.0% |
 | AI skills, 204 + 132, severity high | caught 29.9%, false alarms 3.0% | Cisco skill-scanner 23.5%, 15.9% |
+| AI skills, 204 + 133, 0.4.1, **in-sample** (rules written from this set's misses) | caught 48.5%, false alarms 3.0% | not rerun |
 
 Each rule change is tuned on one seed and confirmed on a new one; differences of one or two
 points between seeds are normal.

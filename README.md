@@ -24,7 +24,7 @@ npx skills add openyard-cloud/vetcode # or give it to your AI agent as a skill
 - **One run, everything.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, and AI agent setups (skills, MCP servers, `CLAUDE.md`), in 8 languages.
 - **Reads, never runs.** Nothing from the target is installed, built or executed. Node 18+ and nothing else.
 
-vetcode is an [Agent Skill](https://agentskills.io), an MCP server, a CLI and a GitHub Action. A zero-dependency scanner finds candidates in seconds; then your agent (Claude, Codex, Gemini, Copilot, Cursor…) reads the code around each one, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, attack scenarios and fixes.
+vetcode is an [Agent Skill](https://agentskills.io), an MCP server, a CLI, a GitHub Action and, in Claude Code, a [guard](#the-guard-checked-before-your-agent-installs) that checks packages before your agent installs them. A zero-dependency scanner finds candidates in seconds; then your agent (Claude, Codex, Gemini, Copilot, Cursor…) reads the code around each one, throws out false positives, and looks for what patterns cannot see (missing authorization, IDOR, broken business logic). You get a short report with real findings, attack scenarios and fixes.
 
 Free and open source (MIT), from the [OpenYard](https://openyard.cloud) community.
 
@@ -155,7 +155,7 @@ Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settin
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.4.1", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.5.0", "vetcode-mcp"] }
   }
 }
 ```
@@ -163,7 +163,7 @@ Most agents (`.cursor/mcp.json`, `.mcp.json`, Claude Desktop, Gemini CLI `settin
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.4.1", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.5.0", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -171,7 +171,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.4.1", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.5.0", "vetcode-mcp"]
 ```
 
 Then ask your agent to "use vetcode to review this project". The agent should call `vetcode_guide` once; the server also tells it to.
@@ -181,6 +181,36 @@ Then ask your agent to "use vetcode to review this project". The agent should ca
 For tools that read `AGENTS.md` (or `.cursorrules`, `CONVENTIONS.md`…) but neither skills nor MCP, clone this repository next to your project and add:
 
 ```markdown
+## The guard: checked before your agent installs
+
+An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code plugin, vetcode looks at every install command **before** it runs and answers allow, ask or deny:
+
+| The command would… | Answer |
+|---|---|
+| install a package that does not exist (a made-up name is one an attacker can register) | deny |
+| install a package with a malware advisory on [OSV.dev](https://osv.dev) | deny |
+| install a package whose code looks malicious (the archive is downloaded and read, never run) | deny |
+| install a name one letter from a popular package (`expres`, `reqeusts`) | ask |
+| install a release less than 72 hours old, or one that lost its provenance or gained an install script | ask |
+| pipe a download into a shell, or install from another index, a repository or a URL | ask |
+| install well-known packages at settled versions | allow, silently |
+
+It reads `npm`, `pnpm`, `yarn` and `bun` installs, `npx` and friends, `pip`, `uv`, `uvx`, `pipx` and `poetry`. Other shell commands cost one regex. "Ask" shows you the reason and waits for your answer; in a run with nobody to ask (`claude -p`) it stops the command and tells the agent why.
+
+```bash
+node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
+# ask (1 package checked)
+# vetcode: expres looks like the popular package express. If express was meant, install that instead.
+```
+
+Agents without hooks can call the same check as the MCP tool `vetcode_guard`, or run the script above before installing.
+
+**Settings** (environment variables): `VETCODE_GUARD=off` turns it off, `VETCODE_GUARD=strict` turns every ask into deny, `VETCODE_GUARD_MIN_AGE_HOURS=72` sets how old a release must be.
+
+**What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
+
+**Limits:** it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). It is not measured yet against an agent without it; that benchmark is next.
+
 ## Security reviews
 When asked to check code for security problems or malware, follow `../vetcode/skills/vetcode/SKILL.md`
 and run its scanner: `node ../vetcode/skills/vetcode/scripts/vet.mjs <folder>`.
@@ -283,7 +313,7 @@ It is not a guarantee. New malware, logic bugs and infrastructure outside the re
 
 **What vetcode adds, and what it does not.** We measured the review step on 49 real authorization and business-logic advisories published after the model's training cutoff. Claude Code with vetcode found the bug in 41% of them, and on a 15-case control Claude Code alone did as well (7 against 8). Finding logic bugs is your agent's own ability; the skill does not raise it. What vetcode gives an agent is what it does not have by itself: every file read, not a sample; patterns for malware, supply-chain tricks and leaked secrets with measured accuracy; registry and advisory data newer than the model; and a procedure for looking at untrusted code without running it. The numbers and their limits are in [`bench/README.md`](bench/README.md#the-agent-step-on-real-advisories).
 
-**Privacy:** the scanner runs locally and sends no code anywhere. Only with `--online` does it reach the network: package names and versions go to OSV.dev, and installed semgrep, osv-scanner and trivy run with their own network access (semgrep downloads its rules). Secrets are redacted in every report. The review step is different: your agent reads the code, so that code goes to whichever model provider the agent uses (Anthropic, OpenAI, Google…), under that provider's terms. For code that must not leave the machine, run the scanner alone, or use an agent backed by a local model.
+**Privacy:** the scanner runs locally and sends no code anywhere. The guard, when the plugin's hook is on, sends the package names in an install command to the registry and OSV.dev ([details](#the-guard-checked-before-your-agent-installs)). The scanner itself reaches the network only with `--online`: package names and versions go to OSV.dev, and installed semgrep, osv-scanner and trivy run with their own network access (semgrep downloads its rules). Secrets are redacted in every report. The review step is different: your agent reads the code, so that code goes to whichever model provider the agent uses (Anthropic, OpenAI, Google…), under that provider's terms. For code that must not leave the machine, run the scanner alone, or use an agent backed by a local model.
 
 **What runs when.** Built in, always: every check listed above, including secrets, containers and infrastructure files. Automatically when installed: gitleaks and zizmor (`--no-tools` turns them off). Only with `--online`: OSV.dev, semgrep, osv-scanner and trivy.
 

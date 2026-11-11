@@ -125,6 +125,8 @@ claude plugin marketplace add openyard-cloud/vetcode && claude plugin install ve
 
 Everything else (MCP, claude.ai, CI, a whole team) is below. All forms need Node.js 18+.
 
+**vetcode is not on npm.** Every command on this page runs it from this repository, pinned to a release. If you come across a package called `vetcode` on npm or PyPI, it is not this project.
+
 | Your agent | Use |
 |---|---|
 | Claude Code | the [plugin](#claude-code) or the [skill](#skill-any-agent-that-loads-agent-skills) |

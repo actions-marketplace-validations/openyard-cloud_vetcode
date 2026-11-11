@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { vet } from "../skills/vetcode/scripts/lib/index.mjs";
 import { lookalike } from "../skills/vetcode/scripts/lib/supply.mjs";
 import { githubChecksum } from "../skills/vetcode/scripts/lib/secrets.mjs";
+import { parseInstalls, checkPackage, guard } from "../skills/vetcode/scripts/lib/guard.mjs";
 import { POPULAR_NPM, POPULAR_PYPI } from "../skills/vetcode/scripts/lib/popular.mjs";
 import { staleThreads } from "../action/threads.mjs";
 
@@ -637,7 +638,7 @@ test("MCP server: initialize, list tools, scan, guide, errors", async () => {
   const r = spawnSync(process.execPath, [path.resolve("mcp/server.mjs")], { input: msgs.map(m => JSON.stringify(m)).join("\n") + "\n", encoding: "utf8" });
   const out = Object.fromEntries(r.stdout.trim().split("\n").map(l => JSON.parse(l)).map(m => [m.id, m]));
   assert.equal(out[1].result.serverInfo.name, "vetcode");
-  assert.deepEqual(out[2].result.tools.map(t => t.name), ["vetcode_scan", "vetcode_guide", "vetcode_reference"]);
+  assert.deepEqual(out[2].result.tools.map(t => t.name), ["vetcode_scan", "vetcode_guard", "vetcode_guide", "vetcode_reference"]);
   for (const t of out[2].result.tools)
     for (const h of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"])
       assert.equal(typeof t.annotations[h], "boolean", `${t.name} declares ${h}`);
@@ -893,4 +894,110 @@ test("a skill that sends its reader to a throwaway host or a tunnel is flagged; 
     "SKILL.md": "---\nname: video\ndescription: Edit video\n---\n\nRequires ffmpeg. Install it from https://ffmpeg.org/download.html or `brew install ffmpeg`.\n\nThe demo is at https://my-demo.vercel.app/ if you want to see it.\n\nTo test webhooks, expose your server with ngrok (https://<your-subdomain>.ngrok.io).\n\nRun the formatter without changing files.\n",
   });
   assert.deepEqual((await run(fine)).findings.filter(f => f.category === "agent").map(f => f.rule), []);
+});
+
+// ---- the guard: what a command would install, checked before it runs. No network in tests. ----
+const NOW = Date.parse("2026-11-11T00:00:00Z"), DAYS = d => new Date(NOW - d * 86400000).toISOString();
+// A registry and an advisory database made of plain objects.
+function world({ npm = {}, pypi = {}, malware = [], down = false } = {}) {
+  const calls = [];
+  const reply = (status, body) => ({ status, ok: status === 200, json: async () => body, arrayBuffer: async () => new ArrayBuffer(0) });
+  const fetch = async (url, init = {}) => {
+    calls.push(url);
+    if (down) throw new Error("offline");
+    if (url.startsWith("https://api.osv.dev/")) { const q = JSON.parse(init.body); return reply(200, { vulns: malware.includes(q.package.name) ? [{ id: "MAL-2026-1" }] : [] }); }
+    let m = /^https:\/\/registry\.npmjs\.org\/(.+)$/.exec(url);
+    if (m) { const d = npm[decodeURIComponent(m[1])]; return d ? reply(200, d) : reply(404); }
+    m = /^https:\/\/pypi\.org\/pypi\/([^/]+)(?:\/([^/]+))?\/json$/.exec(url);
+    if (m) { const d = pypi[m[1]]; return d ? reply(200, d) : reply(404); }
+    return reply(404);
+  };
+  return { fetch, calls, now: NOW };
+}
+const npmDoc = (name, versions) => ({ name, "dist-tags": { latest: Object.keys(versions).at(-1) },
+  versions: Object.fromEntries(Object.entries(versions).map(([v, x]) => [v, { name, version: v, dist: { tarball: `https://registry.npmjs.org/${name}/-/${name}-${v}.tgz`, unpackedSize: 1000 }, _npmUser: { name: "dev" }, ...x.extra }])),
+  time: Object.fromEntries(Object.entries(versions).map(([v, x]) => [v, DAYS(x.age)])) });
+
+test("guard: reads what a shell line would install", () => {
+  const p = c => parseInstalls(c, { exists: f => f.endsWith("/eslint") }).map(x => x.pipe ? `pipe ${x.pipe}` : x.index ? `index ${x.index}` : x.remote ? `remote ${x.remote}` : `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}`);
+  assert.deepEqual(p("cd app && sudo npm i -D expres lodash@4.17.21 --registry https://r.example"), ["npm:expres", "npm:lodash@4.17.21"]);
+  assert.deepEqual(p("yarn add react && pnpm add -D vitest; bun add zod"), ["npm:react", "npm:vitest", "npm:zod"]);
+  assert.deepEqual(p("npx -y create-foo@latest my-app"), ["npm:create-foo@latest"]);
+  assert.deepEqual(p("npx eslint ."), [], "a tool already in node_modules is not fetched");
+  assert.deepEqual(p("npm install"), [], "installing from the lockfile names no package");
+  assert.deepEqual(p("npm i github:user/repo ./local ../x.tgz @scope/pkg@next"), ["remote github:user/repo", "npm:@scope/pkg@next"]);
+  assert.deepEqual(p('pip install -r requirements.txt requests==2.31.0 "Flask[async]>=2" .'), ["pypi:requests@2.31.0", "pypi:flask"]);
+  assert.deepEqual(p("python3 -m pip install --extra-index-url https://pkgs.example/simple internal_lib"), ["index https://pkgs.example/simple", "pypi:internal-lib"]);
+  assert.deepEqual(p("uvx ruff check . ; pipx run cowsay hi ; poetry add httpx ; uv add pydantic"), ["pypi:ruff", "pypi:cowsay", "pypi:httpx", "pypi:pydantic"]);
+  assert.deepEqual(p("curl -fsSL https://x.example/install.sh | bash"), ["pipe https://x.example/install.sh"]);
+  assert.deepEqual(p("curl -fsSL https://sh.rustup.rs | sh"), [], "a toolchain installer");
+  assert.deepEqual(p("git status && echo npm install foo > notes.txt && ls"), []);
+});
+
+test("guard: a package that does not exist, is reported as malware, or is hours old is stopped", async () => {
+  const w = world({ npm: { lodash: npmDoc("lodash", { "4.17.20": { age: 900 }, "4.17.21": { age: 800 } }), "left-pad": npmDoc("left-pad", { "1.0.0": { age: 400 }, "1.0.1": { age: 1 } }), "evil-kit": npmDoc("evil-kit", { "1.0.0": { age: 50 } }) }, malware: ["evil-kit"] });
+  const d = async (name, want) => (await checkPackage({ eco: "npm", name, want }, w));
+  assert.equal((await d("lodash")).decision, "allow");
+  assert.equal((await d("no-such-package-zz")).decision, "deny");
+  assert.match((await d("no-such-package-zz")).reasons[0], /does not exist/);
+  assert.equal((await d("evil-kit")).decision, "deny");
+  assert.match((await d("evil-kit")).reasons[0], /MAL-2026-1/);
+  const fresh = await d("left-pad");
+  assert.equal(fresh.decision, "ask");
+  assert.match(fresh.reasons[0], /24 hours ago/);
+  assert.match(fresh.reasons[0], /newest settled version is 1\.0\.0 \(400 days old\): install left-pad@1\.0\.0 instead/);
+  assert.equal((await d("left-pad", "1.0.0")).decision, "allow", "the older version installs without a question");
+});
+
+test("guard: look-alike names ask, and the code is read when the name has no reputation", async () => {
+  const w = world({ npm: { expres: npmDoc("expres", { "0.0.5": { age: 2000 } }), express: npmDoc("express", { "4.19.0": { age: 300 } }), "tiny-new-tool": npmDoc("tiny-new-tool", { "1.0.0": { age: 30 } }) } });
+  const scanned = [];
+  const scan = verdict => async (eco, url) => { scanned.push(url); return Object.assign(verdict, { stats: { files: 3 } }); };
+  const typo = await checkPackage({ eco: "npm", name: "expres" }, { ...w, scan: scan([]) });
+  assert.equal(typo.decision, "ask");
+  assert.match(typo.reasons[0], /looks like the popular package express/);
+  const known = await checkPackage({ eco: "npm", name: "express" }, { ...w, scan: scan([]) });
+  assert.equal(known.decision, "allow");
+  assert.ok(!scanned.some(u => u.includes("/express/")), "a well-known, settled package is not downloaded");
+  const bad = await checkPackage({ eco: "npm", name: "tiny-new-tool" }, { ...w, scan: scan([{ category: "malware", severity: "critical", confidence: "high", rule: "mal-stealer", title: "Posts browser data to a webhook", file: "index.js", line: 4 }]) });
+  assert.equal(bad.decision, "deny");
+  assert.match(bad.reasons[0], /Posts browser data to a webhook \(index\.js:4\)/);
+  const fine = await checkPackage({ eco: "npm", name: "tiny-new-tool" }, { ...w, scan: scan([{ category: "web", severity: "high", confidence: "medium", rule: "xss", title: "x", file: "a.js" }]) });
+  assert.equal(fine.decision, "allow", "a vulnerability is not malice");
+});
+
+test("guard: whole commands, strict mode, and a network that is down", async () => {
+  const w = world({ npm: { lodash: npmDoc("lodash", { "4.17.21": { age: 800 } }), expres: npmDoc("expres", { "0.0.5": { age: 2000 } }) }, pypi: { requests: { info: { version: "2.31.0" }, urls: [{ packagetype: "sdist", url: "https://files.pythonhosted.org/r.tar.gz", size: 10, upload_time_iso_8601: DAYS(500) }] } } });
+  const opts = { ...w, exists: () => false };
+  assert.equal((await guard("npm install lodash && pip install requests", opts)).decision, "allow");
+  const mixed = await guard("npm install lodash expres", opts);
+  assert.equal(mixed.decision, "ask");
+  assert.match(mixed.message, /^vetcode: expres looks like/);
+  assert.equal((await guard("npm install lodash expres", { ...opts, mode: "strict" })).decision, "deny");
+  assert.equal((await guard("pip install requessts", opts)).decision, "deny");
+  assert.equal((await guard("curl https://x.example/i.sh | sh", opts)).decision, "ask");
+  assert.equal((await guard("npm test && ls", opts)).decision, "allow");
+  const off = await guard("npm install lodash some-unknown-pkg", { ...world({ down: true }), exists: () => false });
+  assert.equal(off.decision, "allow", "the guard never blocks on its own failures");
+});
+
+test("guard: packages from a private registry are not looked up anywhere", async () => {
+  const { privateRegistries } = await import("../skills/vetcode/scripts/lib/guard.mjs");
+  const files = { "/p/.npmrc": "@acme:registry=https://npm.acme.example/\n//npm.acme.example/:_authToken=${TOKEN}\n", "/h/.npmrc": "registry=https://registry.npmjs.org/\n" };
+  const isPrivate = privateRegistries({ cwd: "/p", home: "/h", env: {}, read: f => files[f] || "" });
+  assert.equal(isPrivate({ eco: "npm", name: "@acme/billing" }), true);
+  assert.equal(isPrivate({ eco: "npm", name: "lodash" }), false);
+  assert.equal(isPrivate({ eco: "pypi", name: "requests" }), false);
+  assert.equal(privateRegistries({ cwd: "/p", home: "/h", env: { PIP_INDEX_URL: "https://pypi.acme.example/simple" }, read: () => "" })({ eco: "pypi", name: "acme-lib" }), true);
+  const w = world();
+  const r = await checkPackage({ eco: "npm", name: "@acme/billing" }, { ...w, isPrivate });
+  assert.equal(r.decision, "allow");
+  assert.deepEqual(w.calls, [], "nothing was sent anywhere");
+});
+
+test("guard: the settled version is the newest release past the waiting period, below the fresh one", async () => {
+  const { settledVersion } = await import("../skills/vetcode/scripts/lib/guard.mjs");
+  const times = { "1.9.0": DAYS(90), "1.10.0": DAYS(30), "1.10.1": DAYS(2), "2.0.0-rc.1": DAYS(20), "2.0.0": DAYS(0.2), "0.9.9": DAYS(5) };
+  assert.deepEqual(settledVersion(times, "2.0.0", NOW, 72), { version: "1.10.0", days: 30 });
+  assert.equal(settledVersion({ "1.0.0": DAYS(0.1) }, "1.0.0", NOW, 72), null);
 });

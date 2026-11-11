@@ -4,13 +4,14 @@
 // Claude Desktop, ChatGPT and others.
 //
 // Tools:   vetcode_scan       run the scanner on a folder (read-only) and return the report
+//          vetcode_guard      check a shell command before it installs packages: allow, ask or deny
 //          vetcode_guide      the review workflow (SKILL.md): how to confirm and report findings
 //          vetcode_reference  a manual-review checklist: malware | web | isolation | server | secrets
 // Prompts: security_review    the workflow as a ready-made prompt
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { vet, VERSION } from "../skills/vetcode/scripts/lib/index.mjs";
 import { markdown } from "../skills/vetcode/scripts/lib/report.mjs";
 
@@ -42,6 +43,12 @@ const TOOLS = [
     annotations: { title: "vetcode scan", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   },
   {
+    name: "vetcode_guard",
+    description: "Check a shell command before running it: finds the npm and PyPI packages it would install (npm/pnpm/yarn/bun install, npx, pip, uv, pipx, poetry) and downloads piped into a shell, then answers allow, ask or deny with reasons. It looks at whether the package exists, look-alike names, malware advisories (OSV.dev), how new the release is, and reads the package archive without installing or running it. Call it before installing anything by name. Sends the package names to the registry and to OSV.dev.",
+    inputSchema: { type: "object", properties: { command: { type: "string", description: "The shell command you are about to run, e.g. \"npm install left-pad\"." }, cwd: { type: "string", description: "Folder the command would run in (to see tools already installed there and private registry settings)." } }, required: ["command"], additionalProperties: false },
+    annotations: { title: "vetcode guard", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  },
+  {
     name: "vetcode_guide",
     description: "How to do a vetcode security review: pick the scan mode, confirm each candidate with an exploit scenario, review what patterns cannot see, and write the report. Read this before reporting findings.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -64,6 +71,14 @@ const PROMPTS = [{
 const text = t => ({ content: [{ type: "text", text: t }] });
 
 async function callTool(name, args = {}) {
+  if (name === "vetcode_guard") {
+    if (typeof args.command !== "string" || !args.command.trim()) throw rpcError(-32602, "command must be the shell command to check");
+    const { guard, scanArchive, privateRegistries } = await import(pathToFileURL(path.join(SKILL, "scripts/lib/guard.mjs")).href);
+    const cwd = typeof args.cwd === "string" && fs.existsSync(args.cwd) ? args.cwd : process.cwd();
+    const r = await guard(args.command, { cwd, isPrivate: privateRegistries({ cwd }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
+    const lines = [`Decision: ${r.decision}${r.checked ? ` (${r.checked} package${r.checked === 1 ? "" : "s"} checked)` : " (nothing to install in this command)"}`, r.message, ...r.notes.map(n => `Note: ${n}`)].filter(Boolean);
+    return { content: [{ type: "text", text: lines.join("\n") }], structuredContent: { decision: r.decision, reasons: r.results.flatMap(x => x.reasons || []), packages: r.results.filter(x => x.name).map(x => ({ name: x.name, ecosystem: x.eco, version: x.version || null, decision: x.decision })) } };
+  }
   if (name === "vetcode_guide") return text(guide());
   if (name === "vetcode_reference") {
     if (!TOPICS.includes(args.topic)) throw rpcError(-32602, `topic must be one of ${TOPICS.join(", ")}`);

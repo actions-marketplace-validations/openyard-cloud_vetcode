@@ -10,7 +10,7 @@
       "name": "vetcode",
       "source": "./",
       "description": "Security check for apps, websites and servers: malware, supply chain, secrets, web and server vulnerabilities.",
-      "version": "0.4.1"
+      "version": "0.5.0"
     }
   ]
 }

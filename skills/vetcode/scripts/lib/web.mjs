@@ -19,14 +19,22 @@ const USER_PHP = String.raw`\$_(?:GET|POST|REQUEST|COOKIE|SERVER|FILES)`;
 const rule = r => ({ category: "web", confidence: "medium", ...r });
 const SQL = "Build queries with parameters (`?`, `$1`, `:name`) or the ORM's query builder, never by gluing strings.";
 
+// A template literal whose every ${…} is a table or column name, a list of placeholders or a
+// joined list of clauses.
+const SQL_PARTS_ONLY = /^(?:(?!\$\{).)*(?:\$\{\s*\w*(?:[Tt]able|[Cc]olumn|[Pp]laceholders?|[Cc]lauses?|[Ww]here|[Ff]ields|[Cc]ols|[Ss]ets|[Oo]rder)\w*(?:\.join\([^)]*\))?\s*\}(?:(?!\$\{).)*)+$/;
 // Names that hold a piece of a query rather than a value.
-const SQL_FRAGMENT = /(?:\+|\.)\s*\$?(?:strings\.Join\(|\w*[Pp]laceholders?\w*\(|\w*(?:[Cc]lause|[Ww]here\w*|[Cc]ond\w*|[Ff]ields|[Cc]olumns|[Cc]ols|[Ss]ets|[Tt]able\w*|[Oo]rderBy\w*|[Ss]ql\w*)\b)/;
+const SQL_FRAGMENT = /(?:\+|\.)\s*\$?(?:strings\.Join\(|\w*[Pp]laceholders?\w*\(|\w*(?:[Cc]lause|[Ww]here\w*|[Cc]ond\w*|[Ff]ields|[Cc]olumns|[Cc]ols|[Ss]ets|[Tt]able\w*|[Oo]rderBy\w*|[Ss]ql\w*)\b|\w*\.?[Qq]uote\w*\()/;
 
 export const WEB_RULES = [
   // Injection
   rule({ id: "sql-template-literal", severity: "high", title: "SQL built with a template literal", files: JS,
     re: /\.(?:query|execute|exec|raw|prepare|run|all|get|unsafe)\s*\(\s*`[^`]*\b(?:SELECT|INSERT|UPDATE|DELETE|MERGE|REPLACE|WITH)\b[^`]*\$\{/i,
+    unless: SQL_PARTS_ONLY,
     why: "Values pasted into SQL text let an attacker change the query (SQL injection).", fix: SQL }),
+  rule({ id: "sql-fragments", severity: "low", title: "SQL assembled from fragments", files: JS,
+    re: /\.(?:query|execute|exec|raw|prepare|run|all|get|unsafe)\s*\(\s*`[^`]*\b(?:SELECT|INSERT|UPDATE|DELETE|MERGE|REPLACE|WITH)\b[^`]*\$\{/i, requires: /\$\{/, unlessNot: SQL_PARTS_ONLY,
+    why: "Table and column names, placeholder lists and joined clauses are put into the query text. That is safe when each is made of names and placeholders, and injectable if one carries a value.",
+    fix: "Check how each fragment is built; values belong in the query arguments." }),
   rule({ id: "sql-unsafe-raw", severity: "high", title: "Raw SQL method that does not escape", files: JS,
     re: /\$(?:queryRawUnsafe|executeRawUnsafe)\s*\(|\bsequelize\.literal\s*\([^)]*\$\{|\bknex\.raw\s*\(\s*`[^`]*\$\{|\.whereRaw\s*\(\s*`[^`]*\$\{/,
     why: "These APIs pass the string to the database as-is.", fix: SQL }),
@@ -47,7 +55,8 @@ export const WEB_RULES = [
     re: new RegExp(String.raw`\b(?:mysql_query|mysqli_query|pg_query|->query|->exec|->prepare)\s*\([^;]*${USER_PHP}`),
     why: "Request parameters go straight into SQL.", fix: "Use PDO/mysqli prepared statements with bound parameters." }),
   rule({ id: "sql-go-sprintf", severity: "high", title: "SQL built with fmt.Sprintf", files: GO,
-    re: /\.(?:Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext|Raw|Where)\s*\([^)]*fmt\.Sprintf\(/,
+    // The formatted string has to be the query itself, not one of its bound arguments.
+    re: /\.(?:Query|QueryRow|Exec|QueryContext|QueryRowContext|ExecContext|Raw|Where)\s*\(\s*(?:ctx\s*,\s*)?fmt\.Sprintf\(/,
     why: "Formatted SQL is injectable.", fix: "Pass values as query arguments (`db.Query(sql, a, b)`)." }),
   rule({ id: "nosql-injection", severity: "high", title: "Request object used directly as a database filter", files: JS,
     re: new RegExp(String.raw`\.(?:find|findOne|findOneAndUpdate|findOneAndDelete|updateOne|updateMany|deleteOne|deleteMany|countDocuments|aggregate)\s*\(\s*${USER_JS}\s*[,)]`),
@@ -76,7 +85,7 @@ export const WEB_RULES = [
   // XSS
   rule({ id: "xss-inner-html", severity: "medium", title: "HTML set from a variable", files: JS,
     re: /\.(?:innerHTML|outerHTML)\s*\+?=\s*(?!\s*["'`][^"'`$]*["'`]\s*;?\s*$)(?!\s*["']\s*;)|\.insertAdjacentHTML\s*\([^,]+,\s*(?!["'`][^"'`$]*["'`]\s*\))|\bdocument\.write(?:ln)?\s*\(/,
-    unless: /DOMPurify|sanitize|escapeHtml|escape\(|textContent/,
+    unless: /DOMPurify|sanitize|escapeHtml|escape\(|textContent|\.createHTML\(/,
     why: "If any part comes from a user (or the URL), it can run script in your users' browsers (XSS).", fix: "Use `textContent`, build nodes with createElement, or sanitise with DOMPurify." }),
   rule({ id: "xss-react-dangerous", severity: "medium", title: "dangerouslySetInnerHTML with a variable", files: JS,
     re: /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:\s*(?!["'`])/, unless: /DOMPurify|sanitize|__html\s*:\s*JSON\.stringify/,
@@ -88,7 +97,7 @@ export const WEB_RULES = [
     // A template with no HTML in it (a text message, an email subject) has nothing to inject into.
     // In Blade, a raw variable or request data is the case to read; a helper call is the rule below.
     requires: /<[a-z!][^>]*>/i,
-    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[^!]*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|\.html_safe\b|\braw\s*\(/,
+    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[^!]*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|(?<!["'])\.html_safe\b|\braw\s*\(/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`{{ }}`, `<%=`), or sanitise before marking safe." }),
   // `<%-` prints raw HTML in EJS; in ERB it only trims whitespace.
   rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: /\.ejs$/i, re: /<%-(?!-)/,
@@ -132,6 +141,7 @@ export const WEB_RULES = [
 
   // Crypto, tokens, TLS
   rule({ id: "tls-verify-off", severity: "high", confidence: "high", title: "TLS certificate checks turned off", files: SERVER,
+    unless: /^\s*(?:\/\/|#|\*)/,
     re: /rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["']?0|\bverify\s*=\s*False\b|InsecureSkipVerify\s*:\s*true|CURLOPT_SSL_VERIFY(?:PEER|HOST)\s*,\s*(?:false|0)|ssl\._create_unverified_context|VERIFY_NONE/,
     why: "Anyone on the network path can read and change the traffic (man-in-the-middle).", fix: "Keep verification on; for internal CAs, pass the CA bundle instead." }),
   rule({ id: "jwt-alg-none", severity: "critical", confidence: "high", title: "JWT accepts the `none` algorithm or skips verification", files: SERVER,
@@ -163,7 +173,7 @@ export const WEB_RULES = [
   rule({ id: "cookie-flags-off", severity: "medium", title: "Session cookie without HttpOnly or Secure", files: SERVER,
     re: /\bhttpOnly\s*:\s*false|\bhttponly\s*=\s*False|SESSION_COOKIE_HTTPONLY\s*=\s*False|SESSION_COOKIE_SECURE\s*=\s*False|CSRF_COOKIE_SECURE\s*=\s*False|session\.cookie_httponly\s*=\s*0/,
     why: "Without HttpOnly, any XSS steals the session; without Secure, it travels over plain HTTP.", fix: "Set HttpOnly, Secure and SameSite=Lax (or Strict) on session cookies." }),
-  rule({ id: "csrf-disabled", severity: "medium", title: "CSRF protection disabled", files: SERVER,
+  rule({ id: "csrf-disabled", severity: "medium", title: "CSRF protection disabled", files: SERVER, perFile: true,
     re: /@csrf_exempt|WTF_CSRF_ENABLED\s*=\s*False|csrf\(\)\.disable|\.csrf\(\s*\w*\s*->\s*\w+\.disable\(\)\)|protect_from_forgery\s+with:\s*:null_session|skip_before_action\s+:verify_authenticity_token/,
     why: "With cookie sessions, another site can submit forms as your user.", fix: "Keep CSRF on for cookie-authenticated routes; exempt only token-authenticated APIs or signed webhooks." }),
   rule({ id: "mass-assignment", severity: "medium", title: "Whole request body written to the database", files: JS,
@@ -182,7 +192,8 @@ export const WEB_RULES = [
     re: /resolve_entities\s*=\s*True|\bnoent\s*:\s*true|libxml_disable_entity_loader\s*\(\s*false|XMLParser\([^)]*load_dtd\s*=\s*True|FEATURE_EXTERNAL_GENERAL_ENTITIES[^\n]*true/,
     why: "A crafted XML file can read local files or call internal URLs (XXE).", fix: "Disable entity resolution and DTD loading; in Python use defusedxml." }),
   rule({ id: "postmessage-no-origin", severity: "medium", confidence: "low", title: "message listener (check that it verifies event.origin)", files: JS,
-    re: /addEventListener\(\s*["']message["']\s*,|\bonmessage\s*=/, unless: /origin/,
+    // A BroadcastChannel only carries messages from the same origin.
+    re: /addEventListener\(\s*["']message["']\s*,|\bonmessage\s*=/, unless: /origin|[Cc]hannel\??\.(?:addEventListener|onmessage)|\b(?:worker|port|socket|ws|eventSource|es)\w*\??\.(?:addEventListener|onmessage)/i,
     why: "Any page that can open or frame yours can send it messages; without an origin check they are trusted.", fix: "Compare `event.origin` to an exact allow-list before acting on the data." }),
   rule({ id: "prototype-pollution", severity: "medium", title: "Deep merge of request data", files: JS,
     re: new RegExp(String.raw`\b(?:merge|mergeWith|defaultsDeep|extend|deepmerge|set|setWith)\s*\([^;\n]*${USER_JS}`), unless: /Object\.create\(null\)|hasOwn|__proto__/,

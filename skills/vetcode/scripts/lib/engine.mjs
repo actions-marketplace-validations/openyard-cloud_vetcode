@@ -29,7 +29,13 @@ export const DOC = /\.(md|mdx|markdown|rst|txt|adoc)$/i;
 export const TEST = /(^|\/)(tests?|testdata|__tests__|spec|specs|fixtures?|__fixtures__|__mocks__|examples?|samples?)\/|\.(test|spec)\.\w+$|_test\.\w+$|(^|\/)test_\w+\.py$/i;
 
 // Third-party code copied into the repository, as opposed to the project's own.
-export const VENDORED = /(^|\/)(vendor|vendors|third[_-]party|bower_components)\/|(^|\/)(public|static|assets|resources)\/(?:.*\/)?(lib|libs|vendor)\/|\.min\.(?:js|css)$/i;
+export const VENDORED = /(^|\/)(vendor|vendors|third[_-]party|bower_components)\/|(^|\/)(public|static|assets|resources)\/(?:.*\/)?(lib|libs|vendor)\/|\.min\.(?:js|css)$|(^|\/)assets\/[\w.-]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/i;
+// Translated text: every sentence about passwords and hashes is a string here.
+export const LOCALE = /(^|\/)(locales?|i18n|l10n|lang|langs|languages|translations?)\/|\.(po|pot|arb|xlf|xliff|strings|resx)$|(^|\/)(messages|strings|translations?)[._-][\w-]+\.(json|ya?ml|properties)$/i;
+// Scripts a maintainer runs by hand, and the containers used to develop or test. Nothing a
+// visitor sends reaches them.
+export const DEVTOOL = /(^|\/)(scripts?|extra|release|hack|ci|\.ci|\.devcontainer|\.github|devtools|benchmarks?)\//i;
+export const DEVSTACK = /(^|\/)\.devcontainer\/|(^|\/)(?:docker-)?compose[.-](?:dev|test|local|e2e|ci)[\w.-]*\.ya?ml$|(^|\/)[\w.-]*test[\w.-]*\//i;
 
 const clip = (s, n = 160) => { s = s.trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 
@@ -64,7 +70,11 @@ export function scanLines(file, text, rules, out) {
     for (const r of applicable) {
       r.re.lastIndex = 0;
       const m = r.re.exec(line);
-      if (!m || (r.unless && r.unless.test(line)) || suppressedHere(lines, i, file.rel, r.id)) continue;
+      // unless: the line is the harmless form. unlessNot: only that form counts (the mirror rule).
+      if (!m || (r.unless && r.unless.test(line)) || (r.unlessNot && !r.unlessNot.test(line)) || suppressedHere(lines, i, file.rel, r.id)) continue;
+      // perFile: the same decision repeated down a file is one thing to check, not twenty.
+      const first = r.perFile && out.find(f => f.rule === r.id && f.file === file.rel);
+      if (first) { first.count = (first.count || 1) + 1; first.title = `${r.title} (${first.count} places in this file)`; continue; }
       out.push(finding(r, file.rel, i + 1, r.longLines ? m[0] : line));
     }
   }

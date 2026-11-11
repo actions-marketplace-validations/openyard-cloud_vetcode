@@ -16,7 +16,9 @@ const TF = /\.tf$/i;
 
 export const CONFIG_RULES = [
   rule({ id: "docker-download-exec", severity: "medium", title: "Image build pipes a download into a shell", files: DOCKER,
-    re: /\b(?:curl|wget)\b[^|\n]*\|\s*(?:ba|z)?sh\b/, why: "Whatever that URL serves at build time ends up in your image.", fix: "Download a pinned version, check its checksum, then run it." }),
+    re: /\b(?:curl|wget)\b[^|\n]*\|\s*(?:ba|z)?sh\b/,
+    unless: /https:\/\/(?:(?:deb|rpm)\.nodesource\.com|get\.docker\.com|sh\.rustup\.rs|install\.python-poetry\.org|bun\.sh\/install|get\.pnpm\.io|astral\.sh\/|deno\.land\/install|get\.helm\.sh)/i,
+    why: "Whatever that URL serves at build time ends up in your image.", fix: "Download a pinned version, check its checksum, then run it." }),
   rule({ id: "docker-add-url", severity: "low", title: "ADD from a URL", files: DOCKER,
     re: /^\s*ADD\s+https?:\/\//i, why: "The file is not checksum-pinned and can change.", fix: "Use `ADD --checksum=sha256:...` or download and verify in RUN." }),
   rule({ id: "docker-secret-env", severity: "high", title: "Secret baked into the image", files: DOCKER,
@@ -25,7 +27,7 @@ export const CONFIG_RULES = [
   rule({ id: "compose-privileged", severity: "high", confidence: "high", title: "Container runs privileged", files: COMPOSE,
     re: /^\s*privileged\s*:\s*true\b/, why: "A privileged container can take over the host.", fix: "Remove it; add only the capabilities the service needs (`cap_add`)." }),
   rule({ id: "compose-docker-socket", severity: "high", confidence: "high", title: "Docker socket mounted into a container", files: /\.ya?ml$|Dockerfile/i,
-    re: /\/var\/run\/docker\.sock/, why: "Access to the socket is root on the host.", fix: "Avoid it, or put a filtering proxy (e.g. docker-socket-proxy) in front with read-only access." }),
+    re: /\/var\/run\/docker\.sock/, unless: /^\s*#/, why: "Access to the socket is root on the host.", fix: "Avoid it, or put a filtering proxy (e.g. docker-socket-proxy) in front with read-only access." }),
   rule({ id: "compose-host-network", severity: "medium", title: "Container uses the host network", files: COMPOSE,
     re: /^\s*network_mode\s*:\s*["']?host\b/, why: "The container sees every port on the host and the host sees everything it opens.", fix: "Use a bridge network and publish only the ports needed." }),
   rule({ id: "compose-db-exposed", severity: "medium", title: "Database port published on all interfaces", files: COMPOSE,
@@ -33,6 +35,7 @@ export const CONFIG_RULES = [
     why: "On a server with a public IP, the database is reachable from the internet (and Docker bypasses ufw).", fix: "Publish as `127.0.0.1:5432:5432`, or do not publish and use the internal network." }),
   rule({ id: "compose-literal-password", severity: "medium", title: "Password written into compose file", files: COMPOSE,
     re: /^\s*-?\s*["']?\w*(?:PASSWORD|SECRET|TOKEN|API_KEY)\w*["']?\s*[:=]\s*["']?(?!\$\{?)[^\s"'$]{4,}/i,
+    unless: /[:=]\s*["']?(?:replace|change[-_]?me|example|your[-_]|<)/i,
     why: "The file is committed and shared; the value leaks with it.", fix: "Use `${VAR}` from an untracked .env, or Docker secrets." }),
   rule({ id: "nginx-autoindex", severity: "medium", confidence: "high", title: "Directory listing on", files: NGINX, re: /^\s*autoindex\s+on\s*;/,
     why: "Anyone can browse every file in the folder, including backups and configs.", fix: "Turn it off." }),

@@ -17,6 +17,9 @@ const CS_IN = String.raw`(?:Request\.(?:Query|Form|Headers|Cookies|RouteValues)|
 const RB_IN = String.raw`(?:params|request\.(?:params|query_parameters|request_parameters|headers|body))\b`;
 const GO_IN = String.raw`(?:r|req|request)\.(?:URL\.Query\(\)\.Get|FormValue|PostFormValue|PathValue|Header\.Get)\(|c\.(?:Query|Param|PostForm|GetHeader|FormValue|QueryParam)\(`;
 
+const GO_SQL_PART = String.raw`(?:strings\.Join\([^()]*\)|[\w.]*[Qq]uote\w*\([^()]*(?:\([^()]*\))?[^()]*\)|[\w.]*\b(?:\w*[Cc]ond\w*|\w*[Ww]here\w*|\w*[Cc]lause\w*|elements|columns|selects|fields|sets|stmt\w*\.SQL|\w*[Tt]able\w*(?:\.Name)?|\w*Collection\.Name|query|dangerous\w+)\b)`;
+const GO_SQL_PARTS = new RegExp(String.raw`Sprintf\([^,]*,\s*` + GO_SQL_PART + String.raw`(?:\s*,\s*` + GO_SQL_PART + String.raw`)*\s*\)`);
+
 export const LANG_RULES = [
   // SQL
   rule({ id: "sql-concat", severity: "high", title: "SQL built from strings (Java/Kotlin)", files: JVM, fix: SQL,
@@ -34,7 +37,12 @@ export const LANG_RULES = [
     why: "Formatted SQL is injectable." }),
   rule({ id: "sql-concat", severity: "high", title: "SQL text built with fmt.Sprintf (Go)", files: GO, fix: "Pass values as query arguments (`db.Query(sql, a, b)`).",
     re: new RegExp(String.raw`fmt\.Sprintf\(\s*["\x60][^"\x60\n]*${SQL_WORD}[^"\x60\n]*%[sv]`, "i"),
+    // Every argument is a clause, a list of names or a quoted identifier: a query builder at work.
+    unless: GO_SQL_PARTS,
     why: "Formatted SQL is injectable whenever a value comes from a user." }),
+  rule({ id: "sql-fragments", severity: "low", title: "SQL assembled from fragments (Go)", files: GO, fix: "Check how each fragment is built; values belong in the query arguments.",
+    re: new RegExp(String.raw`fmt\.Sprintf\(\s*["\x60][^"\x60\n]*${SQL_WORD}[^"\x60\n]*%[sv][^"\x60\n]*["\x60]\s*,\s*` + GO_SQL_PART + String.raw`(?:\s*,\s*` + GO_SQL_PART + String.raw`)*\s*\)`, "i"),
+    why: "Clauses, lists of names and quoted identifiers are formatted into the query text. That is safe when each is made of names and placeholders, and injectable if one carries a value." }),
 
   // Commands
   rule({ id: "cmd-injection", severity: "high", title: "Shell command built from strings (Java/Kotlin)", files: JVM, fix: "Run the program directly with a fixed argument list; never through `sh -c` with joined text.",
@@ -71,7 +79,7 @@ export const LANG_RULES = [
     why: "Expression languages and JNDI lookups on attacker text are classic remote-code-execution paths (Spring4Shell, Log4Shell)." }),
 
   // TLS, XML, crypto
-  rule({ id: "tls-verify-off", severity: "high", confidence: "high", title: "Certificate checks turned off", files: /\.(java|kt|scala|groovy|cs|go|rs)$/i, fix: "Remove the override; trust a specific CA or certificate instead if you need a private one.",
+  rule({ id: "tls-verify-off", severity: "high", confidence: "high", title: "Certificate checks turned off", files: /\.(java|kt|scala|groovy|cs|go|rs)$/i, unless: /^\s*(?:\/\/|\*)/, fix: "Remove the override; trust a specific CA or certificate instead if you need a private one.",
     re: /InsecureSkipVerify\s*:\s*true|danger_accept_invalid_(?:certs|hostnames)\s*\(\s*true|\.dangerous\(\)\s*\.set_certificate_verifier|(?:Server|ServerCertificateCustom)(?:Certificate)?ValidationCallback\s*=\s*[^;\n]*=>\s*true|DangerousAcceptAnyServerCertificateValidator|NoopHostnameVerifier|ALLOW_ALL_HOSTNAME_VERIFIER|HostnameVerifier[^\n]*->\s*true|checkServerTrusted\s*\([^)]*\)\s*(?:\{\s*\}|=\s*Unit|\{\s*return;?\s*\})|verify\s*\(\s*String\s+\w+\s*,\s*SSLSession\s+\w+\s*\)\s*\{\s*return\s+true/,
     why: "Anyone on the network path can read and change the traffic (man in the middle)." }),
   rule({ id: "xxe", severity: "high", title: "XML parser resolves external entities (.NET)", files: CS, fix: "Leave DtdProcessing at Prohibit and XmlResolver at null.",
@@ -92,7 +100,7 @@ export const LANG_RULES = [
   rule({ id: "xss-framework-raw", severity: "medium", title: "Unescaped output in a server template", files: /\.(cshtml|razor|erb|haml|slim|go)$/i, fix: "Let the template escape it; sanitise first if HTML is really needed.",
     re: new RegExp(String.raw`@Html\.Raw\s*\(|<%==|\braw\s*\(?\s*${RB_IN}|${RB_IN}\[[^\]]+\]\.html_safe|template\.HTML\s*\(\s*(?:${GO_IN})`),
     why: "Values written without escaping can carry script (XSS)." }),
-  rule({ id: "csrf-disabled", severity: "medium", title: "CSRF protection turned off", files: /\.(java|kt|cs|rb)$/i, fix: "Keep CSRF protection on for cookie-authenticated endpoints.",
+  rule({ id: "csrf-disabled", severity: "medium", title: "CSRF protection turned off", files: /\.(java|kt|cs|rb)$/i, perFile: true, fix: "Keep CSRF protection on for cookie-authenticated endpoints.",
     re: /\.csrf\(\s*\)\s*\.disable\(\)|\.csrf\s*\{\s*(?:it\.)?disable\(\)|csrf\(\s*(?:AbstractHttpConfigurer::disable|csrf\s*->\s*csrf\.disable\(\))|IgnoreAntiforgeryToken|skip_before_action\s+:verify_authenticity_token|protect_from_forgery\s+with:\s*:null_session/,
     why: "Other sites can submit forms as your logged-in users." }),
   rule({ id: "mass-assignment", severity: "high", title: "Every request field allowed into the model", files: RB, fix: "List the permitted fields: `params.require(:user).permit(:name, :email)`.",

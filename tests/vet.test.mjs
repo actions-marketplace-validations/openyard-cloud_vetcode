@@ -1056,6 +1056,7 @@ test("packages: a payload on one enormous line, PyPI look-alike names, confusion
     "setup.py": "from setuptools import setup\nsetup(name='requests', version='2.31.0')\n",
     "pkg/data.js": `module.exports = "${blob}${blob}";\n`,
     "tools/expose.js": "// Run `ngrok http 3000` and open https://<your-subdomain>.ngrok.io\nconsole.log('ready');\n",
+    "scripts/install_pip.py": "import os, sys\nfrom urllib.request import urlopen\nURL = \"https://bootstrap.pypa.io/get-pip.py\"\nopen('/tmp/get-pip.py', 'wb').write(urlopen(URL).read())\nos.system(sys.executable + ' /tmp/get-pip.py --user')\n",
   });
   const f = await run(fine);
   assert.deepEqual(f.findings.filter(x => ["critical", "high"].includes(x.severity)).map(x => x.rule), []);

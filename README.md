@@ -195,6 +195,8 @@ An agent decides to install a package in a second: a name it remembered wrong, a
 | pipe a download into a shell, or install from another index, a repository or a URL | ask |
 | install well-known packages at settled versions | allow, silently |
 
+**After a clone.** When the agent runs `git clone`, `gh repo clone` or `npx degit`, the guard reads the folder that arrived (nothing is run) and, if it holds signs of malware or of an attack on coding agents (a poisoned `CLAUDE.md`, hooks in project settings, an install script that decodes and runs code), tells the agent before it installs, builds or runs anything from it. A clean clone gets no message.
+
 It reads `npm`, `pnpm`, `yarn` and `bun` installs, `npx` and friends, `pip`, `uv`, `uvx`, `pipx` and `poetry`. Other shell commands cost one regex. "Ask" shows you the reason and waits for your answer; in a run with nobody to ask (`claude -p`) it stops the command and tells the agent why.
 
 ```bash
@@ -209,7 +211,7 @@ Agents without hooks can call the same check as the MCP tool `vetcode_guard`, or
 
 **What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
 
-**Limits:** it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable is the case that cannot be tested live.
+**Limits:** the clone check reports what the scanner sees at high or critical; it does not stop the agent by force, it tells it. For packages, it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable is the case that cannot be tested live.
 
 ## Security reviews
 When asked to check code for security problems or malware, follow `../vetcode/skills/vetcode/SKILL.md`

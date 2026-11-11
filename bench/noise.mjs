@@ -23,7 +23,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const SCANNER = path.resolve(arg("--scanner", path.join(here, "../skills/vetcode/scripts/vet.mjs")));
 const CACHE = path.join(here, ".cache/noise");
 const SEV = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
-const CORPUS = JSON.parse(fs.readFileSync(path.join(here, "noise.json"), "utf8")).filter(c => !arg("--only", "") || c.repo.includes(arg("--only")));
+// --corpus bench/noise-heldout.json: twelve other apps that no rule was tuned on, to check that
+// what was learned on the first twelve holds elsewhere.
+const CORPUS = JSON.parse(fs.readFileSync(path.resolve(arg("--corpus", path.join(here, "noise.json"))), "utf8")).filter(c => !arg("--only", "") || c.repo.includes(arg("--only")));
 
 function checkout(c) {
   const dir = path.join(CACHE, `${c.repo.replace("/", "__")}@${c.sha.slice(0, 10)}`);

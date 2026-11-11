@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // vetcode guard: checks what a shell command would install before it runs.
 //
-// As a Claude Code hook (PreToolUse on Bash, see hooks/hooks.json) it reads the hook's JSON on
-// stdin and answers allow, ask or deny. By hand:
+// As a Claude Code hook (see hooks/hooks.json) it reads the hook's JSON on stdin. Before a Bash
+// command runs it answers allow, ask or deny for the packages the command would install. After
+// a `git clone` it reads the cloned folder and tells the agent if it holds signs of malware or
+// of an attack on coding agents, before anything from it is run. By hand:
 //
 //   node guard.mjs "npm install expres"        # prints the decision and the reasons
 //   echo '{"tool_name":"Bash","tool_input":{"command":"pip install requessts"}}' | node guard.mjs
@@ -31,6 +33,14 @@ async function main() {
     let j; try { j = JSON.parse(input); } catch { return; }
     if (j.tool_name !== "Bash") return;
     command = j.tool_input?.command || ""; cwd = j.cwd || cwd; hook = true;
+    // After a clone: read what arrived, before the agent runs anything from it.
+    if (j.hook_event_name === "PostToolUse") {
+      if (MODE === "off" || !/\b(?:clone|degit|tiged|giget)\b/.test(command)) return;
+      const [{ parseClones, checkClone }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
+      const found = (await Promise.all(parseClones(command, { cwd }).map(c => checkClone(c.dir, { vet }).catch(() => null)))).filter(Boolean);
+      if (found.length) console.log(JSON.stringify({ decision: "block", reason: found.map(f => f.message).join(" ") }));
+      return;
+    }
   }
   if (MODE === "off" || !command || !MAYBE.test(command)) return;
   // The scanner is loaded only now: every other shell command pays for a regex, nothing more.

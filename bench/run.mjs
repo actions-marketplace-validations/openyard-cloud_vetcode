@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Scans every cached sample with vetcode and scores the verdicts.
 //
-//   node bench/run.mjs --cache <dir> [--out bench/results] [--only skills] [--explain]
+//   node bench/run.mjs --cache <dir> [--out bench/results] [--only skills] [--explain] [--guard]
 //
 // Each archive is unpacked into its own empty folder, scanned read-only, and deleted.
 // Verdict: a package is "flagged" when vetcode reports at least one finding at the chosen
@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { vet, VERSION } from "../skills/vetcode/scripts/lib/index.mjs";
+import { checkPackage } from "../skills/vetcode/scripts/lib/guard.mjs";
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const CACHE = path.resolve(arg("--cache", path.join(os.tmpdir(), "vetcode-bench")));
@@ -27,21 +28,47 @@ const CATS = new Set(["malware", "supply-chain", "agent"]);
 // short of the verdict, and the lines that mention downloads, secrets, shells or orders to
 // an agent (cut to 220 characters; a description, not the sample).
 const EXPLAIN = process.argv.includes("--explain");
+const GUARD = process.argv.includes("--guard");
 const TELL = /curl|wget|https?:\/\/|base64|\beval\b|\bexec\b|subprocess|os\.system|child_process|\.ssh|\.aws|\.env\b|token|secret|password|credential|api[_-]?key|ignore (?:all|any|previous|prior)|do not (?:tell|mention|reveal|inform|ask)|without (?:asking|telling|confirm|permission|notif)|silently|secretly|exfiltrat|upload|webhook|pastebin|ngrok|chmod|sudo|rm -rf|crontab|bashrc|zshrc|authorized_keys|keychain|wallet|system prompt|<!--|always run|before (?:doing|responding|anything|you)/i;
 function explain(dir, res) {
   const files = [], lines = [];
   const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.isFile()) files.push(p); } };
   try { walk(dir); } catch {}
+  const size = f => { try { return fs.statSync(f).size; } catch { return -1; } }; // packages ship unreadable files
   for (const f of files) {
-    const st = fs.statSync(f); if (st.size > 300000 || !/\.(md|txt|py|js|mjs|cjs|ts|sh|bash|json|ya?ml|toml|ps1|rb|go)$|(^|\/)[A-Z]+$/i.test(f)) continue;
-    const rel = path.relative(dir, f), text = fs.readFileSync(f, "utf8").split(/\r?\n/);
+    if (size(f) < 0 || size(f) > 300000 || !/\.(md|txt|py|js|mjs|cjs|ts|sh|bash|json|ya?ml|toml|ps1|rb|go)$|(^|\/)[A-Z]+$/i.test(f)) continue;
+    let text; try { text = fs.readFileSync(f, "utf8").split(/\r?\n/); } catch { continue; }
+    const rel = path.relative(dir, f);
     if (/SKILL\.md$/i.test(f)) lines.push(...text.slice(0, 12).map((l, i) => `${rel}:${i + 1} ${l.slice(0, 220)}`));
     for (let i = 0; i < text.length && lines.length < 45; i++) if (TELL.test(text[i])) lines.push(`${rel}:${i + 1} ${text[i].trim().slice(0, 220)}`);
   }
-  return { files: files.slice(0, 40).map(f => `${path.relative(dir, f)} (${fs.statSync(f).size})`), fileCount: files.length,
+  return { files: files.slice(0, 40).map(f => `${path.relative(dir, f)} (${size(f)})`), fileCount: files.length,
     below: res.findings.filter(f => RANK[f.severity] >= 2 || f.confidence === "low" || !CATS.has(f.category)).slice(0, 25).map(f => `${f.rule} ${f.severity}${f.confidence === "low" ? " (low confidence)" : ""} ${f.file}:${f.line}`), lines };
 }
 const explained = {};
+
+// The guard's answer for each sample, as if an agent were about to install it on the day it
+// was published and nobody had reported it yet: the registry lists the package, there is no
+// advisory, and the release is past the waiting period. What is left is what the guard can see
+// by itself: the name (a look-alike?) and the code in the archive. The registry and the
+// advisory database are stand-ins built from the sample; nothing is fetched.
+function identity(dir, eco, id) {
+  const read = f => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } };
+  const find = (d, name, depth = 0) => { try { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isFile() && e.name === name) return p; if (e.isDirectory() && depth < 3) { const r = find(p, name, depth + 1); if (r) return r; } } } catch {} return null; };
+  if (eco === "npm") { try { const j = JSON.parse(read(find(dir, "package.json") || "")); if (j.name) return { name: String(j.name).toLowerCase(), version: String(j.version || "1.0.0") }; } catch {} }
+  else { const m = /^Name:\s*(\S+)[\s\S]*?^Version:\s*(\S+)/m.exec(read(find(dir, "PKG-INFO") || "")) || /name\s*=\s*["']([\w.-]+)["'][\s\S]{0,400}?version\s*=\s*["']([\w.]+)["']/.exec(read(find(dir, "setup.py") || "")); if (m) return { name: m[1].toLowerCase().replace(/[-_.]+/g, "-"), version: m[2] }; }
+  const m = /^(?:\d{4}-\d\d-\d\d-)?(.+?)(?:[-_]v?(\d[\w.]*))?\.(?:zip|tgz|tar\.gz)$/.exec(id.split("__").pop());
+  return { name: (m?.[1] || id).toLowerCase(), version: m?.[2] || "1.0.0" };
+}
+async function guardDecision(eco, it, res) {
+  const { name, version } = identity(it.dir, eco, it.id), now = Date.now(), at = new Date(now - 30 * 86400000).toISOString();
+  const reply = body => ({ status: 200, ok: true, json: async () => body });
+  const fetchFn = async url => url.includes("api.osv.dev") ? reply({ vulns: [] })
+    : eco === "npm" ? reply({ name, "dist-tags": { latest: version }, versions: { [version]: { name, version, dist: { tarball: "local", unpackedSize: 1 }, _npmUser: { name: "author" } } }, time: { [version]: at } })
+    : reply({ info: { version }, urls: [{ packagetype: "sdist", url: "local", size: 1, upload_time_iso_8601: at }], releases: { [version]: [{ upload_time_iso_8601: at }] } });
+  const r = await checkPackage({ eco, name, want: version }, { fetch: fetchFn, now, scan: async () => Object.assign(res.findings, { stats: res.stats }) });
+  return r.decision;
+}
 const RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
 // Packages can ship read-only folders; make them writable so cleanup cannot stop the run.
@@ -78,7 +105,8 @@ async function score(name, items) {
     // Same as --fail-on: low-confidence findings (tests, docs) do not decide the verdict.
     const hits = res.findings.filter(f => CATS.has(f.category) && f.confidence !== "low");
     const worst = hits.reduce((m, f) => Math.min(m, RANK[f.severity]), 9);
-    rows.push({ id: it.id, label: it.label, worst, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
+    const decision = GUARD && name !== "skills" ? await guardDecision(name, it, res).catch(() => "error") : undefined;
+    rows.push({ id: it.id, label: it.label, worst, decision, rules: [...new Set(hits.filter(f => RANK[f.severity] <= 1).map(f => f.rule))], files: res.stats.files });
     if (EXPLAIN && it.label === "malicious" && worst > 1) (explained[name] ||= []).push({ id: it.id, ...explain(it.dir, res) });
     if (it.cleanup) remove(it.dir);
   }
@@ -89,9 +117,11 @@ async function score(name, items) {
     const p = tp / (tp + fp || 1), rcl = tp / (tp + fn || 1);
     metrics[t] = { tp, fn, fp, tn, precision: p, recall: rcl, f1: 2 * p * rcl / (p + rcl || 1), accuracy: (tp + tn) / rows.length, fpr: fp / (fp + tn || 1) };
   }
+  const guard = GUARD && name !== "skills" ? Object.fromEntries(["malicious", "benign"].map(l => [l, Object.fromEntries(["deny", "ask", "allow", "error"].map(d => [d, rows.filter(r => r.label === l && r.decision === d).length]))])) : undefined;
+  if (guard) console.error(`${name} guard: malicious ${JSON.stringify(guard.malicious)} · benign ${JSON.stringify(guard.benign)}`);
   const ruleCount = label => Object.entries(rows.filter(r => r.label === label).flatMap(r => r.rules).reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]);
   console.error(`${name}: ${rows.length} samples · F1 ${(metrics.high.f1 * 100).toFixed(1)}% (high) · ${(metrics.critical.f1 * 100).toFixed(1)}% (critical)`);
-  return { name, samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, rulesOnMalicious: ruleCount("malicious"), rulesOnBenign: ruleCount("benign"), missed: rows.filter(r => r.label === "malicious" && r.worst > 1).map(r => r.id), falseAlarms: rows.filter(r => r.label === "benign" && r.worst <= 1).map(r => ({ id: r.id, rules: r.rules })) };
+  return { name, samples: { malicious: rows.filter(r => r.label === "malicious").length, benign: rows.filter(r => r.label === "benign").length }, metrics, guard, rulesOnMalicious: ruleCount("malicious"), rulesOnBenign: ruleCount("benign"), missed: rows.filter(r => r.label === "malicious" && r.worst > 1).map(r => r.id), falseAlarms: rows.filter(r => r.label === "benign" && r.worst <= 1).map(r => ({ id: r.id, rules: r.rules })) };
 }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-bench-work-"));

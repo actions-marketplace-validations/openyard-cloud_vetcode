@@ -58,7 +58,7 @@ if (TOOL === "skill-scanner" && ONLY.includes("skills")) {
   const rows = [];
   const mal = path.join(CACHE, "skills", "malicious");
   for (const f of (fs.existsSync(mal) ? fs.readdirSync(mal).sort() : []).filter((_, i) => i % SHARDS === SHARD)) {
-    const dir = path.join(work, `skill-${f}`);
+    const dir = path.join(work, `skill-${rows.length}`);
     if (!unpack(path.join(mal, f), dir)) { remove(dir); continue; }
     const target = skillDirs(dir)[0] || dir;
     rows.push({ id: f, label: "malicious", ...skillScanner(target) });
@@ -91,8 +91,9 @@ for (const eco of ["npm", "pypi"].filter(e => ONLY.includes(e) && TOOL === "guar
     const d = path.join(CACHE, eco, label);
     if (!fs.existsSync(d)) continue;
     const files = fs.readdirSync(d).sort().filter((_, i) => i % SHARDS === SHARD);
-    for (const f of files) {
-      const dir = path.join(work, `${eco}-${label}-${f}`);
+    for (const [n, f] of files.entries()) {
+      // Numbered, not named after the archive: some malicious packages carry names too long for a folder.
+      const dir = path.join(work, `${eco}-${label}-${n}`);
       if (!unpack(path.join(d, f), dir)) { remove(dir); continue; }
       const v = guarddog(eco, dir);
       rows.push({ id: f, label, ...v });

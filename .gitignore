@@ -4,7 +4,6 @@ vetcode-skill.zip
 
 # Agent answers from bench/advisories.mjs: may name unverified, undisclosed vulnerabilities.
 # Only the fix-diff caches and the score summary in bench/results/ are committed.
-bench/results/advisories/*.json
-!bench/results/advisories/*.diff.json
-bench/results/advisories-baseline/*.json
-!bench/results/advisories-baseline/*.diff.json
+bench/results/advisories*/*.json
+!bench/results/advisories*/*.diff.json
+!bench/results/advisories*/judge-summary.json

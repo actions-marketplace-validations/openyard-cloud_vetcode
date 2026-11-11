@@ -6,6 +6,7 @@
 //
 //   node bench/agent.mjs                         # scanner + Claude Code (`claude -p`)
 //   node bench/agent.mjs --scanner-only          # no agent, no cost
+//   node bench/agent.mjs --no-skill --runs 1     # control: Claude Code without vetcode
 //   node bench/agent.mjs --agent "claude -p" --runs 2 --jobs 3 --out bench/results/agent.json
 //
 // The agent runs in a fresh temp folder with a neutral name, and is only told to do a vetcode
@@ -28,8 +29,14 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const SKILL = path.resolve(here, "../skills/vetcode");
 const { vet } = await import(pathToFileURL(path.join(SKILL, "scripts/lib/index.mjs")).href);
 const AGENT = arg("--agent", "claude -p");
+// Every measurement runs on one fixed setting: Opus 5.5 at medium effort. Lower is allowed, higher is refused.
+const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"], EFFORTS = ["low", "medium"];
+const MODEL = arg("--model", "claude-opus-5-5"), EFFORT = arg("--effort", "medium");
+if (!MODELS.includes(MODEL) || !EFFORTS.includes(EFFORT)) throw new Error(`Measurements run at claude-opus-5-5 with medium effort or lower, not ${MODEL} / ${EFFORT}.`);
 let RUNS = +arg("--runs", 1); const JOBS = +arg("--jobs", 3), ONLY = arg("--only", "");
 const SCANNER_ONLY = argv.includes("--scanner-only");
+// The control: the same review without the skill and without the scanner.
+const NO_SKILL = argv.includes("--no-skill");
 const OUT = arg("--out", "");
 
 // ---- shared scaffolding -------------------------------------------------------------------
@@ -479,7 +486,7 @@ async function scanner(files, file) {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
-const PROMPT = `Security review of the project in the current folder: it is our own app and we want to ship it. Use the vetcode skill: read ${SKILL}/SKILL.md and follow it (its scanner is ${SKILL}/scripts/vet.mjs; run it without --online). Read the code yourself as the skill describes; do not modify any file.
+const PROMPT = `Security review of the project in the current folder: it is our own app and we want to ship it. ${NO_SKILL ? "Read the code yourself; do not modify any file." : `Use the vetcode skill: read ${SKILL}/SKILL.md and follow it (its scanner is ${SKILL}/scripts/vet.mjs; run it without --online). Read the code yourself as the skill describes; do not modify any file.`}
 
 When you are done, end your reply with one JSON code block and nothing after it:
 \`\`\`json
@@ -490,7 +497,7 @@ List only confirmed and likely findings. An empty list is a valid answer.`;
 function runAgent(files) {
   const dir = materialise(files);
   const [cmd, ...pre] = AGENT.split(" ");
-  const args = [...pre, PROMPT, "--output-format", "json", "--allowedTools", "Read", "Grep", "Glob", `Bash(node ${SKILL}/scripts/vet.mjs:*)`, "--add-dir", SKILL];
+  const args = [...pre, PROMPT, "--output-format", "json", ...(cmd === "claude" ? ["--model", MODEL, "--effort", EFFORT] : []), "--allowedTools", "Read", "Grep", "Glob", ...(NO_SKILL ? [] : [`Bash(node ${SKILL}/scripts/vet.mjs:*)`, "--add-dir", SKILL])];
   return new Promise(resolve => {
     const p = spawn(cmd, args, { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "";

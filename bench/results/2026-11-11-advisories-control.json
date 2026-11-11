@@ -1,0 +1,165 @@
+{
+ "reviewer": "claude code alone",
+ "model": "claude-opus-5-5",
+ "effort": "medium",
+ "sides": [
+  "bad"
+ ],
+ "near": 20,
+ "scored": 15,
+ "caught": 7,
+ "inFile": 8,
+ "note": "Scores only. The agent answers stay with whoever ran the benchmark: findings on fixed code may be unverified, undisclosed vulnerabilities.",
+ "cases": [
+  {
+   "ghsa": "GHSA-22jm-h49p-29qw",
+   "repo": "modelcontextprotocol/typescript-sdk",
+   "ecosystem": "npm",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 2
+   }
+  },
+  {
+   "ghsa": "GHSA-2724-6cpj-gf3v",
+   "repo": "open-webui/open-webui",
+   "ecosystem": "pip",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 5
+   }
+  },
+  {
+   "ghsa": "GHSA-2phh-27fw-q4gc",
+   "repo": "PHPOffice/PhpSpreadsheet",
+   "ecosystem": "composer",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 0
+   }
+  },
+  {
+   "ghsa": "GHSA-3p64-6gvh-82v5",
+   "repo": "mlflow/mlflow",
+   "ecosystem": "npm",
+   "caught": false,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 2
+   }
+  },
+  {
+   "ghsa": "GHSA-44r8-3p76-84mw",
+   "repo": "filegator/filegator",
+   "ecosystem": "composer",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 0
+   }
+  },
+  {
+   "ghsa": "GHSA-g74g-rg72-j2p3",
+   "repo": "jdx/mise",
+   "ecosystem": "rust",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 1
+   }
+  },
+  {
+   "ghsa": "GHSA-584p-f93j-wpgc",
+   "repo": "verbb/formie",
+   "ecosystem": "composer",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 5
+   }
+  },
+  {
+   "ghsa": "GHSA-9jjc-fw8x-fmwx",
+   "repo": "moquette-io/moquette",
+   "ecosystem": "maven",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 1
+   }
+  },
+  {
+   "ghsa": "GHSA-3w57-8xmc-8v26",
+   "repo": "agronholm/anyio",
+   "ecosystem": "pip",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 1
+   }
+  },
+  {
+   "ghsa": "GHSA-4pvx-fwjj-8gpc",
+   "repo": "TryGhost/Ghost",
+   "ecosystem": "npm",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 0
+   }
+  },
+  {
+   "ghsa": "GHSA-gx83-3vf8-gh7j",
+   "repo": "FasterXML/jackson-databind",
+   "ecosystem": "maven",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 0
+   }
+  },
+  {
+   "ghsa": "GHSA-42cj-m3vj-89wv",
+   "repo": "traefik/traefik",
+   "ecosystem": "go",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 1
+   }
+  },
+  {
+   "ghsa": "GHSA-mhm7-754m-9p8w",
+   "repo": "FasterXML/jackson-databind",
+   "ecosystem": "maven",
+   "caught": false,
+   "inFile": false,
+   "findings": {
+    "vulnerable": 0
+   }
+  },
+  {
+   "ghsa": "GHSA-9rg8-2wvr-fgjh",
+   "repo": "verbb/formie",
+   "ecosystem": "composer",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 11
+   }
+  },
+  {
+   "ghsa": "GHSA-5j9r-fx4x-rpvg",
+   "repo": "rucio/rucio",
+   "ecosystem": "pip",
+   "caught": true,
+   "inFile": true,
+   "findings": {
+    "vulnerable": 3
+   }
+  }
+ ]
+}

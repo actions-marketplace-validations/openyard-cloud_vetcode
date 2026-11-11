@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
 import { profiles, purposeMismatches } from "./profile.mjs";
 import { npmHistory } from "./npmhistory.mjs";
-import { scanLines, scanFile, options, rank, SEVERITIES } from "./engine.mjs";
+import { scanLines, scanFile, options, rank, SEVERITIES, TEST, VENDORED } from "./engine.mjs";
 import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
 import { MALWARE_RULES, MALWARE_FILE_RULES } from "./malware.mjs";
 import { WEB_RULES } from "./web.mjs";
@@ -117,6 +117,9 @@ export async function vet(target, opts = {}) {
     scanFile(file, file.text, CONFIG_FILE_RULES, findings);
     scanSupplyChain(file, file.text, findings, root);
     scanFile(file, file.text, ANOMALY_FILE_RULES, findings);
+    // A vulnerability pattern in a test, a fixture or a vendored library is not in the app's own
+    // request path. Malware, secrets and supply-chain findings there still count.
+    if (TEST.test(file.rel) || VENDORED.test(file.rel)) for (let k = findings.length - 1; k >= mark; k--) if (findings[k].category === "web") findings.splice(k, 1);
     // Bundled or minified output is full of patterns that mean nothing there; keep its findings
     // visible but let only high-confidence ones decide.
     // Only JavaScript ships that way on purpose: a one-line Python file or setup.py is itself

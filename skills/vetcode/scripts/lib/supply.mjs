@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { finding, lineOf } from "./engine.mjs";
-import { POPULAR_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
+import { POPULAR_SCOPES, KNOWN_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
 import { expanded } from "./normalize.mjs";
 
@@ -38,7 +38,7 @@ export function lookalike(name, popular, scopes = POPULAR_SCOPES, known = popula
   if (popular.has(n) || known.has(n)) return null;
   const scoped = n.match(/^@([^/]+)\/(.+)$/);
   if (scoped) {
-    if (scopes.has(scoped[1])) return null;
+    if (scopes.has(scoped[1]) || KNOWN_SCOPES.has(scoped[1])) return null;
     for (const s of scopes) if (s.length >= 4 && distance(scoped[1], s) === 1) return `@${s}/${scoped[2]}`;
     return null;
   }
@@ -253,7 +253,7 @@ function checkWorkflow(file, text, out) {
   // Whole-workflow checks (zizmor's artipacked, excessive-permissions, self-hosted-runner, dangerous-triggers).
   const uploads = /uses:\s*actions\/upload-artifact/.test(text);
   for (const m of text.matchAll(/uses:\s*actions\/checkout@[^\n]*((?:\n\s+[^\n-][^\n]*)*)/g)) {
-    if (uploads && !/persist-credentials:\s*false/.test(m[1])) w({ r: rule({ id: "gha-persisted-credentials", severity: "medium", confidence: "medium", title: "Checkout keeps the token on disk in a job that uploads artifacts",
+    if (uploads && !/persist-credentials:\s*false/.test(m[1])) w({ r: rule({ id: "gha-persisted-credentials", severity: "low", confidence: "medium", title: "Checkout keeps the token on disk in a job that uploads artifacts",
       why: "actions/checkout writes the GITHUB_TOKEN into .git/config; uploading the workspace publishes it (\"artipacked\").", fix: "Add `persist-credentials: false` to the checkout step." }), line: lineOf(text, m.index), ev: "actions/checkout without persist-credentials: false" });
   }
   if (!/^permissions\s*:/m.test(text) && !/^\s{2,}permissions\s*:/m.test(text)) w({ r: rule({ id: "gha-default-permissions", severity: "low", confidence: "high", title: "Workflow does not limit its token",
@@ -278,7 +278,9 @@ function checkWorkflow(file, text, out) {
         why: "A PR title, branch name or comment becomes shell code: anyone opening a PR or issue can run commands with the workflow's token and secrets.",
         fix: "Pass it through `env:` (e.g. `TITLE: ${{ github.event.pull_request.title }}`) and use \"$TITLE\" in the script." }), file.rel, i + 1, line));
     }
-    if (prt && /ref\s*:\s*\$\{\{\s*github\.event\.pull_request\.head\.(?:sha|ref)|github\.head_ref|refs\/pull\//.test(line)) {
+    // The PR's code has to be fetched: a `ref:` for the checkout, or a git/gh command. Reading
+    // the branch name in an `if:` runs nothing of the attacker's.
+    if (prt && /\bref\s*:[^\n]*(?:github\.event\.pull_request\.head\.(?:sha|ref)|github\.head_ref|refs\/pull\/|workflow_run\.head_(?:sha|branch))|\bgit\s+(?:fetch|checkout|pull|merge)\b[^\n]*(?:refs\/pull\/|\bpull\/|github\.head_ref|pull_request\.head)|\bgh\s+pr\s+checkout\b/.test(line)) {
       out.push(finding(rule({ id: "gha-pwn-request", severity: "critical", confidence: "high", title: "Privileged workflow checks out the PR's code",
         why: "pull_request_target, workflow_run and issue_comment run with write tokens and secrets; building or running the attacker's PR code there hands them over.",
         fix: "Use `pull_request` for building untrusted code, or never run the checked-out code in the privileged job." }), file.rel, i + 1, line));
@@ -308,7 +310,8 @@ function checkWorkflow(file, text, out) {
       out.push(finding(rule({ id: "gha-once-compromised-action", severity: "medium", confidence: "high", title: `${uses[1]} was compromised before and is not pinned`,
         why: "Its tags were moved to malicious code in a past incident; a tag reference would pick that up again.", fix: "Pin to a reviewed commit SHA, or replace it." }), file.rel, i + 1, line.trim()));
     }
-    if (uses && !/^(?:actions|github)\//.test(uses[1]) && !/^[0-9a-f]{40}$/.test(uses[2])) {
+    // Once per action in a workflow: ten steps using the same action are one thing to fix.
+    if (uses && !/^(?:actions|github)\//.test(uses[1]) && !/^[0-9a-f]{40}$/.test(uses[2]) && !out.some(f => f.rule === "gha-unpinned-action" && f.file === file.rel && f.evidence.includes(`${uses[1]}@${uses[2]}`))) {
       out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: "Third-party action pinned to a tag, not a commit",
         why: "Tags can be moved: a compromised action repository can change what runs in your CI (as in the tj-actions incident).", fix: `Pin to the full commit SHA: uses: ${uses[1]}@<sha> # ${uses[2]}` }), file.rel, i + 1, line.trim()));
     }

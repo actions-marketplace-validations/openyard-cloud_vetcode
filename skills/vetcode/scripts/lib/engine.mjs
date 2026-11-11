@@ -28,6 +28,9 @@ export const rank = s => SEVERITIES.indexOf(s);
 export const DOC = /\.(md|mdx|markdown|rst|txt|adoc)$/i;
 export const TEST = /(^|\/)(tests?|testdata|__tests__|spec|specs|fixtures?|__fixtures__|__mocks__|examples?|samples?)\/|\.(test|spec)\.\w+$|_test\.\w+$|(^|\/)test_\w+\.py$/i;
 
+// Third-party code copied into the repository, as opposed to the project's own.
+export const VENDORED = /(^|\/)(vendor|vendors|third[_-]party|bower_components)\/|(^|\/)(public|static|assets|resources)\/(?:.*\/)?(lib|libs|vendor)\/|\.min\.(?:js|css)$/i;
+
 const clip = (s, n = 160) => { s = s.trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 
 export function finding(rule, file, line, evidence, extra = {}) {

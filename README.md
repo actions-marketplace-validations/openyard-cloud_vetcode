@@ -209,7 +209,7 @@ Agents without hooks can call the same check as the MCP tool `vetcode_guard`, or
 
 **What it sends:** the names and versions of the packages in the command, to the package registry (the one the install would contact anyway) and to OSV.dev, plus a download of the package archive, which is read and deleted. Packages that come from a private registry (a `registry=` line in `.npmrc`, `PIP_INDEX_URL` and the like) are not looked up anywhere. If the network is down or a check fails, the command is allowed: the guard never blocks on its own errors.
 
-**Limits:** it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). It is not measured yet against an agent without it; that benchmark is next.
+**Limits:** it checks the packages named in the command, not their dependencies and not a plain `npm install` from a lockfile (scan the project for that). Measured against Claude Code without it ([details](bench/README.md#the-guard-what-an-agent-installs-with-and-without-it)): asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3, and with the guard it installed the previous settled version every time. Made-up names, removed malware and typos the agent already avoided by itself, so the guard changed nothing there. Malware that is still downloadable is the case that cannot be tested live.
 
 ## Security reviews
 When asked to check code for security problems or malware, follow `../vetcode/skills/vetcode/SKILL.md`

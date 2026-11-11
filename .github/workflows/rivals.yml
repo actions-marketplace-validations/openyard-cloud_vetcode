@@ -15,10 +15,17 @@ on:
       seed:
         description: Sampling seed (same seed as the Benchmark run to compare with)
         default: "7"
+      packages:
+        description: Run GuardDog on the npm and PyPI samples (true or false)
+        default: "true"
+      skills:
+        description: Run Cisco skill-scanner on the held-out skills set (true or false)
+        default: "false"
 permissions:
   contents: read
 jobs:
   scan:
+    if: inputs.packages != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -59,8 +66,45 @@ jobs:
           name: shard-${{ matrix.eco }}-${{ matrix.shard }}
           path: rivals/
           retention-days: 7
+  skills:
+    # Cisco skill-scanner (static and behavioural analysers, no LLM) on the held-out skills set.
+    if: inputs.skills == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Cisco skill-scanner
+        run: |
+          pip install --quiet cisco-ai-skill-scanner
+          pip show cisco-ai-skill-scanner | sed -n '1,2p'
+      - name: Download samples (files only, nothing is installed or run)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node bench/fetch.mjs --cache "$RUNNER_TEMP/bench" --only skills-heldout
+      - name: Scan this shard
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: node bench/rivals.mjs --tool skill-scanner --bin "$(which skill-scanner)" --cache "$RUNNER_TEMP/bench" --out rivals/skills-heldout --only skills-heldout --shard "$SHARD/6"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shard-skills-${{ matrix.shard }}
+          path: rivals/
+          retention-days: 7
   merge:
-    needs: scan
+    needs: [scan, skills]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -77,9 +121,9 @@ jobs:
           merge-multiple: true
       - name: Merge the shards
         run: |
-          for eco in npm pypi; do
+          for eco in npm pypi skills-heldout; do
             if ls "rivals/$eco"/*.shard*.json >/dev/null 2>&1; then
-              echo "$eco: $(ls "rivals/$eco"/*.shard*.json | wc -l) of 10 shards"
+              echo "$eco: $(ls "rivals/$eco"/*.shard*.json | wc -l) shards"
               node bench/merge.mjs "rivals/$eco"
             fi
           done

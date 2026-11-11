@@ -19,6 +19,9 @@ const USER_PHP = String.raw`\$_(?:GET|POST|REQUEST|COOKIE|SERVER|FILES)`;
 const rule = r => ({ category: "web", confidence: "medium", ...r });
 const SQL = "Build queries with parameters (`?`, `$1`, `:name`) or the ORM's query builder, never by gluing strings.";
 
+// Names that hold a piece of a query rather than a value.
+const SQL_FRAGMENT = /(?:\+|\.)\s*\$?(?:strings\.Join\(|\w*[Pp]laceholders?\w*\(|\w*(?:[Cc]lause|[Ww]here\w*|[Cc]ond\w*|[Ff]ields|[Cc]olumns|[Cc]ols|[Ss]ets|[Tt]able\w*|[Oo]rderBy\w*|[Ss]ql\w*)\b)/;
+
 export const WEB_RULES = [
   // Injection
   rule({ id: "sql-template-literal", severity: "high", title: "SQL built with a template literal", files: JS,
@@ -29,7 +32,14 @@ export const WEB_RULES = [
     why: "These APIs pass the string to the database as-is.", fix: SQL }),
   rule({ id: "sql-concat", severity: "high", title: "SQL built by string concatenation", files: SERVER,
     re: /["'`]\s*(?:SELECT\b[^"'`]*\bFROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b[^"'`]*["'`]\s*(?:\+|\.)\s*\$?[A-Za-z_]/i,
+    // Joining a list of conditions, a placeholder helper or a clause built elsewhere is how query
+    // builders work; that is the rule below.
+    unless: SQL_FRAGMENT,
     why: "Concatenated SQL is injectable whenever a piece comes from a user.", fix: SQL }),
+  rule({ id: "sql-fragments", severity: "low", title: "SQL assembled from fragments", files: SERVER,
+    re: new RegExp(String.raw`["'\x60]\s*(?:SELECT\b[^"'\x60]*\bFROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b[^"'\x60]*["'\x60]\s*` + SQL_FRAGMENT.source, "i"),
+    why: "The query text is put together from pieces (conditions, placeholders, a clause). That is safe when every piece is made of column names and placeholders, and injectable if one of them carries a value.",
+    fix: "Check how each fragment is built; values belong in the query arguments." }),
   rule({ id: "sql-python-format", severity: "high", title: "SQL built with f-string, % or .format()", files: PY,
     re: /\.(?:execute|executemany|executescript|raw|extra)\s*\(\s*(?:f["'][^"']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b|["'][^"']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b[^"']*["']\s*(?:%|\.format\())|\btext\s*\(\s*f["'][^"']*\b(?:SELECT|INSERT|UPDATE|DELETE)\b/i,
     why: "Formatting values into SQL text allows SQL injection.", fix: "Use `cursor.execute(sql, params)` / SQLAlchemy bound parameters." }),
@@ -75,8 +85,18 @@ export const WEB_RULES = [
     re: /\sv-html\s*=|\{@html\s|set:html\s*=/,
     why: "These bindings skip escaping.", fix: "Bind text, or sanitise the HTML first." }),
   rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: TEMPLATE,
-    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!.*!!\}|<%-(?!-)|\{\{\{[^}]+\}\}\}|\.html_safe\b|\braw\s*\(/,
+    // A template with no HTML in it (a text message, an email subject) has nothing to inject into.
+    // In Blade, a raw variable or request data is the case to read; a helper call is the rule below.
+    requires: /<[a-z!][^>]*>/i,
+    re: /\|\s*safe\b|\{%-?\s*autoescape\s+(?:false|off)|\{!!\s*\$[^!]*!!\}|\{!![^!]*(?:\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE))[^!]*!!\}|\{\{\{[^}]+\}\}\}|\.html_safe\b|\braw\s*\(/,
     why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`{{ }}`, `<%=`), or sanitise before marking safe." }),
+  // `<%-` prints raw HTML in EJS; in ERB it only trims whitespace.
+  rule({ id: "xss-template-unescaped", severity: "medium", title: "Template output without escaping", files: /\.ejs$/i, re: /<%-(?!-)/,
+    why: "Unescaped output is XSS if the value can contain user text.", fix: "Use the escaped form (`<%=`), or sanitise before printing." }),
+  rule({ id: "xss-template-raw-helper", severity: "low", title: "Template prints a helper's output without escaping", files: TEMPLATE,
+    re: /\{!!\s*(?![\s$])[^!]*!!\}/, unless: /\$request\b|\brequest\(|\bold\(|\$_(?:GET|POST|REQUEST|COOKIE)/,
+    why: "Form builders, translations and formatters return HTML on purpose. It is XSS only if the helper passes user text through unescaped.",
+    fix: "Check what the helper does with its arguments, and escape them inside it." }),
   rule({ id: "xss-php-echo", severity: "high", title: "Request data echoed into the page", files: PHP,
     re: new RegExp(String.raw`\b(?:echo|print)\b[^;]*${USER_PHP}`), unless: /htmlspecialchars|htmlentities|esc_html|esc_attr|intval|\(int\)/,
     why: "Reflected XSS.", fix: "Wrap output in htmlspecialchars($v, ENT_QUOTES, 'UTF-8')." }),

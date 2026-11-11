@@ -45,7 +45,10 @@ for (const c of CORPUS) {
   const r = JSON.parse(fs.readFileSync(json, "utf8")); fs.rmSync(json);
   const real = r.findings.filter(f => SEV[f.severity] >= 2);
   const by = k => real.reduce((m, f) => (m[f[k]] = (m[f[k]] || 0) + 1, m), {});
-  rows.push({ repo: c.repo, sha: c.sha.slice(0, 10), files: r.stats?.files || 0, total: real.length, categories: by("category"), rules: by("rule") });
+  // What decides the verdict of a pre-install check: a high or critical finding in the malware,
+  // supply-chain or agent categories, low-confidence ones aside. On a clean app that is a wrong verdict.
+  const flagged = [...new Set(r.findings.filter(f => ["malware", "supply-chain", "agent"].includes(f.category) && SEV[f.severity] >= 3 && f.confidence !== "low").map(f => f.rule))];
+  rows.push({ repo: c.repo, sha: c.sha.slice(0, 10), files: r.stats?.files || 0, total: real.length, flagged, categories: by("category"), rules: by("rule") });
   const show = arg("--show", "");
   if (show) for (const f of r.findings.filter(f => f.rule === show)) console.log(`${c.repo} ${f.file}:${f.line} [${f.severity}] ${String(f.evidence || "").trim().slice(0, 140)}`);
 }
@@ -55,7 +58,9 @@ console.log(`\n| Repository | Files | Medium or above | ${cats.join(" | ")} |\n|
 for (const r of rows) console.log(`| ${r.repo} | ${r.files} | ${r.total} | ${cats.map(k => r.categories[k] || 0).join(" | ")} |`);
 console.log(`| **${rows.length} repositories** | ${rows.reduce((n, r) => n + r.files, 0)} | **${rows.reduce((n, r) => n + r.total, 0)}** | ${cats.map(k => `**${sum(k)}**`).join(" | ")} |`);
 const rules = {}; for (const r of rows) for (const [k, v] of Object.entries(r.rules)) rules[k] = (rules[k] || 0) + v;
-console.log(`\nNoisiest rules: ${Object.entries(rules).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${v}`).join(", ")}.`);
+const wrong = rows.filter(r => r.flagged.length);
+console.log(`\nWrongly flagged as dangerous: ${wrong.length}/${rows.length}${wrong.length ? ` (${wrong.map(r => `${r.repo.split("/")[1]}: ${r.flagged.join(", ")}`).join("; ")})` : ""}.`);
+console.log(`Noisiest rules: ${Object.entries(rules).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${v}`).join(", ")}.`);
 const base = arg("--baseline", "");
 if (base) {
   const old = JSON.parse(fs.readFileSync(base, "utf8")), was = {};

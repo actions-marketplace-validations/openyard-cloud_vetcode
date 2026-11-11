@@ -27,7 +27,7 @@ chart-js echarts leaflet mapbox-gl socket-io-parser engine-io colorette ansi-sty
 supports-color has-flag escape-string-regexp is-number kind-of isarray safe-buffer buffer events util process path-browserify
 crypto-browserify stream-browserify node-gyp node-pre-gyp nan bindings prebuild-install esm ts-jest babel-jest jest-cli
 recharts nextra vitepress react-dnd tslint react-is cookies color server prompt next-auth class-transformer prismjs
-nx turbo lerna husky lint-staged commitizen semantic-release np standard-version vercel netlify-cli wrangler miniflare
+nx turbo lerna husky lint-staged commitizen semantic-release np standard-version vercel netlify-cli wrangler miniflare args-parser
 `);
 
 export const POPULAR_SCOPES = new Set(`
@@ -63,6 +63,8 @@ more-itertools toolz pyarrow polars duckdb dask xgboost lightgbm catboost statsm
 const ranked = file => { try { return fs.readFileSync(new URL(`./data/${file}`, import.meta.url), "utf8").split("\n").filter(l => l && !l.startsWith("#")).map(n => n.toLowerCase().replace(/[_.]+/g, "-")); } catch { return []; } };
 const npmRanked = ranked("popular-npm.txt"), pypiRanked = ranked("popular-pypi.txt");
 export const KNOWN_NPM = new Set([...POPULAR_NPM, ...npmRanked]);
+// A scope that publishes a widely used package is a real organisation, not a lookalike of another.
+export const KNOWN_SCOPES = new Set(npmRanked.filter(n => n.startsWith("@")).map(n => n.slice(1, n.indexOf("/"))));
 export const KNOWN_PYPI = new Set([...POPULAR_PYPI, ...pypiRanked]);
 export const TARGET_NPM = new Set([...POPULAR_NPM, ...npmRanked.slice(0, 1500)]);
 export const TARGET_PYPI = new Set([...POPULAR_PYPI, ...pypiRanked.slice(0, 1500)]);

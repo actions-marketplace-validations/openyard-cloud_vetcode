@@ -72,7 +72,7 @@ export const CONFIG_FILE_RULES = [
         return !tag || tag === "latest";
       }).map(m => ({ line: lineOf(text, m.index), evidence: m[0].trim() }));
     } },
-  { ...rule({ id: "docker-root-user", severity: "medium", title: "Container runs as root",
+  { ...rule({ id: "docker-root-user", severity: "low", title: "Container runs as root",
       why: "If the app is compromised, the attacker is root inside the container, which makes escaping and tampering easier.",
       fix: "Add a user and switch to it at the end: `RUN adduser -D app` / `USER app`." }), files: DOCKER,
     test(text) {

@@ -5,6 +5,8 @@ name: Release
 # Pushes that keep the same version are skipped. Run it by hand from Actions to retry.
 # npm uses trusted publishing (no token): on npmjs.com, @openyard/vetcode → Settings →
 # Trusted publisher → GitHub Actions, repository openyard-cloud/vetcode, workflow release.yml.
+# With "Allow npm publish" ticked there the version goes public at once; without it the version
+# is staged and a maintainer approves it under account settings → Staged Packages.
 on:
   push:
     branches: [main]
@@ -79,13 +81,23 @@ jobs:
           v="$(node -p 'require("./package.json").version')"
           if npm view "$name@$v" version >/dev/null 2>&1; then echo "$name@$v is already on npm"; exit 0; fi
           npm install -g npm@latest
+          # npm hides why trusted publishing failed unless asked: keep the lines that say it.
+          why() { grep -E "npm (verbose oidc|error|warn)|E[0-9]{3}|E_[A-Z_]+" "$1" | grep -v "Unknown user config" | tail -n 25 || true; }
           set +e
-          npm publish --provenance --access public
+          npm publish --provenance --access public --loglevel verbose > publish.log 2>&1
           code=$?
+          why publish.log
+          if [ $code -eq 0 ]; then echo "$name@$v is published on npm."; exit 0; fi
+          # A trusted publisher may be allowed to stage only: the version then waits on npmjs.com
+          # (account settings, Staged Packages) for a maintainer to approve it with 2FA.
+          npm stage publish --provenance --access public --loglevel verbose > stage.log 2>&1
+          staged=$?
+          why stage.log
           set -e
-          if [ $code -ne 0 ]; then
-            # A registry refusal (for example while npm holds the package for review) shows as a
-            # warning, not a failed release: the tag and the GitHub release above are done.
-            # Run this workflow again by hand once npm accepts the package.
-            echo "::warning title=npm publish refused::$name@$v was not published to npm (exit $code). The GitHub release is done; run Release again by hand once npm accepts the package."
+          if [ $staged -eq 0 ]; then
+            echo "::warning title=npm: waiting for approval::$name@$v is staged, not public yet. Approve it on npmjs.com: account settings, Staged Packages (needs 2FA)."
+          else
+            # A registry refusal shows as a warning, not a failed release: the tag and the GitHub
+            # release above are done. Run this workflow again by hand once npm accepts the package.
+            echo "::warning title=npm publish refused::$name@$v was neither published nor staged (publish exit $code, stage exit $staged). The lines above say why. The GitHub release is done; run Release again by hand once npm accepts the package."
           fi

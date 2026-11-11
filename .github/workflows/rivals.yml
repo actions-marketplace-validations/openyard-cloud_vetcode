@@ -1,0 +1,90 @@
+name: Rivals
+# Runs another scanner (GuardDog) on exactly the samples the Benchmark workflow uses for a
+# seed, so both tools are scored on the same packages. GuardDog is slow, so the sample is
+# split into shards that run side by side on throwaway runners; no sample leaves them.
+# Start it by hand: Actions → Rivals → Run workflow. The merged result is the artifact "rivals".
+on:
+  workflow_dispatch:
+    inputs:
+      npm:
+        description: npm packages per class (malicious and benign)
+        default: "1000"
+      pypi:
+        description: PyPI packages per class
+        default: "300"
+      seed:
+        description: Sampling seed (same seed as the Benchmark run to compare with)
+        default: "7"
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        eco: [npm, pypi]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install GuardDog
+        run: |
+          pip install --quiet guarddog
+          pip show guarddog | sed -n '1,2p'
+      - name: Download samples (files only, nothing is installed or run)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NPM_N: ${{ inputs.npm || '1000' }}
+          PYPI_N: ${{ inputs.pypi || '300' }}
+          SEED: ${{ inputs.seed || '7' }}
+          ECO: ${{ matrix.eco }}
+        run: node bench/fetch.mjs --cache "$RUNNER_TEMP/bench" --npm "$NPM_N" --pypi "$PYPI_N" --seed "$SEED" --only "$ECO"
+      - name: Scan this shard
+        env:
+          ECO: ${{ matrix.eco }}
+          SHARD: ${{ matrix.shard }}
+        run: node bench/rivals.mjs --tool guarddog --bin "$(which guarddog)" --cache "$RUNNER_TEMP/bench" --out "rivals/$ECO" --only "$ECO" --shard "$SHARD/10"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shard-${{ matrix.eco }}-${{ matrix.shard }}
+          path: rivals/
+          retention-days: 7
+  merge:
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          path: rivals
+          merge-multiple: true
+      - name: Merge the shards
+        run: |
+          for eco in npm pypi; do
+            if ls "rivals/$eco"/*.shard*.json >/dev/null 2>&1; then
+              echo "$eco: $(ls "rivals/$eco"/*.shard*.json | wc -l) of 10 shards"
+              node bench/merge.mjs "rivals/$eco"
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rivals
+          path: rivals/
+          retention-days: 30

@@ -58,11 +58,19 @@ node bench/rivals.mjs --tool guarddog --bin "$(which guarddog)" --cache /tmp/vet
 node bench/rivals.mjs --tool skill-scanner --bin "$(which skill-scanner)" --cache /tmp/vetcode-bench --out bench/results-cisco --only skills
 ```
 
-Every head-to-head run on fresh samples (never used for tuning), oldest first, including the
-ones vetcode lost. F1 · precision · recall · false alarms:
+Every head-to-head run, including the ones vetcode lost. F1 · precision · recall · false alarms.
+The first four rows are the current versions on the seeds the Benchmark workflow uses, run on
+GitHub Actions (Actions → Rivals → Run workflow, with the same seed); the malicious side of
+seed 31 was never looked at, seed 7 is the one 0.6.0's new rules were written from, and the
+210 clean PyPI packages are the same in every sample. The rows below them are older
+versions on fresh samples, oldest first:
 
 | Data | vetcode | GuardDog (best verdict) |
 |---|---|---|
+| **npm seed 31, 1,000 + 1,000, vetcode 0.6.0, GuardDog 3.2.0** | 95.8 · 96.6 · 94.9 · 3.3% | 92.8 · 95.5 · 90.3 · 4.3% |
+| **PyPI seed 31, 300 + 210, same versions** | 90.5 · 93.9 · 87.3 · 8.1% | 81.8 · 83.4 · 80.3 · 22.9% |
+| npm seed 7, 1,000 + 999, same versions, **in-sample for vetcode** | 94.3 · 96.2 · 92.6 · 3.7% | 92.5 · 94.6 · 90.6 · 5.2% |
+| PyPI seed 7, 300 + 210, same versions, **in-sample for vetcode** | 90.7 · 93.9 · 87.7 · 8.1% | 79.6 · 82.7 · 76.7 · 22.9% |
 | npm seed 14, 500 + 500 | 93.3 · 96.4 · 90.4 · 3.4% | 92.8 · 95.7 · 90.0 · 4.0% |
 | npm seed 16, 500 + 500 | 94.4 · 97.6 · 91.4 · 2.2% | 93.3 · 95.4 · 91.2 · 4.4% |
 | npm seed 18, 150 + 150 | 92.6 · 97.8 · 88.0 · 2.0% | **93.2** · 94.5 · 92.0 · 5.3% |

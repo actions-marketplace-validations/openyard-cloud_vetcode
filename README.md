@@ -8,7 +8,7 @@
   <a href="https://github.com/openyard-cloud/vetcode/releases"><img alt="release" src="https://img.shields.io/github/v/release/openyard-cloud/vetcode?color=14665f"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-14665f"></a>
   <img alt="zero dependencies" src="https://img.shields.io/badge/dependencies-0-14665f">
-  <a href="bench/README.md"><img alt="npm F1 96.1 vs GuardDog 93.0" src="https://img.shields.io/badge/npm%20malware%20F1-96.1%20(GuardDog%2093.0)-2dd4bf"></a>
+  <a href="bench/README.md"><img alt="npm F1 95.8 vs GuardDog 92.8" src="https://img.shields.io/badge/npm%20malware%20F1-95.8%20(GuardDog%2092.8)-2dd4bf"></a>
   <a href="https://openyard.cloud/p/vetcode#check"><img alt="OpenYard code check" src="https://openyard.cloud/badge/vetcode.svg"></a>
 </p>
 
@@ -25,8 +25,8 @@ npx github:openyard-cloud/vetcode#v0.6.0 .       # no agent: scan a project, a p
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between, and every claim below is measured ([how](bench/README.md)):
 
 - **It steps in before the damage.** In Claude Code a [guard](#the-guard-checked-before-your-agent-installs) looks at every install command before it runs and at every repository right after it is cloned. Asked for a package whose newest release was hours old, the agent alone installed it 3 times out of 3; with the guard it installed the previous settled version every time. Shown malware as if nobody had reported it yet, the guard blocked or questioned 95% of 1,000 malicious npm packages and 88% of 300 PyPI ones.
-- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps that no rule was tuned on (33,000 files) it reports 9 findings per thousand files and calls one of them dangerous, the one that does ship agent hooks. On malware benchmarks it raises 2 to 5 times fewer false alarms than GuardDog and Cisco skill-scanner.
-- **Catches as much malware as the best open-source detector, and is harder to fool.** On npm it is level with GuardDog or slightly ahead; on PyPI it leads by 7 F1 points. After 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`) it still catches 99–100% of what it caught; GuardDog loses up to 10%.
+- **Few false alarms.** Every wrong warning costs an agent tokens and your trust. On twelve open-source apps that no rule was tuned on (33,000 files) it reports 9 findings per thousand files and calls one of them dangerous, the one that does ship agent hooks. On malware benchmarks it raises fewer false alarms than GuardDog (3.3% against 4.3% on npm, 8.1% against 22.9% on PyPI) and Cisco skill-scanner (3.0% against 15.9%).
+- **Catches more malware than the best open-source detector, and is harder to fool.** Both tools on the same 2,000 npm packages: F1 95.8 against GuardDog's 92.8. On PyPI: 90.5 against 81.8. After 8 kinds of disguise (split strings, hex escapes, character codes, reversed strings, base64 and gzip packing, code pushed off screen or into `dist/`) it still catches 99–100% of what it caught; GuardDog loses up to 10%.
 - **Knows what attacks on agents look like.** Poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders, a "required" tool to install from a throwaway host.
 - **One run, everything else too.** Malware, supply chain, secrets, web and API bugs, cloud and server config, CI/CD, in 8 languages.
 - **Reads, never runs.** Nothing from the target is installed, built or executed. Node 18+ and nothing else.
@@ -43,12 +43,12 @@ Measured head to head: each tool scans exactly the same packages, drawn at rando
 
 | | Samples | F1 | Precision | Recall | False alarms |
 |---|---|---|---|---|---|
-| **npm**, vetcode | 500 malicious + 499 clean | **96.1** | **98.3** | **94.0** | **1.6%** |
-| npm, GuardDog | same | 93.0 | 93.5 | 92.4 | 6.4% |
-| **PyPI**, vetcode | 300 malicious + 152 clean | **89.2** | **96.5** | **83.0** | **5.9%** |
-| PyPI, GuardDog | same | 85.0 | 87.9 | 82.3 | 22.4% |
+| **npm**, vetcode 0.6.0 | 1,000 malicious + 1,000 clean | **95.8** | **96.6** | **94.9** | **3.3%** |
+| npm, GuardDog 3.2.0 | same | 92.8 | 95.5 | 90.3 | 4.3% |
+| **PyPI**, vetcode 0.6.0 | 300 malicious + 210 clean | **90.5** | **93.9** | **87.3** | **8.1%** |
+| PyPI, GuardDog 3.2.0 | same | 81.8 | 83.4 | 80.3 | 22.9% |
 
-npm samples come from [NPMAnalysis](https://github.com/lxyeternal/NPMAnalysis), the dataset whose paper ranks GuardDog first among 13 detectors. PyPI malware comes from the [Datadog dataset](https://github.com/DataDog/malicious-software-packages-dataset); the clean side is popular packages from pypi.org. On PyPI vetcode has led on every fresh sample, mostly because it raises a quarter as many false alarms. On npm it is closer: vetcode led on most fresh samples, but GuardDog came out ahead on three smaller ones by up to 1.1 F1 points. The [full history](bench/README.md) lists every run, including those.
+Both tools ran on GitHub Actions on the same sample (seed 31), whose malicious packages nobody looked at while 0.6.0's rules were written. npm samples come from [NPMAnalysis](https://github.com/lxyeternal/NPMAnalysis), the dataset whose paper ranks GuardDog first among 13 detectors. PyPI malware comes from the [Datadog dataset](https://github.com/DataDog/malicious-software-packages-dataset); the clean side is popular packages from pypi.org. Earlier versions were closer on npm: over eight older samples vetcode led on five and GuardDog on three, by up to 1.1 F1 points. The [full history](bench/README.md) lists every run, including those.
 
 **Malicious agent skills, vetcode vs [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner)**, both without an LLM, on 204 malicious skills (Datadog) and 132 clean ones (Anthropic, Trail of Bits, obra/superpowers):
 

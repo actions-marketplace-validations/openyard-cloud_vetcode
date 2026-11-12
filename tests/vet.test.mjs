@@ -1384,3 +1384,36 @@ test("the lists of popular names hold nothing a secret scanner reads as a creden
   }
 });
 
+test("private registries: an address counts as public only when it is exactly the public one", async () => {
+  const { privateRegistries } = await import("../skills/vetcode/scripts/lib/private.mjs");
+  const npm = line => privateRegistries({ cwd: "/p", home: "/h", env: {}, read: f => f === "/p/.npmrc" ? line : "" })({ eco: "npm", name: "left-pad" });
+  const py = url => privateRegistries({ cwd: "/p", home: "/h", env: { PIP_INDEX_URL: url }, read: () => "" })({ eco: "pypi", name: "requests" });
+  const site = (host, rest = "/") => ["https:", "", host].join("/") + rest;
+  assert.equal(npm("registry=" + site("registry.npmjs.org")), false);
+  assert.equal(npm("registry=" + site("registry.npmjs.org", "")), false, "without the trailing slash");
+  assert.equal(npm("registry=" + site("registry.yarnpkg.com")), false);
+  assert.equal(npm("registry=" + site("registry.npmjs.org", "/mirror/")), true, "a path under the public host is another registry");
+  assert.equal(npm("registry=" + site("registry.npmjs.org.acme.example")), true, "a host that only starts like the public one");
+  assert.equal(npm("registry=" + site("someone@registry.npmjs.org")), true, "an address with a login is not looked up");
+  assert.equal(npm("registry=" + site("npm.acme.example")), true);
+  assert.equal(py(site("pypi.org", "/simple")), false);
+  assert.equal(py(site("pypi.acme.example", "/simple")), true);
+  assert.equal(py(["http:", "", "pypi.org"].join("/") + "/simple"), true, "plain http is not the public index");
+  // The file names the variables it reads; it never hands the whole environment on.
+  const source = fs.readFileSync(new URL("../skills/vetcode/scripts/lib/private.mjs", import.meta.url), "utf8");
+  assert.equal(/=\s*process\.env\s*[,})]/.test(source), false);
+});
+
+test("guard: the crate archive is fetched from crates.io whatever path the registry answers", async () => {
+  const seen = [];
+  const answer = body => ({ ok: true, status: 200, json: async () => body });
+  const fetchFn = async url => { seen.push(String(url));
+    if (/api\/v1\/crates\//.test(url)) return answer({ crate: { max_stable_version: "1.0.0", downloads: 10 }, versions: [{ num: "1.0.0", dl_path: "@other.example/x", crate_size: 10, created_at: "2020-01-01T00:00:00Z" }] });
+    return answer({});
+  };
+  const asked = [];
+  await checkPackage({ eco: "cargo", name: "somecrate" }, { fetch: fetchFn, scan: async (eco, url) => { asked.push(url); return []; } });
+  assert.equal(asked.length, 1);
+  assert.equal(new URL(asked[0]).hostname, "crates.io");
+});
+

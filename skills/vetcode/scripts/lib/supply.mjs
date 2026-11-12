@@ -8,6 +8,7 @@ import { finding, lineOf } from "./engine.mjs";
 import { POPULAR_SCOPES, KNOWN_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
 import { expanded } from "./normalize.mjs";
+import { weeklyDownloads } from "./registry.mjs";
 
 const rule = r => ({ category: "supply-chain", confidence: "medium", ...r });
 const readJson = text => { try { return JSON.parse(text.replace(/^\uFEFF/, "")); } catch { return null; } };
@@ -53,16 +54,6 @@ export function lookalike(name, popular, scopes = POPULAR_SCOPES, known = popula
   return null;
 }
 
-/** How many times a package was installed last week, from the registry's public counters. null when unknown. */
-export async function weeklyDownloads(fetchFn, eco, name) {
-  try {
-    const url = eco === "npm" ? `https://api.npmjs.org/downloads/point/last-week/${String(name).replace("/", "%2F")}` : `https://pypistats.org/api/packages/${String(name).toLowerCase()}/recent`;
-    const r = await fetchFn(url, { headers: { "user-agent": "vetcode", accept: "application/json" }, signal: AbortSignal.timeout(8000) });
-    if (!r.ok) return null;
-    const j = await r.json(), n = eco === "npm" ? j.downloads : j.data?.last_week;
-    return Number.isFinite(n) ? n : null;
-  } catch { return null; }
-}
 // A name installed tens of thousands of times a week is a package in its own right; one installed
 // a few hundred times next to a name installed millions of times is what a typosquat looks like.
 export const WIDELY_USED = 20000, BARELY_USED = 2000;

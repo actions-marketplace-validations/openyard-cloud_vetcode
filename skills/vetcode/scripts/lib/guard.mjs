@@ -91,7 +91,7 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
   const args = (w, eco) => { const a = []; for (let i = 0; i < w.length; i++) { if (VALUE_FLAGS[eco].test(w[i])) { a.push({ flag: w[i], value: w[++i] }); continue; } if (w[i].startsWith("-")) { a.push({ flag: w[i].split("=")[0], value: w[i].includes("=") ? w[i].slice(w[i].indexOf("=") + 1) : null }); continue; } a.push({ word: w[i] }); } return a; };
   cmds.forEach((raw, i) => {
     const w = strip(raw), bin = base(w[0]);
-    // curl … | sh
+    // A download piped straight into a shell.
     if (raw.sep === "|" && /^(curl|wget)$/.test(bin) && /^(?:ba|z|da|k)?sh$/.test(base(strip(cmds[i + 1] || [])[0]))) {
       const url = w.find(x => /^https?:\/\//.test(x));
       if (!url || !INSTALLER.test(url)) out.push({ pipe: url || "a download", via: `${bin} | ${base(strip(cmds[i + 1])[0])}` });

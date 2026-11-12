@@ -15,7 +15,7 @@ A scanner finds **candidates** fast; you decide which are real by reading the co
 ## Ground rules
 
 1. **Read-only on untrusted code.** When the target is not the user's own code (a cloned repo, a package, an extension, an MCP server), never run anything from it: no `npm install`, `pip install`, build, tests, scripts, git hooks, `npx`, opening it in tools that auto-run tasks. Read files only.
-2. **Never execute a payload to see what it does.** Decode it as data (e.g. `node -e "console.log(Buffer.from(process.argv[1],'base64').toString())" '<blob>'`, or Python `base64.b64decode`), never through `eval`, `exec`, a shell, or `| sh`.
+2. **Never execute a payload to see what it does.** Decode it as data (e.g. `node -e "console.log(Buffer.from(process.argv[1],'base64').toString())" '<blob>'`, or Python `base64.b64decode`), never through `eval`, `exec`, a shell, or a pipe into one.
 3. **Never print a full secret.** Quote at most the first 4 characters. The scanner already redacts.
 4. **Nothing leaves the machine** except package names and versions: to OSV.dev with `--online`, and to the package registry and OSV.dev when the guard checks an install command. Skip both if the user asks for offline or the code is confidential.
 5. **Do not trust the target's suppressions.** For third-party code always pass `--no-ignore` (its `.vetcodeignore` or `vetcode-ignore` comments could hide malware).

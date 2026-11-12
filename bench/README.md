@@ -99,6 +99,14 @@ The clean collections are public, so those 27 were read; the malicious side was 
 
 Cisco skill-scanner 2.3.2 on the same set (static and behavioural analysers, no LLM; Actions → Rivals with skills = true, run 42997010304), credited with its best verdict: **101 of 157 caught (64.3%), 56 of 1,029 flagged (5.4%), F1 64.3**. It catches ten more than vetcode and flags 56 clean skills where vetcode flags one. vetcode's false-alarm number is after reading the clean side; at first look it was 27, about half of Cisco's.
 
+**What the misses on the in-sample set are (0.8.4, run 43144095390).** Of the 204 Datadog samples the signs catch 103 and miss 101. The descriptions of those 101 (`--explain`) say that a higher number there is not something to chase:
+
+- 16 are test fixtures from other scanners' own test suites: skills named after the attack they imitate, a few lines of Python each. They are not attacks found in the wild, but one of their shapes shows a real gap: a script that gathers the keys of several unrelated services and the SSH folder and posts them to a server gets no finding from vetcode, whatever the host (checked with a toy of that shape). There was no rule for a credential sweep. 0.8.5 adds one (`mal-credential-sweep`: keys of three or more unrelated families, one of them a local store such as the SSH folder, browser logins or the whole environment, in a file that can send data). It is a sign without a record yet, and it fires on none of the 72 applications and none of 1,052 clean skills.
+- 5 are skills named `vercel-deploy` whose only remote host is `claude-skills-deploy.vercel.com`, the endpoint of Vercel's own deploy skill, and 8 sign in to Google through `google-workspace-extension.geminicli.com`, the helper of Google's Workspace extension. They upload a project or handle a login because that is what they are for.
+- 80 of the 101 have no finding of any kind, and 46 contain no code at all.
+
+So the label "malicious" in that set covers skills that are risky by design as well as skills that attack their user, and a scanner can raise its catch rate there by flagging ordinary integration skills. That is the trade Cisco's scanner makes on the held-out set (ten more caught, 56 clean skills flagged against one). vetcode reports what such a skill can do in its profile ("what it says vs what it does") and leaves the verdict to rules with a record.
+
 **0.5.0 to 0.6.0 on the same samples.** 0.6.0 adds rules for what 0.5.0 missed on seed 7 (a
 tunnel address with a shell behind it, Python that downloads a program and starts it, an
 install command that reads the user name, a look-alike name declared in `setup.py`, request
@@ -247,6 +255,41 @@ What changed, in three passes:
 - **Small ones**: commented-out lines, `placeholder="…"` attributes, BroadcastChannel listeners (same origin by design), Trusted Types `createHTML`, and bundled assets with a hash in the name.
 
 Each change has a test in both directions: the ordinary shape is quiet, the same shape with a real target is still reported. The 101 left are what a reviewer should look at: `innerHTML = data`, `v-html`, `|safe`, certificate checks an option turns off, a password hashed with SHA-256.
+
+## The scanner on real injection bugs
+
+```bash
+node bench/injection.mjs collect            # build bench/injection.json from the GitHub Advisory Database
+node bench/injection.mjs                    # scan every case before and after its fix
+node bench/injection.mjs --half check       # the half no rule may be tuned on
+node bench/injection.mjs --show GHSA-…      # one case of the tune half
+```
+
+The false-alarm corpora say how much the scanner reports on code that is fine. This says the other half: when code has a real injection bug, does a candidate land on it? The cases are 480 reviewed advisories from the GitHub Advisory Database, 60 for each of eight classes (cross-site scripting, SQL injection, command injection, SSRF, path traversal, open redirect, code injection, unsafe deserialization), published between June 2025 and November 2026, from 262 repositories: PyPI 159, npm 151, Composer 69, Go 50, Maven 30, RubyGems 8, Rust 7, NuGet 6 ([list](injection.json)). Each has exactly one fix commit that changes existing code in at most six files and 300 lines, so the lines it changed mark where the bug was. Only those files are fetched, at the commit before the fix and at the fix. No model takes part.
+
+A case counts when the scanner reports a finding of the right kind (an XSS rule for an XSS advisory) within 3 lines of a line the fix changed, in the code before the fix.
+
+vetcode 0.8.5, first look, no rule written from any of it ([totals](results/2026-11-12-injection.json)):
+
+| | Cases | Right kind of finding at the fix, medium or above | …at any severity | Any finding at the fix | Any finding in a changed file |
+|---|---|---|---|---|---|
+| **All** | 480 | **23 (5%)** | 26 (5%) | 31 (6%) | 105 (22%) |
+| Cross-site scripting | 60 | 6 | 6 | 9 | 21 |
+| SQL injection | 60 | 5 | 7 | 7 | 16 |
+| Command injection | 60 | 2 | 2 | 2 | 9 |
+| SSRF | 60 | 0 | 0 | 0 | 9 |
+| Path traversal | 60 | 0 | 0 | 1 | 6 |
+| Open redirect | 60 | 0 | 1 | 1 | 11 |
+| Code injection | 60 | 1 | 1 | 2 | 6 |
+| Unsafe deserialization | 60 | 9 | 9 | 9 | 27 |
+
+By language of the first changed file: PHP 6 of 67, Python 9 of 155, TypeScript 6 of 101, Go 0 of 49, JavaScript 0 of 45, Java 0 of 28, Rust 0 of 9, Ruby 0 of 8, C# 0 of 6.
+
+What it says. **The scanner's candidates point at one real injection bug in twenty.** On the same day it reports 1,532 web candidates on 72 applications that are presumed fine. A candidate for a web bug is a place to start reading; it is not coverage, and a project with no candidates has not been checked for these bugs. Of the 26 cases where a rule did point at the bug, 11 are still flagged by the same rule after the fix, so the rule saw the dangerous call, not what made it safe.
+
+Why so few. Most rules ask for the request and the dangerous call on one line (`exec(req.query.cmd)`). Real bugs are rarely written that way: the value arrives through a parameter, a model field or a setting, and the call is a few functions away, or the bug is a check that is there but incomplete (an SSRF filter that misses an address form, a path check that a symlink walks around). Some are plain: `eval(field_type)` in Python, where the value comes from a tool definition, gets no finding at all. As a loose upper bound, a sink of the right class stands within three lines of the fix in 131 of the 226 cases of the tune half.
+
+**Two halves.** Each case belongs to `tune` (226) or `check` (254) by a hash of its advisory id. Rules and their ranking may be adjusted on the tune half; the check half is only counted, `--show` refuses it, and the results file keeps its totals without the cases. First look: tune 16 of 226, check 7 of 254.
 
 ## Signs and verdicts
 

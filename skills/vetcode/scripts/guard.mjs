@@ -17,9 +17,10 @@
 //   VETCODE_GUARD=strict    turn every "ask" into "deny"
 //   VETCODE_GUARD_MIN_AGE_HOURS=72   how old a release must be before it installs without a question
 //
-// What leaves the machine: the names and versions of the packages in the command, to the
-// package registry (npm, PyPI) and to OSV.dev, and a download of the package archive, which is
-// read and deleted. For an install that names no package, the names and versions in the
+// What leaves the machine (every destination is in PRIVACY.md): the names and versions of the
+// packages in the command, to the package registry (npm, PyPI, crates.io, the Go proxy) and to
+// OSV.dev, and a download of the package archive, which is read and deleted. A name that looks
+// like a popular package also goes to a download counter (api.npmjs.org, pypistats.org). For an install that names no package, the names and versions in the
 // lockfile or requirements file go to OSV.dev in one request. The install itself would contact the same registry. Nothing is executed.
 // If the network is down or a check fails, the command is allowed: the guard never blocks on
 // its own errors. Packages that come from a private registry (a registry line in .npmrc, or

@@ -1,7 +1,8 @@
 name: Release
 # Releases happen on their own: merge a change to main that raises the version in package.json
 # (and the four other version fields) and this workflow tags it, runs the tests, publishes the
-# GitHub release with vetcode-skill.zip, and publishes the npm package with provenance.
+# GitHub release with vetcode-skill.zip, puts the plugin on the `plugin` branch (the one the
+# Claude plugin directory follows), and publishes the npm package with provenance.
 # Pushes that keep the same version are skipped. Run it by hand from Actions to retry.
 # npm uses trusted publishing (no token): on npmjs.com, @openyard/vetcode → Settings →
 # Trusted publisher → GitHub Actions, repository openyard-cloud/vetcode, workflow release.yml.
@@ -74,6 +75,13 @@ jobs:
           else
             gh release create "v$V" vetcode-skill.zip --target "$GITHUB_SHA" --title "vetcode $V" --generate-notes
           fi
+      # The Claude plugin directory follows the `plugin` branch: only what the plugin installs
+      # (manifest, skill, hooks and its own README), one commit per version.
+      - name: Plugin branch
+        if: steps.v.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh .github/plugin/build.sh "$RUNNER_TEMP/plugin" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
       - name: npm publish
         if: steps.v.outputs.new == 'true'
         run: |

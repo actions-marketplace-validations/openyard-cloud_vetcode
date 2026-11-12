@@ -145,7 +145,7 @@ Everything else (MCP, claude.ai, CI, a whole team) is below. All forms need Node
 
 ### Skill (any agent that loads Agent Skills)
 
-The [skills CLI](https://vercel.com/docs/agent-resources/skills) knows where each agent looks for skills:
+The [skills CLI](https://vercel.com/docs/agent-resources/skills) knows where each agent looks for skills (vetcode on [skills.sh](https://skills.sh/openyard-cloud/vetcode/vetcode)):
 
 ```bash
 npx skills add openyard-cloud/vetcode
@@ -207,7 +207,7 @@ command = "npx"
 args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.4", "vetcode-mcp"]
 ```
 
-Claude Desktop: download `vetcode.mcpb` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and open it; the app installs the server from that file.
+Claude Desktop: download `vetcode.mcpb` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and open it; the app installs the server from that file. The server is listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.openyard-cloud/vetcode`, for clients that install from it.
 
 Then ask your agent to "use vetcode to review this project". The agent should call `vetcode_guide` once; the server also tells it to.
 
@@ -299,7 +299,7 @@ node skills/vetcode/scripts/vet.mjs [path] [options] # from a clone
 
 ### Pull request review on GitHub
 
-vetcode can review every pull request: it scans only the files the pull request changes, comments on the exact lines it adds, lists what was already there, and fails the check only for problems on changed lines.
+The action is on [GitHub Marketplace](https://github.com/marketplace/actions/vetcode-security-review). It reviews every pull request: it scans only the files the pull request changes, comments on the exact lines it adds, lists what was already there, and fails the check only for problems on changed lines.
 
 ```yaml
 # .github/workflows/vetcode.yml

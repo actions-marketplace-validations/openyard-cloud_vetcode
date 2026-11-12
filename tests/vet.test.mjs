@@ -1417,3 +1417,18 @@ test("guard: the crate archive is fetched from crates.io whatever path the regis
   assert.equal(new URL(asked[0]).hostname, "crates.io");
 });
 
+test("release: the README pins the version being released, and the Action fits GitHub Marketplace", () => {
+  const read = f => fs.readFileSync(new URL("../" + f, import.meta.url), "utf8");
+  const version = JSON.parse(read("package.json")).version;
+  const pins = [...read("README.md").matchAll(/openyard-cloud\/vetcode[#@]v(\d+\.\d+\.\d+)/g)].map(m => m[1]);
+  assert.ok(pins.length >= 5, "the README pins a release in its install commands");
+  assert.deepEqual([...new Set(pins)], [version]);
+  // Marketplace refuses a description over 125 characters and lists the action under its name.
+  const action = read("action.yml");
+  const description = /^description: (.*)$/m.exec(action)[1];
+  assert.ok(description.length <= 125, `description is ${description.length} characters`);
+  assert.match(action, /^name: vetcode security review$/m);
+  assert.match(action, /^branding:\n  icon: \w[\w-]*\n  color: (?:white|black|yellow|blue|green|orange|red|purple|gray-dark)$/m);
+  assert.equal(fs.readdirSync(new URL("..", import.meta.url)).filter(f => /^action\.ya?ml$/.test(f)).length, 1);
+});
+

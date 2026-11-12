@@ -29,9 +29,17 @@ cd "$out"
 git init -q -b plugin
 if git fetch -q --depth 1 "$remote" plugin 2>/dev/null; then git reset -q --soft FETCH_HEAD; fi
 git add -A
-if git rev-parse -q --verify HEAD >/dev/null && git diff --cached --quiet HEAD; then
-  echo "The plugin branch already holds this ($v)."
-  exit 0
+if git rev-parse -q --verify HEAD >/dev/null; then
+  if git diff --cached --quiet HEAD; then
+    echo "The plugin branch already holds this ($v)."
+    exit 0
+  fi
+  # A release that changed the Action, the MCP server or the benchmarks changes nothing in the
+  # plugin but its version number. The directory reviews every version, so that is not one.
+  if ! git diff --cached -U0 HEAD | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) ' | grep -qvE '"version": "[0-9.]+"|^. *version: "[0-9.]+"|^.export const VERSION = "[0-9.]+";'; then
+    echo "Only the version number differs from the plugin branch: nothing to publish for $v."
+    exit 0
+  fi
 fi
 git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "vetcode $v"
 git push -q "$remote" plugin

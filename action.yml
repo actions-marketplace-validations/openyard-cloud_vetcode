@@ -1,5 +1,5 @@
 name: vetcode security review
-description: Reviews pull requests for malware, supply-chain attacks, leaked secrets, vulnerabilities and risky CI or AI-agent config, as inline comments.
+description: Reviews pull requests for malware, supply-chain attacks, leaked secrets and vulnerabilities, with inline comments.
 author: OpenYard
 branding:
   icon: shield

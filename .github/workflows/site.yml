@@ -1,0 +1,36 @@
+name: Site
+# Publishes vetcode.openyard.cloud (GitHub Pages) from site/index.html, with the released
+# version filled in. Runs when the page or the version changes, and by hand.
+on:
+  push:
+    branches: [main]
+    paths: [site/**, assets/logo.svg, assets/social-preview.png, package.json, .github/site/**]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: sh .github/site/build.sh _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

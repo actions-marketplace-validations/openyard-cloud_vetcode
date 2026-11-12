@@ -1560,3 +1560,18 @@ test("places to read: which rules report them is generated from the two measurem
   assert.deepEqual([...data.places].sort(), data.places);
 });
 
+test("site: built with the released version, nothing left to fill in, every local file it uses is there", () => {
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-site-")), "site");
+  const built = spawnSync("sh", [new URL("../.github/site/build.sh", import.meta.url).pathname, out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stderr);
+  const html = fs.readFileSync(path.join(out, "index.html"), "utf8");
+  const version = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  assert.equal(html.includes("{{"), false);
+  assert.deepEqual([...new Set([...html.matchAll(/vetcode[#@]v(\d+\.\d+\.\d+)/g)].map(m => m[1]))], [version]);
+  for (const m of html.matchAll(/(?:src|href)="(?!https?:|#|\.\/"|mailto:)([^"]+)"/g)) assert.ok(fs.existsSync(path.join(out, m[1])), m[1]);
+  assert.equal(fs.readFileSync(path.join(out, "CNAME"), "utf8").trim(), "vetcode.openyard.cloud");
+  // The page's numbers are the README's: a change there that is not made here fails.
+  const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  for (const n of ["947", "903", "262", "241", "91", "101", "55 (11%)"]) assert.ok(readme.includes(n) && html.includes(n), n);
+});
+

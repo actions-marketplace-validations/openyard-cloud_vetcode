@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vetcode: the security check your coding agent runs before it acts</title>
+<meta name="description" content="A guard and a scanner for AI coding agents: packages are checked before they install, repositories after they are cloned, MCP servers before they are added. Free, MIT, zero dependencies.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0F172A">
+<link rel="canonical" href="https://vetcode.openyard.cloud/">
+<meta property="og:title" content="vetcode">
+<meta property="og:description" content="The security check your coding agent runs before it acts: packages before install, repositories after clone, MCP servers before they are added.">
+<meta property="og:image" content="https://vetcode.openyard.cloud/social-preview.png">
+<meta property="og:url" content="https://vetcode.openyard.cloud/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<style>
+  /* Design system (ui-ux-pro-max, "developer security tool"): Dark Mode (OLED) style, developer
+     typography (JetBrains Mono headings, IBM Plex Sans body), code-dark palette with a "run green"
+     accent used for the call to action only. Page pattern: Trust & Authority over a minimal single
+     column: hero with one action > proof > what it checks > honest numbers > install > footer. */
+  :root {
+    --primary: #1E293B;
+    --secondary: #334155;
+    --accent: #22C55E;
+    --on-accent: #0F172A;
+    --bg: #0F172A;
+    --fg: #F8FAFC;
+    --card: #1B2336;
+    --muted: #272F42;
+    --muted-fg: #94A3B8;
+    --body-fg: #CBD5E1;
+    --border: #475569;
+    --border-soft: #2A3447;
+    --deny: #EF4444;
+    --ask: #F59E0B;
+    --term: #0B1120;
+    --ring: #FFFFFF;
+    --heading: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    --ease: 200ms ease;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before { transition: none !important; animation: none !important; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+  .col { max-width: 1080px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  a { color: var(--accent); text-underline-offset: 3px; transition: color var(--ease); }
+  a:hover { color: #4ADE80; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 6px; }
+  code { font: 0.9em var(--heading); background: var(--muted); color: var(--fg); padding: 2px 6px; border-radius: 4px; }
+  .icon { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* top bar */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 700 18px var(--heading); color: var(--fg); text-decoration: none; min-height: 44px; }
+  .brand:hover { color: var(--fg); }
+  .brand img { width: 30px; height: 30px; }
+  .top nav { display: flex; gap: 4px; }
+  .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; color: var(--muted-fg); text-decoration: none; font-size: 15px; border-radius: 8px; }
+  .top nav a:hover { color: var(--fg); background: var(--muted); }
+
+  /* hero: one claim, one action, and the guard answering underneath */
+  .hero { text-align: center; padding-block: 56px 40px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font: 500 13px var(--heading); color: var(--muted-fg); border: 1px solid var(--border-soft); border-radius: 999px; padding: 6px 14px; margin: 0 0 26px; }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .hero h1 { font: 700 clamp(32px, 5.4vw, 60px)/1.08 var(--heading); letter-spacing: -0.02em; margin: 0 auto 20px; max-width: 22ch; text-wrap: balance; }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted-fg); margin: 0 auto 32px; max-width: 40em; }
+  .install-box { display: flex; align-items: center; gap: 10px; max-width: 760px; margin: 0 auto; background: var(--term); border: 1px solid var(--border-soft); border-radius: 12px; padding: 8px 8px 8px 18px; text-align: left; }
+  .install-box pre { margin: 0; flex: 1; min-width: 0; font: 14px/1.5 var(--heading); color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 0; }
+  .install-box pre::before { content: "$ "; color: var(--muted-fg); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 8px; font: 600 15px var(--body); text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: background var(--ease), color var(--ease), border-color var(--ease); }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover { background: #4ADE80; color: var(--on-accent); }
+  .btn.ghost { background: transparent; color: var(--fg); border-color: var(--border); }
+  .btn.ghost:hover { background: var(--muted); color: var(--fg); }
+  .hero .links { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+  .hero .meta { margin: 18px 0 0; font-size: 14px; color: var(--muted-fg); }
+
+  .term { max-width: 760px; margin: 44px auto 0; background: var(--term); border: 1px solid var(--border-soft); border-radius: 12px; text-align: left; overflow: hidden; }
+  .term-bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--border-soft); font: 12px var(--heading); color: var(--muted-fg); }
+  .term-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--secondary); }
+  .term-bar b { font-weight: 500; margin-left: 8px; }
+  .term-body { padding: 18px 20px 22px; font: 14px/1.6 var(--heading); overflow-x: auto; }
+  .term-body p { margin: 0; white-space: pre-wrap; }
+  .term-body .cmd { color: var(--fg); }
+  .term-body .cmd::before { content: "$ "; color: var(--muted-fg); }
+  .term-body .out { color: var(--body-fg); }
+  .term-body .gap { height: 14px; }
+  .term-body .dim { color: var(--muted-fg); }
+  .chip { display: inline-block; font: 700 11px/1 var(--heading); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; margin-right: 8px; vertical-align: 1px; }
+  .chip.deny { background: var(--deny); color: #FFFFFF; }
+  .chip.ask { background: var(--ask); color: var(--on-accent); }
+  .chip.allow { background: var(--accent); color: var(--on-accent); }
+
+  /* proof: four measured numbers */
+  .proof { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; margin: 64px 0 0; }
+  .stat { background: var(--card); padding: 22px 20px; min-width: 0; }
+  .stat .n { font: 700 30px/1.1 var(--heading); color: var(--fg); font-variant-numeric: tabular-nums; }
+  .stat .n small { font-size: 16px; color: var(--muted-fg); font-weight: 500; }
+  .stat p { margin: 8px 0 0; font-size: 14px; color: var(--muted-fg); }
+
+  section { padding-block: 80px 0; }
+  h2 { font: 700 clamp(24px, 3.2vw, 34px)/1.2 var(--heading); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
+  .sub { color: var(--muted-fg); margin: 0 0 32px; max-width: 44em; }
+
+  /* what it checks */
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border-soft); border-radius: 12px; padding: 24px; min-width: 0; transition: border-color var(--ease); }
+  .card:hover { border-color: var(--border); }
+  .card .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .card .badge { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: rgba(34, 197, 94, .12); color: var(--accent); }
+  .card h3 { margin: 0; font: 600 18px var(--heading); }
+  .card .when { margin: 0; font: 500 12px var(--heading); letter-spacing: .05em; text-transform: uppercase; color: var(--muted-fg); }
+  .card p.body { margin: 0; color: var(--body-fg); }
+
+  /* numbers */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--card); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  th { font: 600 12px var(--heading); letter-spacing: .05em; text-transform: uppercase; color: var(--muted-fg); background: var(--primary); }
+  td { color: var(--body-fg); }
+  td strong { color: var(--fg); }
+  tr:last-child td { border-bottom: none; }
+  .limits { margin: 20px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .limit { border: 1px solid var(--border-soft); border-radius: 12px; padding: 18px 20px; min-width: 0; }
+  .limit h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font: 600 15px var(--heading); color: var(--fg); }
+  .limit h3 .icon { width: 18px; height: 18px; color: var(--ask); }
+  .limit p { margin: 0; color: var(--muted-fg); font-size: 15px; }
+  .source { margin-top: 18px; font-size: 14px; color: var(--muted-fg); }
+
+  /* install */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tab { min-height: 44px; font: 500 14px var(--body); padding: 0 16px; border-radius: 8px; border: 1px solid var(--border-soft); background: transparent; color: var(--muted-fg); cursor: pointer; transition: background var(--ease), color var(--ease), border-color var(--ease); }
+  .tab:hover { color: var(--fg); border-color: var(--border); }
+  .tab[aria-selected="true"] { background: var(--secondary); border-color: var(--secondary); color: var(--fg); }
+  .panel { background: var(--card); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px 22px; }
+  .panel p { margin: 0 0 14px; color: var(--body-fg); }
+  .code { display: flex; align-items: flex-start; gap: 10px; background: var(--term); border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 8px 8px 16px; }
+  .code pre { margin: 0; flex: 1; min-width: 0; overflow-x: auto; white-space: pre; font: 14px/1.55 var(--heading); color: var(--fg); padding: 10px 0; }
+  .copy { flex: none; min-height: 44px; min-width: 76px; font: 600 13px var(--body); padding: 0 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--fg); cursor: pointer; transition: background var(--ease), color var(--ease), border-color var(--ease); }
+  .copy:hover { background: var(--muted); }
+  .copy[data-done] { border-color: var(--accent); color: var(--accent); }
+  .install-box .copy.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .install-box .copy.primary:hover { background: #4ADE80; }
+  .note { font-size: 14px; color: var(--muted-fg); margin: 16px 0 0; }
+
+  /* closing call to action */
+  .closing { margin-top: 80px; text-align: center; border: 1px solid var(--border-soft); border-radius: 16px; padding: 48px 24px; background: linear-gradient(180deg, var(--card), var(--bg)); }
+  .closing h2 { margin-bottom: 10px; }
+  .closing p { color: var(--muted-fg); margin: 0 auto 24px; max-width: 36em; }
+  .closing .links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  footer { margin-top: 64px; border-top: 1px solid var(--border-soft); padding-block: 28px 40px; color: var(--muted-fg); font-size: 14px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer a { color: var(--muted-fg); }
+  footer a:hover { color: var(--fg); }
+
+  @media (max-width: 1024px) { .proof { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 768px) {
+    .hero { padding-block: 32px 24px; }
+    .grid, .limits { grid-template-columns: minmax(0, 1fr); }
+    .top nav a.optional { display: none; }
+    .install-box { flex-direction: column; align-items: stretch; padding: 8px 12px 12px; }
+    .install-box .copy { width: 100%; }
+  }
+  @media (max-width: 420px) { .proof { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M16.5 9.4 7.5 4.2"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v6"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="m8.5 11 2 2 3.5-4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+</svg>
+
+<div class="col">
+  <header class="top">
+    <a class="brand" href="./"><img src="logo.svg" alt="" width="30" height="30">vetcode</a>
+    <nav aria-label="Sections">
+      <a class="optional" href="#what">What it checks</a>
+      <a class="optional" href="#numbers">Numbers</a>
+      <a class="optional" href="#install">Install</a>
+      <a href="https://github.com/openyard-cloud/vetcode" aria-label="vetcode on GitHub"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg></a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Free and open source · v{{VERSION}}</p>
+      <h1>The security check your coding agent runs <em>before it acts</em>.</h1>
+      <p class="lede">Agents install packages in a second and run cloned repositories without reading them. vetcode reads first: packages before they install, repositories after they are cloned, MCP servers before they are added.</p>
+
+      <div class="install-box">
+        <pre id="hero-cmd">claude plugin marketplace add openyard-cloud/vetcode &amp;&amp; claude plugin install vetcode@openyard</pre>
+        <button class="copy primary" data-copy="hero-cmd" type="button">Copy</button>
+      </div>
+      <div class="links">
+        <a class="btn ghost" href="#install">Other agents, MCP and CI</a>
+        <a class="btn ghost" href="https://github.com/openyard-cloud/vetcode"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg>Source</a>
+      </div>
+      <p class="meta">MIT · zero dependencies · reads code, never runs it · no telemetry</p>
+
+      <div class="term" role="img" aria-label="Three install commands and the guard's answers: deny for a package that does not exist, ask for a look-alike name, allow for a well-known package.">
+        <div class="term-bar" aria-hidden="true"><span></span><span></span><span></span><b>claude code · vetcode guard</b></div>
+        <div class="term-body" aria-hidden="true">
+          <p class="cmd">npm install react-dom-helpers-pro</p>
+          <p class="out"><span class="chip deny">deny</span>react-dom-helpers-pro does not exist on npm. Check the name: a made-up name is one an attacker can register.</p>
+          <p class="gap"></p>
+          <p class="cmd">npm install expres</p>
+          <p class="out"><span class="chip ask">ask</span>expres looks like the popular package express. If express was meant, install that instead.</p>
+          <p class="gap"></p>
+          <p class="cmd">npm install express</p>
+          <p class="out"><span class="chip allow">allow</span><span class="dim">well known, settled version: the install runs, nothing is shown</span></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="proof" aria-label="Measured results">
+      <div class="stat"><div class="n">947<small>/1,000</small></div><p>malicious npm packages caught, with 26 false alarms on 1,000 clean ones. GuardDog: 903 and 43.</p></div>
+      <div class="stat"><div class="n">262<small>/300</small></div><p>malicious PyPI packages caught. GuardDog on the same packages: 241.</p></div>
+      <div class="stat"><div class="n">3<small>/3</small></div><p>times Claude Code installed the settled release instead of one only hours old.</p></div>
+      <div class="stat"><div class="n">1<small>/72</small></div><p>open-source applications wrongly called dangerous.</p></div>
+    </div>
+
+    <section id="what" aria-labelledby="what-h">
+      <h2 id="what-h">What it checks, and when</h2>
+      <p class="sub">In Claude Code the guard runs on its own, as a hook. Other agents call the same checks as a tool, or load the review procedure as a skill.</p>
+      <div class="grid">
+        <article class="card">
+          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-package"/></svg></span><div><p class="when">Before an install</p><h3>Packages</h3></div></div>
+          <p class="body">npm, pnpm, yarn, bun, pip, uv, cargo and go. A name that does not exist, a look-alike of a popular one, a malware advisory, malicious code in the archive (downloaded and read, never run), a release only hours old. It answers allow, ask or deny before the command runs.</p>
+        </article>
+        <article class="card">
+          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg></span><div><p class="when">After a clone</p><h3>Repositories</h3></div></div>
+          <p class="body">Before the agent builds or runs anything from it: install scripts that decode and run code, instructions planted in agent files such as CLAUDE.md, hooks and auto-approved MCP servers in project settings.</p>
+        </article>
+        <article class="card">
+          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><div><p class="when">Before it is added</p><h3>MCP servers</h3></div></div>
+          <p class="body">Whether added with <code>claude mcp add</code> or written into a config file: the package the server would start, and an address behind a tunnel or on plain HTTP.</p>
+        </article>
+        <article class="card">
+          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg></span><div><p class="when">When you ask</p><h3>A review</h3></div></div>
+          <p class="body">"Is this repo safe to run?" or "review this before I deploy": a scan for malware, supply-chain tricks, leaked keys and risky CI and server config, and a procedure that has the agent confirm each finding by reading the code.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="numbers" aria-labelledby="numbers-h">
+      <h2 id="numbers-h">Measured, including what it does badly</h2>
+      <p class="sub">Every number comes from a script in the repository, run on samples its rules were not tuned on unless the source says so.</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th scope="col">Question</th><th scope="col">vetcode</th><th scope="col">For comparison</th></tr></thead>
+          <tbody>
+            <tr><td>Malicious npm packages caught, of 1,000 (false alarms on 1,000 clean ones)</td><td><strong>947</strong> (26)</td><td>GuardDog: 903 (43)</td></tr>
+            <tr><td>Malicious PyPI packages caught, of 300 (false alarms on 210 clean ones)</td><td><strong>262</strong> (16)</td><td>GuardDog: 241 (48)</td></tr>
+            <tr><td>Asked to add a package whose newest release was hours old, 3 tries</td><td>installed the previous, settled version 3 times</td><td>Claude Code alone installed the new release 3 times</td></tr>
+            <tr><td>Malicious agent skills it had never seen, of 157 (false alarms on 1,029 clean ones)</td><td>91 (<strong>1</strong>)</td><td>Cisco skill-scanner: 101 (56)</td></tr>
+            <tr><td>Open-source applications wrongly called dangerous, of 72</td><td><strong>1</strong></td><td></td></tr>
+            <tr><td>Real injection bugs where it points, of 480 advisories</td><td>55 (11%)</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="limits">
+        <div class="limit"><h3><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Web bugs</h3><p>It lists the dangerous calls in web code as places to read. They stand at about one real injection bug in ten.</p></div>
+        <div class="limit"><h3><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>Logic bugs</h3><p>It does not make your agent better at finding missing authorization or business-logic flaws.</p></div>
+        <div class="limit"><h3><svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>No guarantee</h3><p>New malware can still slip through. A clean report means nothing obvious was found.</p></div>
+      </div>
+      <p class="source">Methods, samples and every run: <a href="https://github.com/openyard-cloud/vetcode/blob/main/bench/README.md">bench/README.md</a></p>
+    </section>
+
+    <section id="install" aria-labelledby="install-h">
+      <h2 id="install-h">Install</h2>
+      <p class="sub">Needs Node.js 18 or newer and nothing else. vetcode is not on npm: every command runs it from the repository, pinned to a release.</p>
+
+      <div class="tabs" role="tablist" aria-label="Where you use it">
+        <button class="tab" type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Claude Code</button>
+        <button class="tab" type="button" role="tab" id="tab-skill" aria-controls="panel-skill" aria-selected="false" tabindex="-1">Other agents</button>
+        <button class="tab" type="button" role="tab" id="tab-mcp" aria-controls="panel-mcp" aria-selected="false" tabindex="-1">MCP server</button>
+        <button class="tab" type="button" role="tab" id="tab-cli" aria-controls="panel-cli" aria-selected="false" tabindex="-1">Command line</button>
+        <button class="tab" type="button" role="tab" id="tab-ci" aria-controls="panel-ci" aria-selected="false" tabindex="-1">GitHub Action</button>
+      </div>
+
+      <div class="panel" role="tabpanel" id="panel-claude" aria-labelledby="tab-claude">
+        <p>The plugin: the guard on every install, clone and MCP server, plus the review skill.</p>
+        <div class="code"><pre id="c1">claude plugin marketplace add openyard-cloud/vetcode &amp;&amp; claude plugin install vetcode@openyard</pre><button class="copy" type="button" data-copy="c1">Copy</button></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-skill" aria-labelledby="tab-skill" hidden>
+        <p>Codex, Gemini CLI, GitHub Copilot, Cursor, Amp, Goose, opencode and any agent that loads Agent Skills.</p>
+        <div class="code"><pre id="c2">npx skills add openyard-cloud/vetcode</pre><button class="copy" type="button" data-copy="c2">Copy</button></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-mcp" aria-labelledby="tab-mcp" hidden>
+        <p>For any client that speaks MCP. In Claude Desktop, open <code>vetcode.mcpb</code> from the <a href="https://github.com/openyard-cloud/vetcode/releases/latest">latest release</a> instead. Listed in the MCP Registry as <code>io.github.openyard-cloud/vetcode</code>.</p>
+        <div class="code"><pre id="c3">{
+  "mcpServers": {
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v{{VERSION}}", "vetcode-mcp"] }
+  }
+}</pre><button class="copy" type="button" data-copy="c3">Copy</button></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-cli" aria-labelledby="tab-cli" hidden>
+        <p>No agent at all: scan a project, a package or a cloned repository.</p>
+        <div class="code"><pre id="c4">npx github:openyard-cloud/vetcode#v{{VERSION}} .</pre><button class="copy" type="button" data-copy="c4">Copy</button></div>
+      </div>
+      <div class="panel" role="tabpanel" id="panel-ci" aria-labelledby="tab-ci" hidden>
+        <p>Reviews every pull request and comments on the lines it adds. On the <a href="https://github.com/marketplace/actions/vetcode-security-review">GitHub Marketplace</a>.</p>
+        <div class="code"><pre id="c5">- uses: openyard-cloud/vetcode@v{{VERSION}}
+  with:
+    fail-on: high</pre><button class="copy" type="button" data-copy="c5">Copy</button></div>
+      </div>
+
+      <p class="note">Only package names leave your machine, to the package registry and OSV.dev; no code, no account, no telemetry. <a href="https://github.com/openyard-cloud/vetcode/blob/main/PRIVACY.md">Privacy</a></p>
+    </section>
+
+    <div class="closing">
+      <h2>Tell us what it gets wrong</h2>
+      <p>False alarms and anything it lets through are the reports that make it better.</p>
+      <div class="links">
+        <a class="btn primary" href="https://github.com/openyard-cloud/vetcode/issues">Open an issue</a>
+        <a class="btn ghost" href="https://github.com/openyard-cloud/vetcode/blob/main/SECURITY.md">Report a security problem</a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>vetcode {{VERSION}} · MIT · from the <a href="https://openyard.cloud">OpenYard</a> community</span>
+    <span><a href="https://github.com/openyard-cloud/vetcode">GitHub</a> · <a href="https://github.com/openyard-cloud/vetcode/blob/main/PRIVACY.md">Privacy</a> · <a href="https://github.com/openyard-cloud/vetcode/blob/main/bench/README.md">Benchmarks</a></span>
+  </footer>
+</div>
+
+<script>
+  // Tabs: click or arrow keys, as in any tab list.
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function show(tab) {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => show(t));
+    t.addEventListener("keydown", e => {
+      const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!step) return;
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      show(next); next.focus();
+    });
+  });
+  // Copy buttons, with a selection as the fallback when the clipboard is refused.
+  for (const b of document.querySelectorAll(".copy")) {
+    b.addEventListener("click", async () => {
+      const el = document.getElementById(b.dataset.copy);
+      let copied = true;
+      try { await navigator.clipboard.writeText(el.textContent); }
+      catch (e) { copied = false; const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+      b.textContent = copied ? "Copied" : "Selected"; b.dataset.done = "";
+      setTimeout(() => { b.textContent = "Copy"; delete b.dataset.done; }, 1800);
+    });
+  }
+</script>
+</body>
+</html>

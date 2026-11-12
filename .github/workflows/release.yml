@@ -2,7 +2,8 @@ name: Release
 # Releases happen on their own: merge a change to main that raises the version in package.json
 # (and the four other version fields) and this workflow tags it, runs the tests, publishes the
 # GitHub release with vetcode-skill.zip, puts the plugin on the `plugin` branch (the one the
-# Claude plugin directory follows), and publishes the npm package with provenance.
+# Claude plugin directory follows), attaches vetcode.mcpb and publishes it to the MCP Registry,
+# and publishes the npm package with provenance.
 # Pushes that keep the same version are skipped. Run it by hand from Actions to retry.
 # npm uses trusted publishing (no token): on npmjs.com, @openyard/vetcode → Settings →
 # Trusted publisher → GitHub Actions, repository openyard-cloud/vetcode, workflow release.yml.
@@ -82,6 +83,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: sh .github/plugin/build.sh "$RUNNER_TEMP/plugin" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+      # The MCP bundle goes on the release once: the MCP Registry keeps its hash, and clients
+      # check it before they install, so a bundle is never replaced. The registry entry is
+      # published with the workflow's own identity (no token); a refusal is a warning, as for npm.
+      - name: MCP bundle and registry
+        if: steps.v.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          work="$RUNNER_TEMP/mcp"
+          if gh release view "v$V" --json assets -q '.assets[].name' | grep -qx vetcode.mcpb; then
+            gh release download "v$V" -p vetcode.mcpb -D "$RUNNER_TEMP/released"
+            node .github/mcp/bundle.mjs "$work" "$RUNNER_TEMP/released/vetcode.mcpb"
+          else
+            node .github/mcp/bundle.mjs "$work"
+            gh release upload "v$V" "$work/vetcode.mcpb"
+          fi
+          cd "$work"
+          if curl -sf -o /dev/null "https://registry.modelcontextprotocol.io/v0/servers/io.github.openyard-cloud%2Fvetcode/versions/$V"; then
+            echo "The MCP Registry already has $V."
+            exit 0
+          fi
+          curl -sSfL -o publisher.tar.gz https://github.com/modelcontextprotocol/registry/releases/download/v1.8.9/mcp-publisher_linux_amd64.tar.gz
+          echo "4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8  publisher.tar.gz" | sha256sum -c -
+          tar xzf publisher.tar.gz mcp-publisher
+          set +e
+          ./mcp-publisher login github-oidc && ./mcp-publisher publish
+          code=$?
+          set -e
+          if [ $code -eq 0 ]; then
+            echo "io.github.openyard-cloud/vetcode $V is in the MCP Registry."
+          else
+            echo "::warning title=MCP Registry refused::io.github.openyard-cloud/vetcode $V was not published (exit $code). The lines above say why. vetcode.mcpb is on the release; run Release again by hand to retry."
+          fi
       - name: npm publish
         if: steps.v.outputs.new == 'true'
         run: |

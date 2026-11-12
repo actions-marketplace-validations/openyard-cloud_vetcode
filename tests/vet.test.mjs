@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
+import crypto from "node:crypto";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { vet } from "../skills/vetcode/scripts/lib/index.mjs";
@@ -1455,3 +1456,32 @@ test("release: the README pins the version being released, and the Action fits G
   assert.equal(fs.readdirSync(new URL("..", import.meta.url)).filter(f => /^action\.ya?ml$/.test(f)).length, 1);
 });
 
+
+test("the MCP bundle: a manifest that matches the server, a server that runs from the bundle, a registry entry within the limits", () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-mcpb-"));
+  const built = spawnSync("node", [new URL("../.github/mcp/bundle.mjs", import.meta.url).pathname, out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stderr);
+  const version = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  const dir = path.join(out, "bundle");
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
+  assert.equal(manifest.version, version);
+  for (const k of ["manifest_version", "name", "version", "description", "author", "server"]) assert.ok(manifest[k], k);
+  assert.ok(fs.existsSync(path.join(dir, manifest.server.entry_point)));
+  assert.ok(fs.existsSync(path.join(dir, manifest.icon)));
+  assert.deepEqual(manifest.server.mcp_config.args, ["${__dirname}/" + manifest.server.entry_point]);
+  // The server answers from the bundle's folder, and offers exactly the tools the manifest lists.
+  const ask = [{ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } } }, { jsonrpc: "2.0", id: 2, method: "tools/list" }];
+  const run = spawnSync("node", [path.join(dir, manifest.server.entry_point)], { input: ask.map(a => JSON.stringify(a)).join("\n") + "\n", encoding: "utf8" });
+  const answers = run.stdout.trim().split("\n").map(l => JSON.parse(l));
+  assert.equal(answers[0].result.serverInfo.version, version);
+  assert.deepEqual(answers[1].result.tools.map(t => t.name), manifest.tools.map(t => t.name));
+  // The registry's limits: a description of at most 100 characters, an address that contains "mcp", the hash of the file.
+  const entry = JSON.parse(fs.readFileSync(path.join(out, "server.json"), "utf8"));
+  assert.equal(entry.name, "io.github.openyard-cloud/vetcode");
+  assert.equal(entry.version, version);
+  assert.ok(entry.description.length <= 100, `description is ${entry.description.length} characters`);
+  const pack = entry.packages[0];
+  assert.equal(pack.identifier, `https://github.com/openyard-cloud/vetcode/releases/download/v${version}/vetcode.mcpb`);
+  assert.match(pack.identifier, /mcp/);
+  if (fs.existsSync(path.join(out, "vetcode.mcpb"))) assert.equal(pack.fileSha256, crypto.createHash("sha256").update(fs.readFileSync(path.join(out, "vetcode.mcpb"))).digest("hex"));
+});

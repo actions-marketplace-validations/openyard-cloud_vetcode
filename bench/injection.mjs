@@ -106,7 +106,7 @@ function collect() {
       }
     }
   }
-  fs.writeFileSync(LIST, JSON.stringify(out, null, 1) + "\n");
+  fs.writeFileSync(LIST, "[\n" + out.map(c => JSON.stringify(c)).join(",\n") + "\n]\n"); // one case per line
   console.log(`${out.length} cases: ${Object.keys(CLASSES).map(k => `${k} ${count(k)}`).join(", ")}; tune ${out.filter(c => c.half === "tune").length}, check ${out.filter(c => c.half === "check").length}`);
 }
 

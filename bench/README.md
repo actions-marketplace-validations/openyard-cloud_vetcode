@@ -200,7 +200,7 @@ node bench/noise.mjs --show secret-assignment                           # the li
 | Fifth (58,000 files) | 1,423 (0.7.1) | **818** | 5 | **0** |
 | Sixth (45,000 files), first scanned with 0.8.0 | 554 | 554 | **1** (2 by the old rule) | 1 |
 
-Findings are at medium or above; from 0.8.0 several raw-HTML sinks in one file count once (counted line by line the "now" column reads 96, 285, 241, 293 and 1,181). A wrong verdict used to mean any high sign of malware, supply-chain attack or agent attack; five sets in a row produced two to five of them at first look, each from one rule matching one or two lines, and fixing the rules for one set did not help the next. From 0.8.0 a verdict needs a rule with a record or corroboration. The sixth set is the first met with that mechanism: one verdict, on an app (Ghost) that does ship agent hooks and install instructions for agents. All 72 apps together (228,282 files) give 2,085 findings with 0.8.5, 9.1 per thousand files; 1,532 of them are web candidates.
+Findings are at medium or above; from 0.8.0 several raw-HTML sinks in one file count once (counted line by line the "now" column reads 96, 285, 241, 293 and 1,181). A wrong verdict used to mean any high sign of malware, supply-chain attack or agent attack; five sets in a row produced two to five of them at first look, each from one rule matching one or two lines, and fixing the rules for one set did not help the next. From 0.8.0 a verdict needs a rule with a record or corroboration. The sixth set is the first met with that mechanism: one verdict, on an app (Ghost) that does ship agent hooks and install instructions for agents. All 72 apps together (228,282 files) give 2,085 findings with 0.8.5, 9.1 per thousand files; 1,532 of them are web candidates. From 0.8.6 the rules that only see a dangerous call report [places to read](#places-to-read-086) instead: 829 findings (3.6 per thousand files) and 1,882 places.
 
 The report got shorter too, which is what an agent pays for: on the first twelve apps the text an agent has to read went from 131 KB to 45 KB in total (median per app 11 KB to 4 KB), and on the third twelve from 147 KB to 79 KB. Fewer findings account for most of it; low and informational findings are one line per rule, with the detail in the JSON report. Detection did not pay for the cleanup: on a malware sample no rule was written from, 0.6.0 catches slightly more than 0.5.0 (npm 944 → 949 of 1,000, PyPI 247 → 262 of 300) with the same false alarms.
 
@@ -309,6 +309,29 @@ What it says. **The scanner's candidates point at one real injection bug in twen
 Why so few. Most rules ask for the request and the dangerous call on one line (`exec(req.query.cmd)`). Real bugs are rarely written that way: the value arrives through a parameter, a model field or a setting, and the call is a few functions away, or the bug is a check that is there but incomplete (an SSRF filter that misses an address form, a path check that a symlink walks around). Some are plain: `eval(field_type)` in Python, where the value comes from a tool definition, gets no finding at all. As a loose upper bound, a sink of the right class stands within three lines of the fix in 131 of the 226 cases of the tune half.
 
 **Two halves.** Each case belongs to `tune` (226) or `check` (254) by a hash of its advisory id. Rules and their ranking may be adjusted on the tune half; the check half is only counted, `--show` refuses it, and the results file keeps its totals without the cases. First look: tune 16 of 226, check 7 of 254.
+
+### Places to read (0.8.6)
+
+The first look says two things about the web rules: they report a great deal on code that is fine, and they rarely stand where a real bug is. Both come from the same cause. A rule that matches a dangerous call without seeing where its value comes from fires on every such call, and a rule that asks for the request on the same line almost never fires on a real bug. So from 0.8.6 the scanner reports two things apart:
+
+- a **finding**, when a rule has a record or sees the request reach the call;
+- a **place to read**: a dangerous call whose argument is not fixed text. It has no severity, fails no build, and takes one line per kind in the report, with the question to ask of it. Places come from a catalogue of such calls (running a program, running text as code, rebuilding objects from data) and from the rules that are measured to be of this kind.
+
+Which rules report places is computed, not chosen (`node bench/calibrate-web.mjs --injection bench/results/2026-11-12-injection-0.8.6.json --noise bench/results/2026-11-12-noise --write`; the table it prints is the record): a rule reports places when it fires at least 10 times on the 72 applications and more than 20 times for every real bug it stood at on the tune half. Twelve rules do, the four raw-HTML rules and SQL built by concatenation among them; `deserialize-python` (6 real bugs, 8 on the applications) keeps reporting findings. An entry of the catalogue is dropped when it fires at least 40 times on the applications and never stood at a real bug: five were, such as PHP `include` with a variable (174 on the applications, none at a bug).
+
+| | 0.8.5 | 0.8.6 |
+|---|---|---|
+| Findings at medium or above on the 72 applications | 2,085 (9.1 per 1,000 files) | **829 (3.6)** |
+| …of them web | 1,532 | 276 |
+| Places to read on the 72 applications | | 1,882 (8.2 per 1,000 files; 15 per application at the median) |
+| A finding or a place of the right kind where the fix is, all 480 | 26 (5%) | **55 (11%)** |
+| …on the tune half (226), where the catalogue was looked at | 18 | 39 (17%) |
+| …on the check half (254), counted once | 8 | **16 (6%)** |
+| Anything in a file the fix changed, all 480 | 105 (22%) | 167 (35%) |
+
+By class, 0.8.6, a finding or a place of the right kind where the fix is: deserialization 20 of 60, command injection 12, code injection 9, SQL injection 7, XSS 6, open redirect 1, SSRF 0, path traversal 0.
+
+What it says. An agent now has 60% fewer findings to read on code that is fine, and the scanner stands at twice as many real bugs. It is still one real bug in nine overall and one in sixteen on the half nothing was tuned on: the tune half's 17% is the number of a set that was looked at, and the check half's 6% is the honest one. There are no places for SSRF, path traversal and redirects, where every outgoing request and every file opened would be one. And of the 55, 33 are still pointed at after the fix, because the call is still there and what made it safe is elsewhere. A place says where to start reading. Most real injection bugs are a missing or incomplete check somewhere else, and finding those stays the reader's work.
 
 ## Signs and verdicts
 

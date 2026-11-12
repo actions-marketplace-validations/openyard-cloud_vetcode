@@ -52,7 +52,10 @@ for (const c of CORPUS) {
   // Wrongly flagged: a verdict (lib/verdict.mjs). signs: every high sign, which is what counted before 0.8.
   const v = JSON.parse(spawnSync("node", ["--input-type=module", "-e", `import { verdict } from ${JSON.stringify(path.join(path.dirname(SCANNER), "lib/verdict.mjs"))}; let s = ""; for await (const c of process.stdin) s += c; const v = verdict(JSON.parse(s)); console.log(JSON.stringify({ decided: [...new Set(v.decided.map(f => f.rule))], signs: [...new Set(v.signs.map(f => f.rule))] }));`], { input: JSON.stringify(r.findings), encoding: "utf8", maxBuffer: 64 << 20 }).stdout || '{"decided":[],"signs":[]}');
   const flagged = v.decided, signs = v.signs;
-  rows.push({ repo: c.repo, sha: c.sha.slice(0, 10), files: r.stats?.files || 0, total: real.length, flagged, signs, categories: by("category"), rules: by("rule") });
+  // Places to read are counted apart: by kind, and by the rule that reported them where a rule did
+  // (bench/calibrate-web.mjs needs to know how often a rule fires whether or not it is a finding).
+  const places = r.places || [], tally = key => places.reduce((m, p) => (key(p) && (m[key(p)] = (m[key(p)] || 0) + 1), m), {});
+  rows.push({ repo: c.repo, sha: c.sha.slice(0, 10), files: r.stats?.files || 0, total: real.length, flagged, signs, categories: by("category"), rules: by("rule"), places: places.length, placeKinds: tally(p => p.kind), placeRules: tally(p => p.rule || p.sink) });
   const show = arg("--show", "");
   if (show) for (const f of r.findings.filter(f => f.rule === show)) console.log(`${c.repo} ${f.file}:${f.line} [${f.severity}] ${String(f.evidence || "").trim().slice(0, 140)}`);
 }
@@ -67,6 +70,9 @@ console.log(`\nWrongly flagged as dangerous: ${wrong.length}/${rows.length}${wro
 const signed = rows.filter(r => r.signs.length);
 console.log(`With at least one high sign (the verdict before 0.8): ${signed.length}/${rows.length}${signed.length ? ` (${signed.map(r => `${r.repo.split("/")[1]}: ${r.signs.join(", ")}`).join("; ")})` : ""}.`);
 console.log(`Noisiest rules: ${Object.entries(rules).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => `${k} ${v}`).join(", ")}.`);
+const kinds = {}; for (const r of rows) for (const [k, v] of Object.entries(r.placeKinds)) kinds[k] = (kinds[k] || 0) + v;
+const nPlaces = rows.reduce((n, r) => n + r.places, 0), nFiles = rows.reduce((n, r) => n + r.files, 0);
+console.log(`Places to read: ${nPlaces} (${(nPlaces * 1000 / Math.max(1, nFiles)).toFixed(1)} per 1,000 files): ${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}.`);
 const base = arg("--baseline", "");
 if (base) {
   const old = JSON.parse(fs.readFileSync(base, "utf8")), was = {};

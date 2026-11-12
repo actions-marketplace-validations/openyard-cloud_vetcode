@@ -15,6 +15,7 @@ import { CONFIG_RULES, CONFIG_FILE_RULES, supabaseTablesWithoutRls } from "./con
 import { scanSupplyChain, scanInstalledPackage, scanProjectInstallEntries, scanPythonImportTime, hardeningAdvice, settleLookalikes } from "./supply.mjs";
 import crypto from "node:crypto";
 import { scanAgentFiles } from "./agent.mjs";
+import { scanSinks, kindOfRule, KINDS } from "./sinks.mjs";
 import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
@@ -42,7 +43,11 @@ async function yarnCopiesAreOfficial(copies, out, log) {
   }
 }
 
-export const VERSION = "0.8.5";
+// Rules measured to fire far more often on applications that are fine than on real bugs (bench/calibrate-web.mjs).
+let PLACE_RULES = new Set();
+try { PLACE_RULES = new Set(JSON.parse(fs.readFileSync(new URL("./data/web-places.json", import.meta.url), "utf8")).places); } catch {}
+
+export const VERSION = "0.8.6";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -113,6 +118,7 @@ export async function vet(target, opts = {}) {
   // build output); outside one, read everything.
   const listed = only || gitFiles(root);
   const findings = [];
+  const sinks = [];
   const files = [];
   const partial = [];
   const yarnCopies = [];
@@ -152,6 +158,7 @@ export async function vet(target, opts = {}) {
     scanFile(file, file.text, CONFIG_FILE_RULES, findings);
     scanSupplyChain(file, file.text, findings, root);
     scanFile(file, file.text, ANOMALY_FILE_RULES, findings);
+    scanSinks(file, file.text, sinks);
     // A vulnerability pattern in a test, a fixture or a vendored library is not in the app's own
     // request path. Malware, secrets and supply-chain findings there still count.
     if (TEST.test(file.rel) || VENDORED.test(file.rel) || LOCALE.test(file.rel)) for (let k = findings.length - 1; k >= mark; k--) if (findings[k].category === "web") findings.splice(k, 1);
@@ -229,6 +236,20 @@ export async function vet(target, opts = {}) {
     reported = unique.filter(f => !known.has(f.fingerprint));
     baselined = unique.length - reported.length;
   }
+  // Findings and places. A rule that matches a dangerous call without seeing where its value comes
+  // from reports a place to read, not a finding; so does the catalogue of such calls (sinks.mjs).
+  // A place on a line that already has a finding of the same kind says nothing new.
+  const places = [];
+  // places: false keeps every rule a finding and lists no places (tests of single rules ask for that).
+  if (opts.places !== false) reported = reported.filter(f => {
+    const kind = PLACE_RULES.has(f.rule) ? kindOfRule(f.rule) : null;
+    if (!kind) return true;
+    places.push({ kind, file: f.file, line: f.line, call: f.evidence, rule: f.rule, ...(f.count ? { count: f.count } : {}) });
+    return false;
+  });
+  const taken = new Set([...reported.filter(f => f.category === "web").map(f => `${f.file}:${f.line}`), ...places.map(p => `${p.file}:${p.line}`)]);
+  if (opts.places !== false) for (const p of sinks) { const k = `${p.file}:${p.line}`; if (!taken.has(k)) { taken.add(k); places.push(p); } }
+  places.sort((a, b) => a.kind.localeCompare(b.kind) || a.file.localeCompare(b.file) || a.line - b.line);
   const counts = Object.fromEntries(SEVERITIES.map(s => [s, reported.filter(f => f.severity === s).length]));
   // The answer to "is this safe to install or run": a verdict, or the places to read when there is none.
   const v = verdict(reported), brief = f => ({ rule: f.rule, severity: f.severity, file: f.file, line: f.line, title: f.title });
@@ -239,6 +260,7 @@ export async function vet(target, opts = {}) {
       ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },
     surprises: surprises(files, reported),
     profiles: prof.map(({ kind, name, file, purpose, capabilities }) => ({ kind, name, file, purpose, capabilities })),
+    places, placeKinds: KINDS,
     findings: reported,
   };
 }

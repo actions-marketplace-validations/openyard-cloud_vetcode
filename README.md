@@ -19,7 +19,7 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.5 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.6 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
@@ -27,7 +27,7 @@ An agent installs a package in a second and runs a cloned project without readin
 | | What it does | Where it runs |
 |---|---|---|
 | **The guard** | Answers allow, ask or deny before a package is installed or an MCP server is added, and reads a repository right after it is cloned | Claude Code, on its own; other agents call it as a tool |
-| **The scanner** | Reads a folder for malware, supply-chain attacks, attacks on agents, leaked secrets, and web, server and CI problems | Skill, MCP server, command line, GitHub Action |
+| **The scanner** | Reads a folder for malware, supply-chain attacks, attacks on agents, leaked secrets, and server and CI problems, and lists the places in web code worth reading | Skill, MCP server, command line, GitHub Action |
 | **The review procedure** | Tells your agent how to confirm each finding by reading the code, and what to report | Skill, MCP server |
 
 Nothing from the code it looks at is installed, built or run. It needs Node.js 18 or newer and nothing else. Free and open source (MIT), from the [OpenYard](https://openyard.cloud) community.
@@ -47,15 +47,15 @@ Every number here is measured, on samples the rules were not tuned on unless it 
 | The guard, shown malware as if nobody had reported it yet | blocks or questions 95% of npm, 88% of PyPI, and 3% of clean npm packages | |
 | A package whose newest release is hours old, asked for 3 times | the agent installs the previous, settled version 3 times | the agent alone installs the new release 3 times |
 | Wrong "this is malicious" verdicts on 72 real applications (228,000 files) | **1** | |
-| Findings an agent has to read on those applications | about 9 per 1,000 files | |
-| Real injection bugs the scanner points at, of 480 advisories | 23 (5%) | |
+| Findings an agent has to read on those applications | about 4 per 1,000 files, plus 8 places to read | |
+| Real injection bugs the scanner points at, of 480 advisories | 55 (11%); 6% on the half no rule was tuned on | |
 | Real authorization bugs found by Claude Code with vetcode, of 49 advisories | 41% | Claude Code alone does as well |
 
 **A sign and a verdict are different things.** A scanner of several hundred rules that lets any one of them call code malicious is wrong somewhere on almost every large project. vetcode reports every sign, which is what your agent is told to read, and gives a verdict, which is what stops an install without asking, only when a rule with a measured record fires, when two rules agree on one file, or when the sign sits in code an install script starts.
 
 **What it is good at.** Malware and supply-chain attacks in packages and repositories, attacks aimed at coding agents (poisoned `CLAUDE.md` and skills, hooks and auto-approved MCP servers in project settings, tool descriptions that give orders), leaked secrets, and stepping in before the install, not after.
 
-**What it is not.** It does not find web bugs by itself: its candidates for injection bugs point at one real bug in twenty, so they are places to start reading, not coverage. It does not make your agent better at logic bugs such as missing authorization; that is the agent's own ability. And a clean report means "nothing obvious found", not "safe".
+**What it is not.** It does not find web bugs by itself: it lists the dangerous calls as places to read, and those stand at about one real injection bug in ten, so they are where to start, not coverage. It does not make your agent better at logic bugs such as missing authorization; that is the agent's own ability. And a clean report means "nothing obvious found", not "safe".
 
 **Read the numbers with care.** Samples are 157 to 1,000 items, so they move by a point or two between samples. Most malicious packages in the public datasets were found by GuardDog itself, which favours it. Cisco's scanner catches ten more skills by flagging 56 clean ones, a trade vetcode does not make. All numbers are the scanner alone; in normal use your agent reads every finding again.
 
@@ -122,7 +122,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.5", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.6", "vetcode-mcp"] }
   }
 }
 ```
@@ -135,7 +135,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.5", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.6", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -143,7 +143,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.5", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.6", "vetcode-mcp"]
 ```
 
 </details>
@@ -232,7 +232,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.5 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.6 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -266,7 +266,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.5   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.6   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```
@@ -330,7 +330,7 @@ Name the rule. Folders can go in `.vetcodeignore` (gitignore syntax). Every repo
 
 **What it does not add.**
 
-- *Web bugs.* On 480 real injection advisories the scanner had a candidate of the right kind on the lines the fix later changed in 23 of them ([how](bench/README.md#the-scanner-on-real-injection-bugs)). No candidates does not mean no injection bug.
+- *Web bugs.* A dangerous call whose argument is not fixed text (a program started, text run as code, HTML written without escaping, SQL built from parts) is listed as a **place to read**, apart from the findings: most are fine, and the report says what to ask of each kind. On 480 real injection advisories a finding or a place of the right kind stood on the lines the fix later changed in 55 of them, and in 6% of the half no rule was tuned on ([how](bench/README.md#the-scanner-on-real-injection-bugs)). No place does not mean no injection bug.
 - *Logic bugs.* On 49 real authorization and business-logic advisories published after the model's training cutoff, Claude Code with vetcode found the bug in 41%, and on a 15-case control Claude Code alone did as well ([how](bench/README.md#the-agent-step-on-real-advisories)).
 - *A guarantee.* New malware, logic bugs and infrastructure outside the repository can still slip through.
 

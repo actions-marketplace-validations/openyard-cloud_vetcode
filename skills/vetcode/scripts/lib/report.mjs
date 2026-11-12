@@ -15,6 +15,21 @@ function verdictLines(v) {
   return [``, `**No verdict and no sign of malware.** That covers what patterns can see, not logic flaws or new techniques.`];
 }
 
+// Places to read: where the dangerous calls are, one line per kind. They are not findings, so the
+// line says what to ask of each one; every place is in the JSON report.
+const SHOWN = 6;
+function placeLines(result) {
+  const places = result.places || [];
+  if (!places.length) return [];
+  const out = [``, `## Places to read (${places.length})`, ``, `Dangerous calls whose argument is not fixed text. These are not findings: most are fine. For each kind, trace the value back to where it comes from; no place of a kind does not mean no bug of that kind.`, ``];
+  const kinds = result.placeKinds || {};
+  for (const kind of [...new Set(places.map(p => p.kind))]) {
+    const list = places.filter(p => p.kind === kind), files = new Set(list.map(p => p.file)).size;
+    out.push(`- **${kinds[kind]?.title || kind}** · ${list.length} in ${files} file${files > 1 ? "s" : ""}: ${list.slice(0, SHOWN).map(p => code(`${p.file}:${p.line}`)).join(", ")}${list.length > SHOWN ? ` and ${list.length - SHOWN} more` : ""}. ${kinds[kind]?.ask || ""}`);
+  }
+  return out;
+}
+
 export function markdown(result) {
   const { stats, findings } = result;
   const c = stats.counts;
@@ -23,7 +38,7 @@ export function markdown(result) {
     ``,
     `**Target:** ${code(result.target)} · **mode:** ${result.mode} · **files:** ${stats.files}${stats.packages ? ` · **installed packages:** ${stats.packages}` : ""} · ${(stats.ms / 1000).toFixed(1)} s`,
     ``,
-    `**Findings:** ${SEVERITIES.map(s => `${ICON[s]} ${s} ${c[s]}`).join(" · ")}`,
+    `**Findings:** ${SEVERITIES.map(s => `${ICON[s]} ${s} ${c[s]}`).join(" · ")}${result.places?.length ? ` · places to read ${result.places.length}` : ""}`,
     ...verdictLines(result.verdict),
     ``,
     `Checks: built-in rules${stats.tools.length ? ` + ${stats.tools.join(", ")}` : ""} · OSV lookup: ${stats.osv} · git history: ${stats.history ? "yes" : "no"}`,
@@ -42,7 +57,7 @@ export function markdown(result) {
     for (const s of result.surprises) out.push(`- ${code(s.file)} · ${s.why}`);
   }
   if (!findings.length) {
-    out.push(``, `No candidates found. This is not proof of safety: logic flaws, authorization gaps and new malware need a manual review.`);
+    out.push(``, `No candidates found. This is not proof of safety: logic flaws, authorization gaps and new malware need a manual review.`, ...placeLines(result));
     return out.join("\n") + "\n";
   }
   out.push(``, `Each item is a **candidate** found by pattern: confirm it by reading the code before acting on it.`);
@@ -70,5 +85,6 @@ export function markdown(result) {
       out.push(``, `**Why:** ${f0.why}`, ``, `**Fix:** ${f0.fix}`);
     }
   }
+  out.push(...placeLines(result));
   return out.join("\n") + "\n";
 }

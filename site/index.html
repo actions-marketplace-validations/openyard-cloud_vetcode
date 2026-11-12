@@ -16,176 +16,210 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700;800&display=swap">
 <style>
-  /* Design system (ui-ux-pro-max, "developer security tool"): Dark Mode (OLED) style, developer
-     typography (JetBrains Mono headings, IBM Plex Sans body), code-dark palette with a "run green"
-     accent used for the call to action only. Page pattern: Trust & Authority over a minimal single
-     column: hero with one action > proof > what it checks > honest numbers > install > footer. */
+  /* Design system (ui-ux-pro-max, "developer security tool", variance 9, motion 6): Brutalism on a
+     code-dark ground. Sharp corners, 2px borders, a visible grid, large blocks, 700+ mono type,
+     hard offset shadows instead of soft ones, instant hover states. Layout: an asymmetric bento grid
+     for the hero and proof, then full-width bands. Motion: one staggered entrance of the grid cells
+     and a typed terminal, both skipped under reduced motion. Colour: run green for the action, the
+     guard's own three answers (deny red, ask amber, allow green) as the only other colours. */
   :root {
-    --primary: #1E293B;
-    --secondary: #334155;
+    --bg: #0F172A;
+    --ink: #F8FAFC;
+    --cell: #131C31;
+    --cell-2: #1B2336;
+    --line: #F8FAFC;
+    --grid: rgba(148, 163, 184, .09);
+    --muted: #94A3B8;
+    --soft: #CBD5E1;
     --accent: #22C55E;
     --on-accent: #0F172A;
-    --bg: #0F172A;
-    --fg: #F8FAFC;
-    --card: #1B2336;
-    --muted: #272F42;
-    --muted-fg: #94A3B8;
-    --body-fg: #CBD5E1;
-    --border: #475569;
-    --border-soft: #2A3447;
     --deny: #EF4444;
     --ask: #F59E0B;
-    --term: #0B1120;
-    --ring: #FFFFFF;
+    --term: #070B14;
     --heading: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     --body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
-    --ease: 200ms ease;
+    --b: 2px solid var(--line);
+    --shadow: 6px 6px 0 var(--accent);
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before { transition: none !important; animation: none !important; } }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
-  .col { max-width: 1080px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
-  a { color: var(--accent); text-underline-offset: 3px; transition: color var(--ease); }
-  a:hover { color: #4ADE80; }
-  :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 6px; }
-  code { font: 0.9em var(--heading); background: var(--muted); color: var(--fg); padding: 2px 6px; border-radius: 4px; }
-  .icon { width: 22px; height: 22px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  body {
+    margin: 0; color: var(--ink); font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased;
+    background-color: var(--bg);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .col { max-width: 1200px; margin: 0 auto; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
+  a:hover { color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--ask); outline-offset: 3px; }
+  code { font: 600 .9em var(--heading); background: var(--cell-2); border: 1px solid var(--muted); padding: 1px 6px; }
+  .icon { width: 26px; height: 26px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
 
   /* top bar */
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; }
-  .brand { display: flex; align-items: center; gap: 10px; font: 700 18px var(--heading); color: var(--fg); text-decoration: none; min-height: 44px; }
-  .brand:hover { color: var(--fg); }
+  .top { display: flex; align-items: stretch; justify-content: space-between; border: var(--b); background: var(--bg); margin-top: 20px; }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 0 18px; min-height: 56px; font: 800 20px var(--heading); color: var(--ink); text-decoration: none; letter-spacing: -.02em; }
   .brand img { width: 30px; height: 30px; }
-  .top nav { display: flex; gap: 4px; }
-  .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; color: var(--muted-fg); text-decoration: none; font-size: 15px; border-radius: 8px; }
-  .top nav a:hover { color: var(--fg); background: var(--muted); }
+  .top nav { display: flex; }
+  .top nav a { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 0 18px; border-left: var(--b); color: var(--ink); text-decoration: none; font: 700 14px var(--heading); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
+  .top nav a:hover { background: var(--ink); color: var(--bg); }
 
-  /* hero: one claim, one action, and the guard answering underneath */
-  .hero { text-align: center; padding-block: 56px 40px; }
-  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font: 500 13px var(--heading); color: var(--muted-fg); border: 1px solid var(--border-soft); border-radius: 999px; padding: 6px 14px; margin: 0 0 26px; }
-  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
-  .hero h1 { font: 700 clamp(32px, 5.4vw, 60px)/1.08 var(--heading); letter-spacing: -0.02em; margin: 0 auto 20px; max-width: 22ch; text-wrap: balance; }
-  .hero h1 em { font-style: normal; color: var(--accent); }
-  .hero .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted-fg); margin: 0 auto 32px; max-width: 40em; }
-  .install-box { display: flex; align-items: center; gap: 10px; max-width: 760px; margin: 0 auto; background: var(--term); border: 1px solid var(--border-soft); border-radius: 12px; padding: 8px 8px 8px 18px; text-align: left; }
-  .install-box pre { margin: 0; flex: 1; min-width: 0; font: 14px/1.5 var(--heading); color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px 0; }
-  .install-box pre::before { content: "$ "; color: var(--muted-fg); }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 8px; font: 600 15px var(--body); text-decoration: none; cursor: pointer; border: 1px solid transparent; transition: background var(--ease), color var(--ease), border-color var(--ease); }
-  .btn.primary { background: var(--accent); color: var(--on-accent); }
-  .btn.primary:hover { background: #4ADE80; color: var(--on-accent); }
-  .btn.ghost { background: transparent; color: var(--fg); border-color: var(--border); }
-  .btn.ghost:hover { background: var(--muted); color: var(--fg); }
-  .hero .links { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
-  .hero .meta { margin: 18px 0 0; font-size: 14px; color: var(--muted-fg); }
+  /* bento */
+  .bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+  .cell { border: var(--b); background: var(--cell); padding: 24px; min-width: 0; position: relative; }
+  .tag { display: inline-block; font: 800 12px var(--heading); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
 
-  .term { max-width: 760px; margin: 44px auto 0; background: var(--term); border: 1px solid var(--border-soft); border-radius: 12px; text-align: left; overflow: hidden; }
-  .term-bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--border-soft); font: 12px var(--heading); color: var(--muted-fg); }
-  .term-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--secondary); }
-  .term-bar b { font-weight: 500; margin-left: 8px; }
-  .term-body { padding: 18px 20px 22px; font: 14px/1.6 var(--heading); overflow-x: auto; }
+  .hero { grid-column: span 8; grid-row: span 2; display: flex; flex-direction: column; justify-content: space-between; gap: 28px; padding: 32px; }
+  .hero h1 { font: 800 clamp(38px, 6.2vw, 82px)/1.1 var(--heading); letter-spacing: -.045em; margin: 0; text-wrap: balance; }
+  .hero h1 mark { background: linear-gradient(transparent 12%, var(--accent) 12%, var(--accent) 94%, transparent 94%); color: var(--on-accent); padding: 0 .12em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+  .hero .lede { font-size: clamp(17px, 1.7vw, 20px); color: var(--soft); margin: 0; max-width: 34em; }
+  .cmd-box { display: flex; border: var(--b); background: var(--term); box-shadow: var(--shadow); }
+  .cmd-box pre { margin: 0; flex: 1; min-width: 0; padding: 14px 16px; font: 600 14px/1.5 var(--heading); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+  .cmd-box pre::before { content: "$ "; color: var(--accent); }
+  .copy { flex: none; min-width: 88px; min-height: 48px; border: 0; border-left: var(--b); background: var(--accent); color: var(--on-accent); font: 800 14px var(--heading); text-transform: uppercase; letter-spacing: .04em; cursor: pointer; }
+  .copy:hover { background: var(--ink); }
+  .copy[data-done] { background: var(--ink); }
+  .hero .meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .hero .meta li { border: 1px solid var(--muted); padding: 4px 10px; font: 700 12px var(--heading); text-transform: uppercase; letter-spacing: .05em; color: var(--soft); }
+
+  .stat { grid-column: span 4; display: flex; flex-direction: column; justify-content: space-between; }
+  .stat .n { font: 800 clamp(48px, 5.4vw, 72px)/.9 var(--heading); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+  .stat .n small { font-size: .38em; color: var(--muted); letter-spacing: -.02em; }
+  .stat p { margin: 14px 0 0; color: var(--soft); font-size: 15px; }
+  .stat.green { background: var(--accent); color: var(--on-accent); }
+  .stat.green .n small, .stat.green .tag, .stat.green p { color: var(--on-accent); }
+
+  .answers { grid-column: span 5; display: grid; grid-template-rows: repeat(3, 1fr); padding: 0; }
+  .answer { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-top: var(--b); }
+  .answer:first-child { border-top: 0; }
+  .answer b { font: 800 22px var(--heading); letter-spacing: .02em; min-width: 92px; }
+  .answer span { color: var(--soft); font-size: 15px; }
+  .answer.deny b { color: var(--deny); } .answer.ask b { color: var(--ask); } .answer.allow b { color: var(--accent); }
+
+  .term { grid-column: span 7; background: var(--term); padding: 0; }
+  .term-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: var(--b); padding: 10px 16px; font: 800 12px var(--heading); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .term-bar i { font-style: normal; color: var(--accent); }
+  .term-body { padding: 18px 20px 22px; font: 500 14px/1.6 var(--heading); overflow-x: auto; }
   .term-body p { margin: 0; white-space: pre-wrap; }
-  .term-body .cmd { color: var(--fg); }
-  .term-body .cmd::before { content: "$ "; color: var(--muted-fg); }
-  .term-body .out { color: var(--body-fg); }
   .term-body .gap { height: 14px; }
-  .term-body .dim { color: var(--muted-fg); }
-  .chip { display: inline-block; font: 700 11px/1 var(--heading); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 4px; margin-right: 8px; vertical-align: 1px; }
-  .chip.deny { background: var(--deny); color: #FFFFFF; }
-  .chip.ask { background: var(--ask); color: var(--on-accent); }
-  .chip.allow { background: var(--accent); color: var(--on-accent); }
+  .cmdline { color: var(--ink); }
+  .cmdline::before { content: "$ "; color: var(--accent); }
+  .out { color: var(--soft); }
+  .chip { display: inline-block; font: 800 11px/1 var(--heading); letter-spacing: .08em; text-transform: uppercase; padding: 4px 7px; margin-right: 8px; vertical-align: 1px; }
+  .chip.deny { background: var(--deny); color: #FFFFFF; } .chip.ask { background: var(--ask); color: var(--on-accent); } .chip.allow { background: var(--accent); color: var(--on-accent); }
+  .dim { color: var(--muted); }
 
-  /* proof: four measured numbers */
-  .proof { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; margin: 64px 0 0; }
-  .stat { background: var(--card); padding: 22px 20px; min-width: 0; }
-  .stat .n { font: 700 30px/1.1 var(--heading); color: var(--fg); font-variant-numeric: tabular-nums; }
-  .stat .n small { font-size: 16px; color: var(--muted-fg); font-weight: 500; }
-  .stat p { margin: 8px 0 0; font-size: 14px; color: var(--muted-fg); }
-
-  section { padding-block: 80px 0; }
-  h2 { font: 700 clamp(24px, 3.2vw, 34px)/1.2 var(--heading); letter-spacing: -0.01em; margin: 0 0 12px; text-wrap: balance; }
-  .sub { color: var(--muted-fg); margin: 0 0 32px; max-width: 44em; }
-
-  /* what it checks */
-  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-  .card { background: var(--card); border: 1px solid var(--border-soft); border-radius: 12px; padding: 24px; min-width: 0; transition: border-color var(--ease); }
-  .card:hover { border-color: var(--border); }
-  .card .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .card .badge { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: rgba(34, 197, 94, .12); color: var(--accent); }
-  .card h3 { margin: 0; font: 600 18px var(--heading); }
-  .card .when { margin: 0; font: 500 12px var(--heading); letter-spacing: .05em; text-transform: uppercase; color: var(--muted-fg); }
-  .card p.body { margin: 0; color: var(--body-fg); }
-
-  /* numbers */
-  .tablewrap { overflow-x: auto; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--card); }
-  table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
-  th { font: 600 12px var(--heading); letter-spacing: .05em; text-transform: uppercase; color: var(--muted-fg); background: var(--primary); }
-  td { color: var(--body-fg); }
-  td strong { color: var(--fg); }
-  tr:last-child td { border-bottom: none; }
-  .limits { margin: 20px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-  .limit { border: 1px solid var(--border-soft); border-radius: 12px; padding: 18px 20px; min-width: 0; }
-  .limit h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font: 600 15px var(--heading); color: var(--fg); }
-  .limit h3 .icon { width: 18px; height: 18px; color: var(--ask); }
-  .limit p { margin: 0; color: var(--muted-fg); font-size: 15px; }
-  .source { margin-top: 18px; font-size: 14px; color: var(--muted-fg); }
-
-  /* install */
-  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-  .tab { min-height: 44px; font: 500 14px var(--body); padding: 0 16px; border-radius: 8px; border: 1px solid var(--border-soft); background: transparent; color: var(--muted-fg); cursor: pointer; transition: background var(--ease), color var(--ease), border-color var(--ease); }
-  .tab:hover { color: var(--fg); border-color: var(--border); }
-  .tab[aria-selected="true"] { background: var(--secondary); border-color: var(--secondary); color: var(--fg); }
-  .panel { background: var(--card); border: 1px solid var(--border-soft); border-radius: 12px; padding: 20px 22px; }
-  .panel p { margin: 0 0 14px; color: var(--body-fg); }
-  .code { display: flex; align-items: flex-start; gap: 10px; background: var(--term); border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 8px 8px 16px; }
-  .code pre { margin: 0; flex: 1; min-width: 0; overflow-x: auto; white-space: pre; font: 14px/1.55 var(--heading); color: var(--fg); padding: 10px 0; }
-  .copy { flex: none; min-height: 44px; min-width: 76px; font: 600 13px var(--body); padding: 0 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--fg); cursor: pointer; transition: background var(--ease), color var(--ease), border-color var(--ease); }
-  .copy:hover { background: var(--muted); }
-  .copy[data-done] { border-color: var(--accent); color: var(--accent); }
-  .install-box .copy.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  .install-box .copy.primary:hover { background: #4ADE80; }
-  .note { font-size: 14px; color: var(--muted-fg); margin: 16px 0 0; }
-
-  /* closing call to action */
-  .closing { margin-top: 80px; text-align: center; border: 1px solid var(--border-soft); border-radius: 16px; padding: 48px 24px; background: linear-gradient(180deg, var(--card), var(--bg)); }
-  .closing h2 { margin-bottom: 10px; }
-  .closing p { color: var(--muted-fg); margin: 0 auto 24px; max-width: 36em; }
-  .closing .links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-
-  footer { margin-top: 64px; border-top: 1px solid var(--border-soft); padding-block: 28px 40px; color: var(--muted-fg); font-size: 14px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-  footer a { color: var(--muted-fg); }
-  footer a:hover { color: var(--fg); }
-
-  @media (max-width: 1024px) { .proof { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 768px) {
-    .hero { padding-block: 32px 24px; }
-    .grid, .limits { grid-template-columns: minmax(0, 1fr); }
-    .top nav a.optional { display: none; }
-    .install-box { flex-direction: column; align-items: stretch; padding: 8px 12px 12px; }
-    .install-box .copy { width: 100%; }
+  /* typed terminal: each command types, then its answer appears; final state without motion */
+  .type { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: bottom; max-width: 100%; }
+  @media (prefers-reduced-motion: no-preference) {
+    .t1 { animation: typing .9s steps(34) .5s both; }
+    .o1 { animation: appear .01s 1.5s both; }
+    .t2 { animation: typing .55s steps(18) 2.1s both; }
+    .o2 { animation: appear .01s 2.75s both; }
+    .t3 { animation: typing .55s steps(19) 3.3s both; }
+    .o3 { animation: appear .01s 3.95s both; }
+    .bento > .cell { animation: rise .42s cubic-bezier(.34, 1.4, .64, 1) both; }
+    .bento > .cell:nth-child(2) { animation-delay: .06s; } .bento > .cell:nth-child(3) { animation-delay: .12s; }
+    .bento > .cell:nth-child(4) { animation-delay: .18s; } .bento > .cell:nth-child(5) { animation-delay: .24s; }
+    .bento > .cell:nth-child(6) { animation-delay: .30s; }
   }
-  @media (max-width: 420px) { .proof { grid-template-columns: minmax(0, 1fr); } }
+  @keyframes typing { from { width: 0; } }
+  @keyframes appear { from { opacity: 0; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+
+  /* bands */
+  section { margin-top: 96px; }
+  .band-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; flex-wrap: wrap; border-bottom: var(--b); padding-bottom: 14px; margin-bottom: 24px; }
+  h2 { font: 800 clamp(30px, 4.4vw, 56px)/1 var(--heading); letter-spacing: -.04em; margin: 0; text-wrap: balance; }
+  .band-head p { margin: 0; color: var(--soft); max-width: 30em; }
+
+  .checks { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .check { border: var(--b); background: var(--cell); padding: 24px; min-width: 0; }
+  .check:nth-child(1) { grid-column: span 7; } .check:nth-child(2) { grid-column: span 5; }
+  .check:nth-child(3) { grid-column: span 5; } .check:nth-child(4) { grid-column: span 7; }
+  .check .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .check h3 { margin: 0; font: 800 26px var(--heading); letter-spacing: -.03em; }
+  .check .when { font: 800 12px var(--heading); text-transform: uppercase; letter-spacing: .08em; background: var(--ink); color: var(--bg); padding: 4px 8px; }
+  .check .ico { color: var(--accent); }
+  .check p { margin: 0; color: var(--soft); }
+
+  .tablewrap { overflow-x: auto; border: var(--b); background: var(--cell); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 14px 18px; border-bottom: 1px solid #334155; vertical-align: top; }
+  th { font: 800 12px var(--heading); letter-spacing: .08em; text-transform: uppercase; color: var(--bg); background: var(--ink); }
+  td { color: var(--soft); }
+  td strong { color: var(--ink); font-family: var(--heading); font-weight: 800; }
+  tr:last-child td { border-bottom: none; }
+  .limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+  .limit { border: 2px solid var(--deny); padding: 18px 20px; min-width: 0; background: rgba(239, 68, 68, .06); }
+  .limit h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font: 800 16px var(--heading); text-transform: uppercase; letter-spacing: .04em; color: var(--deny); }
+  .limit h3 .icon { width: 20px; height: 20px; }
+  .limit p { margin: 0; color: var(--soft); font-size: 15px; }
+  .source { margin-top: 16px; font-size: 14px; color: var(--muted); }
+
+  .tabs { display: flex; flex-wrap: wrap; border: var(--b); border-bottom: 0; }
+  .tab { flex: 1 1 auto; min-height: 52px; padding: 0 16px; border: 0; border-right: var(--b); background: transparent; color: var(--ink); font: 800 13px var(--heading); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+  .tab:last-child { border-right: 0; }
+  .tab:hover { background: var(--cell-2); }
+  .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+  .panel { border: var(--b); background: var(--cell); padding: 22px; }
+  .panel p { margin: 0 0 16px; color: var(--soft); }
+  .code { display: flex; border: var(--b); background: var(--term); }
+  .code pre { margin: 0; flex: 1; min-width: 0; padding: 14px 16px; font: 600 14px/1.55 var(--heading); overflow-x: auto; white-space: pre; color: var(--ink); }
+  .code .copy { background: transparent; color: var(--ink); }
+  .code .copy:hover, .code .copy[data-done] { background: var(--accent); color: var(--on-accent); }
+  .note { font-size: 14px; color: var(--muted); margin: 16px 0 0; }
+
+  .closing { margin-top: 96px; border: var(--b); background: var(--accent); color: var(--on-accent); padding: clamp(28px, 5vw, 56px); display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px; align-items: end; box-shadow: 10px 10px 0 var(--ink); }
+  .closing h2 { color: var(--on-accent); }
+  .closing p { margin: 12px 0 0; font-size: 18px; }
+  .closing .links { display: flex; flex-direction: column; gap: 12px; }
+  .btn { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 0 18px; border: 2px solid var(--on-accent); font: 800 14px var(--heading); text-transform: uppercase; letter-spacing: .05em; text-decoration: none; cursor: pointer; }
+  .btn.dark { background: var(--on-accent); color: var(--accent); }
+  .btn.dark:hover { background: var(--ink); color: var(--on-accent); }
+  .btn.line { background: transparent; color: var(--on-accent); }
+  .btn.line:hover { background: var(--on-accent); color: var(--accent); }
+
+  footer { margin: 64px 0 40px; border-top: var(--b); padding-top: 20px; color: var(--muted); font: 600 13px var(--heading); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; text-transform: uppercase; letter-spacing: .04em; }
+  footer a { color: var(--soft); text-decoration: none; }
+  footer a:hover { color: var(--accent); }
+
+  @media (max-width: 1024px) {
+    .hero { grid-column: span 12; grid-row: auto; }
+    .stat { grid-column: span 6; }
+    .answers, .term { grid-column: span 12; }
+  }
+  @media (max-width: 768px) {
+    .top nav a.optional { display: none; }
+    .stat { grid-column: span 12; }
+    .check:nth-child(n) { grid-column: span 12; }
+    .limits, .closing { grid-template-columns: minmax(0, 1fr); }
+    .cmd-box { flex-direction: column; }
+    .cmd-box .copy { border-left: 0; border-top: var(--b); }
+    .hero { padding: 24px; }
+    .tab { flex: 1 1 45%; border-bottom: var(--b); }
+  }
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-package" viewBox="0 0 24 24"><path d="M16.5 9.4 7.5 4.2"/><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></symbol>
-  <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v6"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
-  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="m8.5 11 2 2 3.5-4"/></symbol>
-  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M16.5 9.4 7.5 4.2"/><path d="M21 16V8l-9-5-9 5v8l9 5z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><path d="M6 9v6"/><path d="M18 9v3a6 6 0 0 1-6 6H9"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v6l-3 3H9l-3-3V8z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><rect x="4" y="4" width="13" height="13"/><path d="m21 21-4-4"/><path d="m8 11 2 2 4-4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M12 3 2 21h20z"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
 </svg>
 
 <div class="col">
   <header class="top">
     <a class="brand" href="./"><img src="logo.svg" alt="" width="30" height="30">vetcode</a>
     <nav aria-label="Sections">
-      <a class="optional" href="#what">What it checks</a>
+      <a class="optional" href="#what">Checks</a>
       <a class="optional" href="#numbers">Numbers</a>
       <a class="optional" href="#install">Install</a>
       <a href="https://github.com/openyard-cloud/vetcode" aria-label="vetcode on GitHub"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg></a>
@@ -193,69 +227,85 @@
   </header>
 
   <main>
-    <div class="hero">
-      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Free and open source · v{{VERSION}}</p>
-      <h1>The security check your coding agent runs <em>before it acts</em>.</h1>
-      <p class="lede">Agents install packages in a second and run cloned repositories without reading them. vetcode reads first: packages before they install, repositories after they are cloned, MCP servers before they are added.</p>
-
-      <div class="install-box">
-        <pre id="hero-cmd">claude plugin marketplace add openyard-cloud/vetcode &amp;&amp; claude plugin install vetcode@openyard</pre>
-        <button class="copy primary" data-copy="hero-cmd" type="button">Copy</button>
+    <div class="bento">
+      <div class="cell hero">
+        <div>
+          <p class="tag">v{{VERSION}} · free and open source</p>
+          <h1>Your agent runs code it never read. <mark>vetcode reads it first.</mark></h1>
+        </div>
+        <p class="lede">The security check your coding agent runs before it acts: packages before they install, repositories after they are cloned, MCP servers before they are added.</p>
+        <div class="cmd-box">
+          <pre id="hero-cmd">claude plugin marketplace add openyard-cloud/vetcode &amp;&amp; claude plugin install vetcode@openyard</pre>
+          <button class="copy" type="button" data-copy="hero-cmd">Copy</button>
+        </div>
+        <ul class="meta">
+          <li>MIT</li><li>Zero dependencies</li><li>Reads, never runs</li><li>No telemetry</li>
+        </ul>
       </div>
-      <div class="links">
-        <a class="btn ghost" href="#install">Other agents, MCP and CI</a>
-        <a class="btn ghost" href="https://github.com/openyard-cloud/vetcode"><svg class="icon" aria-hidden="true"><use href="#i-github"/></svg>Source</a>
-      </div>
-      <p class="meta">MIT · zero dependencies · reads code, never runs it · no telemetry</p>
 
-      <div class="term" role="img" aria-label="Three install commands and the guard's answers: deny for a package that does not exist, ask for a look-alike name, allow for a well-known package.">
-        <div class="term-bar" aria-hidden="true"><span></span><span></span><span></span><b>claude code · vetcode guard</b></div>
+      <div class="cell stat green">
+        <p class="tag">npm malware, same 2,000 packages</p>
+        <div class="n">947<small>/1000</small></div>
+        <p>caught, 26 false alarms. GuardDog: 903 and 43.</p>
+      </div>
+
+      <div class="cell stat">
+        <p class="tag">Agent alone vs with vetcode</p>
+        <div class="n">3<small>/3</small></div>
+        <p>times Claude Code took the settled release instead of one published hours earlier.</p>
+      </div>
+
+      <div class="cell term" role="img" aria-label="Three install commands and the guard's answers: deny for a package that does not exist, ask for a look-alike name, allow for a well-known package.">
+        <div class="term-bar" aria-hidden="true"><span>claude code</span><i>vetcode guard · on</i></div>
         <div class="term-body" aria-hidden="true">
-          <p class="cmd">npm install react-dom-helpers-pro</p>
-          <p class="out"><span class="chip deny">deny</span>react-dom-helpers-pro does not exist on npm. Check the name: a made-up name is one an attacker can register.</p>
+          <p class="cmdline"><span class="type t1">npm install react-dom-helpers-pro</span></p>
+          <p class="out o1"><span class="chip deny">deny</span>react-dom-helpers-pro does not exist on npm. Check the name: a made-up name is one an attacker can register.</p>
           <p class="gap"></p>
-          <p class="cmd">npm install expres</p>
-          <p class="out"><span class="chip ask">ask</span>expres looks like the popular package express. If express was meant, install that instead.</p>
+          <p class="cmdline"><span class="type t2">npm install expres</span></p>
+          <p class="out o2"><span class="chip ask">ask</span>expres looks like the popular package express. If express was meant, install that instead.</p>
           <p class="gap"></p>
-          <p class="cmd">npm install express</p>
-          <p class="out"><span class="chip allow">allow</span><span class="dim">well known, settled version: the install runs, nothing is shown</span></p>
+          <p class="cmdline"><span class="type t3">npm install express</span></p>
+          <p class="out o3"><span class="chip allow">allow</span><span class="dim">well known, settled version: the install runs, nothing is shown</span></p>
         </div>
       </div>
-    </div>
 
-    <div class="proof" aria-label="Measured results">
-      <div class="stat"><div class="n">947<small>/1,000</small></div><p>malicious npm packages caught, with 26 false alarms on 1,000 clean ones. GuardDog: 903 and 43.</p></div>
-      <div class="stat"><div class="n">262<small>/300</small></div><p>malicious PyPI packages caught. GuardDog on the same packages: 241.</p></div>
-      <div class="stat"><div class="n">3<small>/3</small></div><p>times Claude Code installed the settled release instead of one only hours old.</p></div>
-      <div class="stat"><div class="n">1<small>/72</small></div><p>open-source applications wrongly called dangerous.</p></div>
+      <div class="cell answers" aria-label="The guard's three answers">
+        <div class="answer deny"><b>DENY</b><span>Made-up names, malware advisories, malicious code in the archive.</span></div>
+        <div class="answer ask"><b>ASK</b><span>Look-alikes, releases hours old, pipes into a shell, tunnelled MCP servers.</span></div>
+        <div class="answer allow"><b>ALLOW</b><span>Well-known packages at settled versions. Silently.</span></div>
+      </div>
     </div>
 
     <section id="what" aria-labelledby="what-h">
-      <h2 id="what-h">What it checks, and when</h2>
-      <p class="sub">In Claude Code the guard runs on its own, as a hook. Other agents call the same checks as a tool, or load the review procedure as a skill.</p>
-      <div class="grid">
-        <article class="card">
-          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-package"/></svg></span><div><p class="when">Before an install</p><h3>Packages</h3></div></div>
-          <p class="body">npm, pnpm, yarn, bun, pip, uv, cargo and go. A name that does not exist, a look-alike of a popular one, a malware advisory, malicious code in the archive (downloaded and read, never run), a release only hours old. It answers allow, ask or deny before the command runs.</p>
+      <div class="band-head">
+        <h2 id="what-h">Four moments it steps in</h2>
+        <p>In Claude Code the guard runs on its own, as a hook. Other agents call the same checks as a tool, or load the review procedure as a skill.</p>
+      </div>
+      <div class="checks">
+        <article class="check">
+          <div class="head"><h3>Packages</h3><span class="when">Before install</span></div>
+          <p>npm, pnpm, yarn, bun, pip, uv, cargo and go. A name that does not exist, a look-alike of a popular one, a malware advisory, malicious code in the archive (downloaded and read, never run), a release only hours old. Allow, ask or deny, before the command runs.</p>
         </article>
-        <article class="card">
-          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg></span><div><p class="when">After a clone</p><h3>Repositories</h3></div></div>
-          <p class="body">Before the agent builds or runs anything from it: install scripts that decode and run code, instructions planted in agent files such as CLAUDE.md, hooks and auto-approved MCP servers in project settings.</p>
+        <article class="check">
+          <div class="head"><h3>Repositories</h3><span class="when">After clone</span></div>
+          <p>Before the agent builds or runs anything: install scripts that decode and run code, instructions planted in agent files such as CLAUDE.md, hooks and auto-approved MCP servers in project settings.</p>
         </article>
-        <article class="card">
-          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg></span><div><p class="when">Before it is added</p><h3>MCP servers</h3></div></div>
-          <p class="body">Whether added with <code>claude mcp add</code> or written into a config file: the package the server would start, and an address behind a tunnel or on plain HTTP.</p>
+        <article class="check">
+          <div class="head"><h3>MCP servers</h3><span class="when">Before it's added</span></div>
+          <p>Added with <code>claude mcp add</code> or written into a config file: the package the server would start, and an address behind a tunnel or on plain HTTP.</p>
         </article>
-        <article class="card">
-          <div class="head"><span class="badge"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg></span><div><p class="when">When you ask</p><h3>A review</h3></div></div>
-          <p class="body">"Is this repo safe to run?" or "review this before I deploy": a scan for malware, supply-chain tricks, leaked keys and risky CI and server config, and a procedure that has the agent confirm each finding by reading the code.</p>
+        <article class="check">
+          <div class="head"><h3>A review</h3><span class="when">When you ask</span></div>
+          <p>"Is this repo safe to run?" or "review this before I deploy": a scan for malware, supply-chain tricks, leaked keys and risky CI and server config, and a procedure that has the agent confirm each finding by reading the code.</p>
         </article>
       </div>
     </section>
 
     <section id="numbers" aria-labelledby="numbers-h">
-      <h2 id="numbers-h">Measured, including what it does badly</h2>
-      <p class="sub">Every number comes from a script in the repository, run on samples its rules were not tuned on unless the source says so.</p>
+      <div class="band-head">
+        <h2 id="numbers-h">Measured. Bad numbers included.</h2>
+        <p>Every number comes from a script in the repository, run on samples its rules were not tuned on unless the source says so.</p>
+      </div>
       <div class="tablewrap">
         <table>
           <thead><tr><th scope="col">Question</th><th scope="col">vetcode</th><th scope="col">For comparison</th></tr></thead>
@@ -278,8 +328,10 @@
     </section>
 
     <section id="install" aria-labelledby="install-h">
-      <h2 id="install-h">Install</h2>
-      <p class="sub">Needs Node.js 18 or newer and nothing else. vetcode is not on npm: every command runs it from the repository, pinned to a release.</p>
+      <div class="band-head">
+        <h2 id="install-h">Install</h2>
+        <p>Node.js 18 or newer, nothing else. vetcode is not on npm: every command runs it from the repository, pinned to a release.</p>
+      </div>
 
       <div class="tabs" role="tablist" aria-label="Where you use it">
         <button class="tab" type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Claude Code</button>
@@ -320,11 +372,13 @@
     </section>
 
     <div class="closing">
-      <h2>Tell us what it gets wrong</h2>
-      <p>False alarms and anything it lets through are the reports that make it better.</p>
+      <div>
+        <h2>Tell us what it gets wrong.</h2>
+        <p>False alarms and anything it lets through are the reports that make it better.</p>
+      </div>
       <div class="links">
-        <a class="btn primary" href="https://github.com/openyard-cloud/vetcode/issues">Open an issue</a>
-        <a class="btn ghost" href="https://github.com/openyard-cloud/vetcode/blob/main/SECURITY.md">Report a security problem</a>
+        <a class="btn dark" href="https://github.com/openyard-cloud/vetcode/issues">Open an issue<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="btn line" href="https://github.com/openyard-cloud/vetcode/blob/main/SECURITY.md">Report a security problem<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </div>
     </div>
   </main>

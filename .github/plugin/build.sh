@@ -1,14 +1,17 @@
 #!/bin/sh
-# Builds the folder that is published as the Claude Code plugin: the manifest, the skill, the
-# hooks, and a README written for the plugin's listing. Nothing else from this repository
-# (benchmarks, tests, the GitHub Action, the MCP server) is part of the plugin.
+# Builds the folder that is published as the Claude Code plugin on the `plugin` branch, which
+# is the one the Claude plugin directory follows. Nothing else from this repository
+# (benchmarks, tests, the GitHub Action, the MCP server) is part of it.
 #
 #   sh .github/plugin/build.sh <folder>            build it
 #   sh .github/plugin/build.sh <folder> <remote>   build it, then commit it to the remote's
 #                                                  `plugin` branch when anything in it changed
 #
-# The Release workflow runs the second form. The Claude plugin directory follows that branch,
-# so what it scans and what people install is exactly this folder.
+# Two editions:
+#   default        the skill alone: Markdown, no programs, no hooks. The directory accepts
+#                  programs and hooks only from organizations it has verified.
+#   WITH_CODE=1    the whole plugin: skill, scanner, guard and hooks. Set it in the Release
+#                  workflow once the organization that submits the plugin is verified.
 set -eu
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 out="$1"
@@ -17,9 +20,22 @@ remote="${2:-}"
 rm -rf "$out"
 mkdir -p "$out/.claude-plugin"
 cp "$root/.claude-plugin/plugin.json" "$root/.claude-plugin/icon.png" "$out/.claude-plugin/"
-cp -R "$root/skills" "$root/hooks" "$out/"
 cp "$root/LICENSE" "$root/PRIVACY.md" "$root/SECURITY.md" "$out/"
-cp "$root/.github/plugin/README.md" "$out/README.md"
+if [ "${WITH_CODE:-}" = "1" ]; then
+  cp -R "$root/skills" "$root/hooks" "$out/"
+  cp "$root/.github/plugin/README.md" "$out/README.md"
+else
+  mkdir -p "$out/skills/vetcode"
+  cp "$root/skills/vetcode/SKILL.md" "$out/skills/vetcode/"
+  cp -R "$root/skills/vetcode/references" "$out/skills/vetcode/"
+  cp "$root/.github/plugin/README.skill-only.md" "$out/README.md"
+  # The listing takes its short description from the manifest: say what this edition is.
+  node -e '
+    const fs = require("fs"), f = process.argv[1], m = JSON.parse(fs.readFileSync(f, "utf8"));
+    m.description = "Security review skill for coding agents: a procedure and checklists for finding malware, supply-chain attacks, leaked secrets, web/API vulnerabilities and server misconfiguration by reading code. Skill only: the scanner and the install guard are in the full plugin on GitHub.";
+    fs.writeFileSync(f, JSON.stringify(m, null, 2) + "\n");
+  ' "$out/.claude-plugin/plugin.json"
+fi
 find "$out" -name .DS_Store -delete
 
 [ -n "$remote" ] || exit 0

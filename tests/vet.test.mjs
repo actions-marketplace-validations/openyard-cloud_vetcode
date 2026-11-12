@@ -1355,23 +1355,46 @@ test("guard: a repository is read right after it is cloned", async () => {
   assert.equal(await checkClone("/no/such/folder", { vet }), null);
 });
 
-test("the plugin folder holds the plugin and nothing else", () => {
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-plugin-")), "plugin");
-  const built = spawnSync("sh", [new URL("../.github/plugin/build.sh", import.meta.url).pathname, out], { encoding: "utf8" });
-  assert.equal(built.status, 0, built.stderr);
-  assert.deepEqual(fs.readdirSync(out).sort(), [".claude-plugin", "LICENSE", "PRIVACY.md", "README.md", "SECURITY.md", "hooks", "skills"]);
-  assert.deepEqual(fs.readdirSync(path.join(out, ".claude-plugin")).sort(), ["icon.png", "plugin.json"]);
-  // Every program a hook starts is in the folder.
-  const hooks = JSON.parse(fs.readFileSync(path.join(out, "hooks/hooks.json"), "utf8")).hooks;
+test("the plugin folder: the directory edition is Markdown alone, the full edition runs from its folder", () => {
+  const script = new URL("../.github/plugin/build.sh", import.meta.url).pathname;
+  const build = env => {
+    const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-plugin-")), "plugin");
+    const built = spawnSync("sh", [script, out], { encoding: "utf8", env: { ...process.env, ...env } });
+    assert.equal(built.status, 0, built.stderr);
+    return out;
+  };
+  const files = (dir, rel = "") => fs.readdirSync(path.join(dir, rel), { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(dir, path.join(rel, e.name)) : [path.join(rel, e.name)]);
+  // The listing's README stands alone: no link or image that points into this repository's tree.
+  const standsAlone = out => { for (const m of fs.readFileSync(path.join(out, "README.md"), "utf8").matchAll(/\]\(([^)]+)\)|<img[^>]*>/g)) assert.match(m[1] || "", /^https:\/\//, m[0]); };
+
+  // What the directory takes from an organization it has not verified: Markdown, text, JSON, YAML and images. No program, no hook.
+  const lite = build({ WITH_CODE: "" });
+  assert.deepEqual(fs.readdirSync(lite).sort(), [".claude-plugin", "LICENSE", "PRIVACY.md", "README.md", "SECURITY.md", "skills"]);
+  for (const f of files(lite)) {
+    assert.match(f, /\.(?:md|json|txt|ya?ml|png)$|^LICENSE$/, f);
+    assert.notEqual(fs.readFileSync(path.join(lite, f)).subarray(0, 2).toString("latin1"), "#!", f);
+  }
+  assert.deepEqual(fs.readdirSync(path.join(lite, "skills/vetcode")).sort(), ["SKILL.md", "references"]);
+  const manifest = JSON.parse(fs.readFileSync(path.join(lite, ".claude-plugin/plugin.json"), "utf8"));
+  assert.match(manifest.description, /Skill only/);
+  assert.equal(manifest.version, JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
+  // The skill says what to do when its programs are not there, and does not tell the agent to fetch them.
+  const skill = fs.readFileSync(path.join(lite, "skills/vetcode/SKILL.md"), "utf8");
+  assert.match(skill, /If this copy of the skill has no `scripts` folder/);
+  assert.match(skill, /Do not download or run it yourself/);
+  standsAlone(lite);
+
+  const full = build({ WITH_CODE: "1" });
+  assert.deepEqual(fs.readdirSync(full).sort(), [".claude-plugin", "LICENSE", "PRIVACY.md", "README.md", "SECURITY.md", "hooks", "skills"]);
+  assert.deepEqual(fs.readdirSync(path.join(full, ".claude-plugin")).sort(), ["icon.png", "plugin.json"]);
+  // Every program a hook starts is in the folder, and the guard works from the folder alone.
+  const hooks = JSON.parse(fs.readFileSync(path.join(full, "hooks/hooks.json"), "utf8")).hooks;
   for (const h of Object.values(hooks).flat().flatMap(m => m.hooks)) {
     assert.equal(h.command, "node");
-    for (const a of h.args) assert.ok(fs.existsSync(a.replace("${CLAUDE_PLUGIN_ROOT}", out)), a);
+    for (const a of h.args) assert.ok(fs.existsSync(a.replace("${CLAUDE_PLUGIN_ROOT}", full)), a);
   }
-  // The listing's README stands alone: no link or image that points into this repository's tree.
-  const readme = fs.readFileSync(path.join(out, "README.md"), "utf8");
-  for (const m of readme.matchAll(/\]\(([^)]+)\)|<img[^>]*>/g)) assert.match(m[1] || "", /^https:\/\//, m[0]);
-  // The guard works from the folder alone.
-  const run = spawnSync("node", [path.join(out, "skills/vetcode/scripts/guard.mjs"), "ls -la"], { encoding: "utf8" });
+  standsAlone(full);
+  const run = spawnSync("node", [path.join(full, "skills/vetcode/scripts/guard.mjs"), "ls -la"], { encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
 });
 

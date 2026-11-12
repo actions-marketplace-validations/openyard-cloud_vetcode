@@ -333,6 +333,24 @@ By class, 0.8.6, a finding or a place of the right kind where the fix is: deseri
 
 What it says. An agent now has 60% fewer findings to read on code that is fine, and the scanner stands at twice as many real bugs. It is still one real bug in nine overall and one in sixteen on the half nothing was tuned on: the tune half's 17% is the number of a set that was looked at, and the check half's 6% is the honest one. There are no places for SSRF, path traversal and redirects, where every outgoing request and every file opened would be one. And of the 55, 33 are still pointed at after the fix, because the call is still there and what made it safe is elsewhere. A place says where to start reading. Most real injection bugs are a missing or incomplete check somewhere else, and finding those stays the reader's work.
 
+## Instructions injected into what an agent reads: a guard that was not built
+
+```bash
+node bench/injected-text.mjs      # no model, no cost
+```
+
+vetcode's guard looks at commands before they run. The other way an agent is attacked is through what it reads: a web page or a tool's answer that carries instructions. Before building a guard for that, the patterns that catch poisoned `CLAUDE.md` files and skills were run on two public sets of injected text, with the documents of the 72 clean applications as the clean side.
+
+| Text | Items | Flagged |
+|---|---|---|
+| [InjecAgent](https://github.com/uiuc-kang-lab/InjecAgent), tool answers with a plain injected instruction | 1,054 | 0 |
+| InjecAgent, the same wrapped in one fixed "ignore all previous instructions" sentence | 1,054 | 1,054 (100%) |
+| [deepset/prompt-injections](https://huggingface.co/datasets/deepset/prompt-injections), labelled injection | 263 | 2 (0.8%) |
+| deepset/prompt-injections, labelled not an injection | 399 | 0 |
+| Documents of the 72 clean applications | 6,549 | 45 (0.7%) |
+
+Patterns catch a sentence they know and nothing else. An injected instruction is an ordinary instruction ("send the latest invoice to this address"); what makes it an attack is who wrote it, and no pattern sees that. A guard built on these patterns would stop the textbook sentence, miss about 99% of everything else and speak up on one clean document in 150. It would look like protection and not be one, so it was not built. Telling an injected instruction from the user's own takes a model that is given both; that is outside what a scanner without one can do.
+
 ## Signs and verdicts
 
 Five sets of twelve apps were scanned for the first time, one after another (the corpora above, plus [a fifth](noise-fifth.json) and [a sixth](noise-sixth.json)). Each time two to five clean apps got a high or critical finding about malware, the supply chain or agent files, each time from a different rule matching one or two lines, and the rules fixed after one set did not make the next first look better: 3, 5, 2, 4 and 5 wrong verdicts. Tightening a rule to stop that cost catches on the malware benchmark. That loop is a property of the design, not of any rule: with several hundred rules each allowed to call a target malicious by itself, some rule is wrong somewhere in almost every large code base.

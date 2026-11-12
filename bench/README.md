@@ -128,6 +128,8 @@ alarm. A first run of 0.6.0 did raise one: psutil ships a maintenance script tha
 `get-pip.py` and runs it, which the new Python rule took for a dropper; the rule now leaves
 the Python toolchain's own installers alone.
 
+**Speed.** On the same 30 PyPI packages (659 MB), GuardDog took 1,104 s and vetcode 299 s; vetcode has since become another third faster.
+
 ## Evasion: does it still catch the sample once it is disguised?
 
 `mutate.mjs` rewrites malicious samples the way attackers do to get past scanners, without
@@ -168,6 +170,8 @@ node bench/redteam.mjs            # this build
 node bench/redteam.mjs --lib <path to another build>/skills/vetcode/scripts/lib/index.mjs
 ```
 
+15 of 15 caught from 2021–2026 campaigns, each next to a clean look-alike that is not flagged: code pushed off-screen in `dist/`, GlassWorm Unicode payloads, payloads in images, protestware, time bombs, sandbox evasion, homoglyphs, disguised executables, recon beacons, ClawHavoc-style skills, a Visual Studio project that runs encoded PowerShell at build, a Rust build script that steals SSH keys, a Go module whose init() opens a shell.
+
 Fifteen techniques from 2021–2026 campaigns that the public datasets barely contain (code
 pushed off-screen in dist/, GlassWorm Unicode payloads, payloads in images, protestware,
 time bombs, sandbox evasion, homoglyphs, disguised executables, purpose mismatch, recon
@@ -184,6 +188,21 @@ node bench/noise.mjs                                                    # scan t
 node bench/noise.mjs --baseline bench/results/2026-11-11-noise-0.3.1.json   # what changed since 0.3.1
 node bench/noise.mjs --show secret-assignment                           # the lines one rule reports
 ```
+
+**All six sets at a glance.** Each set is twelve well-known open-source apps, pinned to a commit, that handle tokens, passwords and API keys all day. "First look" is the version that met the set before any rule was changed because of it.
+
+| Twelve apps at a time | Findings at first look | Findings now | Wrong verdicts at first look | Wrong verdicts now |
+|---|---|---|---|---|
+| First set (14,000 files) | 2,024 (0.3.1) | **76** | 3 | **0** |
+| Second (33,000 files) | 477 (0.5.0) | **247** | 5 | **0** |
+| Third (37,000 files) | 340 (0.6.0) | **210** | 2 | **0** |
+| Fourth (40,000 files) | 380 (0.7.0) | **180** | 4 | **0** |
+| Fifth (58,000 files) | 1,423 (0.7.1) | **818** | 5 | **0** |
+| Sixth (45,000 files), first scanned with 0.8.0 | 554 | 554 | **1** (2 by the old rule) | 1 |
+
+Findings are at medium or above; from 0.8.0 several raw-HTML sinks in one file count once (counted line by line the "now" column reads 96, 285, 241, 293 and 1,181). A wrong verdict used to mean any high sign of malware, supply-chain attack or agent attack; five sets in a row produced two to five of them at first look, each from one rule matching one or two lines, and fixing the rules for one set did not help the next. From 0.8.0 a verdict needs a rule with a record or corroboration. The sixth set is the first met with that mechanism: one verdict, on an app (Ghost) that does ship agent hooks and install instructions for agents. All 72 apps together (228,282 files) give 2,085 findings with 0.8.5, 9.1 per thousand files; 1,532 of them are web candidates.
+
+The report got shorter too, which is what an agent pays for: on the first twelve apps the text an agent has to read went from 131 KB to 45 KB in total (median per app 11 KB to 4 KB), and on the third twelve from 147 KB to 79 KB. Fewer findings account for most of it; low and informational findings are one line per rule, with the detail in the JSON report. Detection did not pay for the cleanup: on a malware sample no rule was written from, 0.6.0 catches slightly more than 0.5.0 (npm 944 → 949 of 1,000, PyPI 247 → 262 of 300) with the same false alarms.
 
 Twelve well-known, maintained open-source apps pinned to a commit ([list](noise.json)): TypeScript, JavaScript, Go, Python, Ruby and PHP, about 14,000 files. They handle tokens, passwords and API keys all day, so those words are everywhere without a secret in the code. Whatever the scanner reports at medium or above is presumed a false alarm until someone shows otherwise. An agent has to read every one of them, so this number is what a scan costs in attention.
 

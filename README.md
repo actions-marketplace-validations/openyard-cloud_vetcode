@@ -207,6 +207,8 @@ command = "npx"
 args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.4", "vetcode-mcp"]
 ```
 
+Claude Desktop: download `vetcode.mcpb` from [Releases](https://github.com/openyard-cloud/vetcode/releases) and open it; the app installs the server from that file.
+
 Then ask your agent to "use vetcode to review this project". The agent should call `vetcode_guide` once; the server also tells it to.
 
 ### Agents that only read an instructions file

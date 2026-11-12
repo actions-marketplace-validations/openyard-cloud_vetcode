@@ -1354,3 +1354,24 @@ test("guard: a repository is read right after it is cloned", async () => {
   assert.equal(await checkClone(fine, { vet }), null, "a clean clone says nothing");
   assert.equal(await checkClone("/no/such/folder", { vet }), null);
 });
+
+test("the plugin folder holds the plugin and nothing else", () => {
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-plugin-")), "plugin");
+  const built = spawnSync("sh", [new URL("../.github/plugin/build.sh", import.meta.url).pathname, out], { encoding: "utf8" });
+  assert.equal(built.status, 0, built.stderr);
+  assert.deepEqual(fs.readdirSync(out).sort(), [".claude-plugin", "LICENSE", "PRIVACY.md", "README.md", "SECURITY.md", "hooks", "skills"]);
+  assert.deepEqual(fs.readdirSync(path.join(out, ".claude-plugin")).sort(), ["icon.png", "plugin.json"]);
+  // Every program a hook starts is in the folder.
+  const hooks = JSON.parse(fs.readFileSync(path.join(out, "hooks/hooks.json"), "utf8")).hooks;
+  for (const h of Object.values(hooks).flat().flatMap(m => m.hooks)) {
+    assert.equal(h.command, "node");
+    for (const a of h.args) assert.ok(fs.existsSync(a.replace("${CLAUDE_PLUGIN_ROOT}", out)), a);
+  }
+  // The listing's README stands alone: no link or image that points into this repository's tree.
+  const readme = fs.readFileSync(path.join(out, "README.md"), "utf8");
+  for (const m of readme.matchAll(/\]\(([^)]+)\)|<img[^>]*>/g)) assert.match(m[1] || "", /^https:\/\//, m[0]);
+  // The guard works from the folder alone.
+  const run = spawnSync("node", [path.join(out, "skills/vetcode/scripts/guard.mjs"), "ls -la"], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+});
+

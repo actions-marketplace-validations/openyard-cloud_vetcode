@@ -1,0 +1,445 @@
+{
+ "scanner": "0.8.5",
+ "repos": [
+  {
+   "repo": "zulip/zulip",
+   "sha": "4a7fbdea0f",
+   "files": 8395,
+   "total": 75,
+   "flagged": [],
+   "signs": [
+    "agent-plain-http-endpoint"
+   ],
+   "categories": {
+    "secrets": 51,
+    "agent": 1,
+    "web": 19,
+    "config": 1,
+    "malware": 3
+   },
+   "rules": {
+    "secret-aws-key": 7,
+    "agent-plain-http-endpoint": 1,
+    "secret-file-committed": 1,
+    "secret-slack-token": 36,
+    "deserialize-python": 1,
+    "django-allowed-hosts": 1,
+    "mal-credential-paths": 3,
+    "secret-jwt": 1,
+    "secret-assignment": 6,
+    "csrf-disabled": 16,
+    "prototype-pollution": 1,
+    "zip-slip": 1
+   },
+   "places": 74,
+   "placeKinds": {
+    "code": 13,
+    "command": 26,
+    "html": 35
+   },
+   "placeRules": {
+    "code-eval-dynamic": 5,
+    "sink-code-py": 8,
+    "sink-command-rb": 1,
+    "cmd-injection": 7,
+    "sink-command-py": 18,
+    "xss-framework-raw": 3,
+    "xss-template-unescaped": 26,
+    "xss-inner-html": 6
+   }
+  },
+  {
+   "repo": "pretix/pretix",
+   "sha": "137059dd4e",
+   "files": 2374,
+   "total": 27,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 13,
+    "config": 1,
+    "malware": 2,
+    "secrets": 11
+   },
+   "rules": {
+    "jwt-alg-none": 1,
+    "cmd-injection-py": 2,
+    "path-traversal": 1,
+    "sql-python-format": 2,
+    "weak-secret": 1,
+    "debug-enabled": 2,
+    "django-allowed-hosts": 1,
+    "mal-base64-blob": 1,
+    "mal-zero-width": 1,
+    "secret-assignment": 11,
+    "csrf-disabled": 4
+   },
+   "places": 69,
+   "placeKinds": {
+    "code": 21,
+    "command": 5,
+    "html": 43
+   },
+   "placeRules": {
+    "sink-code-py": 20,
+    "code-eval-dynamic": 1,
+    "sink-command-py": 4,
+    "sink-command-js": 1,
+    "xss-template-unescaped": 25,
+    "xss-inner-html": 4,
+    "postmessage-no-origin": 4,
+    "xss-framework-raw": 10
+   }
+  },
+  {
+   "repo": "wger-project/wger",
+   "sha": "c6ee8a7401",
+   "files": 1117,
+   "total": 8,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "secrets": 3,
+    "web": 2,
+    "config": 2,
+    "supply-chain": 1
+   },
+   "rules": {
+    "secret-db-url": 1,
+    "debug-enabled": 1,
+    "cors-credentials-any": 1,
+    "compose-db-exposed": 1,
+    "compose-literal-password": 1,
+    "secret-assignment": 2,
+    "mcp-unpinned": 1
+   },
+   "places": 4,
+   "placeKinds": {
+    "code": 1,
+    "html": 3
+   },
+   "placeRules": {
+    "sink-code-py": 1,
+    "xss-template-unescaped": 2,
+    "xss-inner-html": 1
+   }
+  },
+  {
+   "repo": "redmine/redmine",
+   "sha": "3805a1dd05",
+   "files": 2144,
+   "total": 10,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 9,
+    "secrets": 1
+   },
+   "rules": {
+    "tls-verify-off": 3,
+    "weak-password-hash": 2,
+    "secret-assignment": 1,
+    "open-redirect": 2,
+    "csrf-disabled": 2
+   },
+   "places": 78,
+   "placeKinds": {
+    "code": 18,
+    "command": 6,
+    "html": 38,
+    "sql": 16
+   },
+   "placeRules": {
+    "sink-code-rb-2": 11,
+    "sink-code-rb": 7,
+    "cmd-injection": 4,
+    "sink-command-rb": 1,
+    "sink-command-rb-2": 1,
+    "xss-inner-html": 3,
+    "xss-template-unescaped": 35,
+    "sql-concat": 16
+   }
+  },
+  {
+   "repo": "solidusio/solidus",
+   "sha": "e8dc054235",
+   "files": 3796,
+   "total": 5,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 2,
+    "config": 2,
+    "secrets": 1
+   },
+   "rules": {
+    "mass-assignment": 2,
+    "compose-literal-password": 2,
+    "secret-assignment": 1
+   },
+   "places": 63,
+   "placeKinds": {
+    "code": 27,
+    "command": 10,
+    "html": 24,
+    "sql": 2
+   },
+   "placeRules": {
+    "sink-code-rb-2": 27,
+    "sink-command-rb-2": 6,
+    "cmd-injection": 3,
+    "sink-command-rb": 1,
+    "xss-inner-html": 8,
+    "xss-template-unescaped": 12,
+    "xss-framework-raw": 4,
+    "sql-concat": 2
+   }
+  },
+  {
+   "repo": "Chocobozzz/PeerTube",
+   "sha": "53928dd624",
+   "files": 4204,
+   "total": 6,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 3,
+    "secrets": 3
+   },
+   "rules": {
+    "path-traversal": 2,
+    "secret-assignment": 3,
+    "path-upload-name": 1
+   },
+   "places": 33,
+   "placeKinds": {
+    "code": 1,
+    "command": 15,
+    "html": 14,
+    "sql": 3
+   },
+   "placeRules": {
+    "sink-code-js": 1,
+    "cmd-injection-js": 10,
+    "sink-command-js": 2,
+    "sink-command-js-2": 3,
+    "xss-inner-html": 10,
+    "xss-template-unescaped": 4,
+    "sql-template-literal": 3
+   }
+  },
+  {
+   "repo": "TryGhost/Ghost",
+   "sha": "801ec9741c",
+   "files": 9180,
+   "total": 20,
+   "flagged": [
+    "agent-instruction-injection"
+   ],
+   "signs": [
+    "agent-instruction-injection",
+    "agent-project-hooks"
+   ],
+   "categories": {
+    "secrets": 5,
+    "agent": 2,
+    "web": 4,
+    "malware": 3,
+    "supply-chain": 6
+   },
+   "rules": {
+    "secret-stripe-live": 5,
+    "agent-instruction-injection": 1,
+    "agent-project-hooks": 1,
+    "cors-credentials-any": 1,
+    "mal-zero-width": 2,
+    "mal-credential-paths": 1,
+    "behaviour-purpose-mismatch": 5,
+    "anom-native-executable": 1,
+    "jwt-decode-auth": 2,
+    "prototype-pollution": 1
+   },
+   "places": 92,
+   "placeKinds": {
+    "command": 23,
+    "html": 66,
+    "sql": 3
+   },
+   "placeRules": {
+    "cmd-injection-js": 2,
+    "sink-command-js-2": 20,
+    "sink-command-js": 1,
+    "xss-inner-html": 35,
+    "postmessage-no-origin": 3,
+    "xss-react-dangerous": 18,
+    "xss-template-unescaped": 10,
+    "sql-unsafe-raw": 3
+   }
+  },
+  {
+   "repo": "woodpecker-ci/woodpecker",
+   "sha": "80dd675350",
+   "files": 1655,
+   "total": 18,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "config": 3,
+    "web": 4,
+    "malware": 7,
+    "secrets": 4
+   },
+   "rules": {
+    "compose-docker-socket": 2,
+    "k8s-privileged": 1,
+    "tls-verify-off": 4,
+    "mal-credential-paths": 7,
+    "secret-jwt": 4
+   },
+   "places": 14,
+   "placeKinds": {
+    "command": 10,
+    "html": 4
+   },
+   "placeRules": {
+    "sink-command-go": 8,
+    "sink-command-go-2": 2,
+    "xss-react-dangerous": 1,
+    "xss-framework-raw": 2,
+    "postmessage-no-origin": 1
+   }
+  },
+  {
+   "repo": "halo-dev/halo",
+   "sha": "c47762117e",
+   "files": 3326,
+   "total": 3,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 3
+   },
+   "rules": {
+    "code-eval-input": 2,
+    "deserialize-unsafe": 1
+   },
+   "places": 9,
+   "placeKinds": {
+    "deserialize": 2,
+    "html": 7
+   },
+   "placeRules": {
+    "sink-deserialize-jvm": 2,
+    "xss-framework-raw": 6,
+    "xss-inner-html": 1
+   }
+  },
+  {
+   "repo": "kanboard/kanboard",
+   "sha": "37ef9101bf",
+   "files": 2344,
+   "total": 8,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 6,
+    "config": 2
+   },
+   "rules": {
+    "tls-verify-off": 2,
+    "weak-password-hash": 2,
+    "compose-literal-password": 2,
+    "weak-cipher": 2
+   },
+   "places": 105,
+   "placeKinds": {
+    "code": 69,
+    "command": 13,
+    "deserialize": 4,
+    "html": 2,
+    "sql": 17
+   },
+   "placeRules": {
+    "sink-code-php-2": 33,
+    "sink-code-php": 36,
+    "sink-command-php-2": 9,
+    "sink-command-php": 4,
+    "sink-deserialize-php": 4,
+    "xss-inner-html": 2,
+    "sql-concat": 17
+   }
+  },
+  {
+   "repo": "Leantime/leantime",
+   "sha": "bbba712e69",
+   "files": 1928,
+   "total": 17,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 1,
+    "config": 4,
+    "malware": 1,
+    "secrets": 9,
+    "supply-chain": 2
+   },
+   "rules": {
+    "llm-output-exec": 1,
+    "apache-indexes": 1,
+    "compose-literal-password": 1,
+    "compose-db-exposed": 2,
+    "mal-exfil-endpoint": 1,
+    "secret-assignment": 9,
+    "gha-unpinned-action": 2
+   },
+   "places": 125,
+   "placeKinds": {
+    "code": 31,
+    "command": 48,
+    "deserialize": 1,
+    "html": 44,
+    "sql": 1
+   },
+   "placeRules": {
+    "sink-code-php-2": 25,
+    "sink-code-php": 6,
+    "sink-command-php": 9,
+    "sink-command-php-2": 39,
+    "sink-deserialize-php": 1,
+    "xss-template-unescaped": 30,
+    "xss-inner-html": 14,
+    "sql-concat": 1
+   }
+  },
+  {
+   "repo": "Radarr/Radarr",
+   "sha": "7e3f80c98d",
+   "files": 4593,
+   "total": 7,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "malware": 3,
+    "secrets": 2,
+    "supply-chain": 1,
+    "web": 1
+   },
+   "rules": {
+    "mal-exfil-endpoint": 3,
+    "secret-jwt": 1,
+    "secret-assignment": 1,
+    "anom-native-executable": 1,
+    "open-redirect": 1
+   },
+   "places": 4,
+   "placeKinds": {
+    "command": 3,
+    "html": 1
+   },
+   "placeRules": {
+    "sink-command-cs": 3,
+    "xss-react-dangerous": 1
+   }
+  }
+ ]
+}

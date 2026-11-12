@@ -141,7 +141,7 @@ export const WEB_RULES = [
 
   // Deserialization
   rule({ id: "deserialize-python", severity: "high", title: "Unsafe deserialisation", files: PY,
-    re: /\b(?:pickle|cPickle|_pickle|dill|shelve|jsonpickle)\.(?:loads?|Unpickler|open|decode)\s*\(|\bmarshal\.loads\s*\(|\byaml\.load\s*\((?![^)]*Loader\s*=\s*(?:yaml\.)?C?SafeLoader)|\byaml\.(?:unsafe_load|full_load)\s*\(|torch\.load\s*\((?![^)]*weights_only\s*=\s*True)/,
+    re: /\b(?:pickle|cPickle|_pickle|dill|shelve|jsonpickle)\.(?:loads?|Unpickler|open|decode)\s*\(|\bmarshal\.loads\s*\(|\byaml\.load\s*\((?![^\n]*Loader\s*=\s*(?:yaml\.)?C?SafeLoader)|\byaml\.(?:unsafe_load|full_load)\s*\(|torch\.load\s*\((?![^\n]*weights_only\s*=\s*True)/,
     why: "Loading untrusted pickle/YAML runs arbitrary code.", fix: "Use JSON or `yaml.safe_load`; `torch.load(..., weights_only=True)`; never unpickle data from users or the network." }),
   rule({ id: "deserialize-php", severity: "high", title: "unserialize() on request data", files: PHP,
     re: new RegExp(String.raw`\bunserialize\s*\([^)]*(?:${USER_PHP}|base64_decode)`),

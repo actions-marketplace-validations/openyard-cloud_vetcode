@@ -32,7 +32,9 @@ function project(files) {
   return dir;
 }
 const rules = r => new Set(r.findings.map(f => f.rule));
-const run = (dir, opts = {}) => vet(dir, { tools: false, ...opts });
+// Rule tests ask "does this rule fire on this code", whatever tier the rule reports in: places: false
+// keeps every rule a finding. The tiers have their own tests at the end.
+const run = (dir, opts = {}) => vet(dir, { tools: false, places: false, ...opts });
 
 test("a clean project has no findings above low", async () => {
   const dir = project({
@@ -1518,5 +1520,43 @@ test("injection benchmark: the lines a fix changed, read from its patch", async 
   assert.deepEqual(m.old, [12, 40]);
   assert.deepEqual(m.new, [12, 13, 42]);
   assert.ok(CLASSES.xss.rules.test("xss-inner-html") && CLASSES.sqli.rules.test("sql-concat") && !CLASSES.sqli.rules.test("xss-inner-html"));
+});
+
+test("places to read: dangerous calls with an argument that is not fixed, apart from the findings", async () => {
+  const dir = project({
+    "src/app.js": ['const { exec, spawn } = require("child_process");', "function clean(dir) { exec(`rm -rf ${dir}`); }", 'spawn("npx", ["tool", "--agent", name]);', 'spawn("ls", ["-l"]);', 'exec("ls -la");',
+      "el.innerHTML = name;", 'const q = "SELECT * FROM t WHERE id = " + id;', "re.exec(text);", "const v = eval(expr);", ""].join("\n"),
+    "src/tool.py": ["import os, pickle, subprocess, yaml", "def load(data, cmd, url):", "    os.system(cmd)", '    subprocess.run(["git", "clone", url], check=True)', '    subprocess.run(["ls", "-l"])',
+      "    kind = eval(data.kind) if isinstance(data.kind, str) else data.kind", "    cfg = yaml.load(open(cmd), Loader=yaml.SafeLoader)", "    return pickle.loads(data)", ""].join("\n"),
+    "src/run.go": ["package x", 'import "os/exec"', 'func f(url string) { exec.Command("git", "clone", url).Run(); exec.Command("ls", "-l").Run() }', ""].join("\n"),
+    // The same calls in a test are not the application's.
+    "tests/test_tool.py": ["import os", "os.system(cmd)", ""].join("\n"),
+  });
+  const r = await vet(dir, { tools: false, noIgnore: true, log: () => {} });
+  const places = r.places.map(p => `${p.kind} ${p.file}:${p.line}`).sort();
+  assert.deepEqual(places, ["code src/app.js:9", "code src/tool.py:6", "command src/app.js:2", "command src/app.js:3", "command src/run.go:3", "command src/tool.py:3", "command src/tool.py:4", "html src/app.js:6", "sql src/app.js:7"]);
+  // Rules measured to fire on fine code far more often than on real bugs report places, not findings.
+  assert.deepEqual(r.findings.filter(f => ["xss-inner-html", "sql-concat", "cmd-injection-js", "code-eval-dynamic"].includes(f.rule)), []);
+  assert.equal(r.places.find(p => p.file === "src/app.js" && p.line === 6).rule, "xss-inner-html");
+  // A rule with a record keeps reporting a finding, and its line is not listed twice.
+  assert.deepEqual(r.findings.filter(f => f.rule === "deserialize-python").map(f => `${f.file}:${f.line}`), ["src/tool.py:8"]);
+  assert.equal(r.places.some(p => p.file === "src/tool.py" && p.line === 8), false);
+  // The report lists them in a section of their own, one line per kind, with the question to ask.
+  const text = markdown(r);
+  assert.match(text, /places to read 9/);
+  assert.match(text, /## Places to read \(9\)/);
+  assert.match(text, /\*\*Runs a program with an argument that is not fixed\*\* · 5 in 3 files/);
+  // Asked for findings only (the rule tests do), nothing is moved.
+  const flat = await vet(dir, { tools: false, noIgnore: true, places: false, log: () => {} });
+  assert.deepEqual(flat.places, []);
+  assert.ok(flat.findings.some(f => f.rule === "xss-inner-html"));
+});
+
+test("places to read: which rules report them is generated from the two measurements", () => {
+  const data = JSON.parse(fs.readFileSync(new URL("../skills/vetcode/scripts/lib/data/web-places.json", import.meta.url), "utf8"));
+  assert.ok(data.places.includes("xss-inner-html") && data.places.includes("sql-concat"));
+  // Rules that pointed at real bugs about as often as they fire on fine code keep reporting findings.
+  assert.equal(data.places.includes("deserialize-python"), false);
+  assert.deepEqual([...data.places].sort(), data.places);
 });
 

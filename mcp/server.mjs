@@ -94,9 +94,9 @@ async function callTool(name, args = {}) {
       content: [
         { type: "text", text: markdown(result) + more },
         { type: "text", text: "Findings (JSON):\n" + JSON.stringify(findings) },
-        { type: "text", text: "Next: confirm each finding by reading the code (vetcode_guide, step 3) before reporting it." },
+        { type: "text", text: "Next: confirm each finding by reading the code (vetcode_guide, step 3) before reporting it. Places to read are not findings: for each kind, trace the value back to where it comes from." },
       ],
-      structuredContent: { verdict: result.verdict, stats: result.stats, findings },
+      structuredContent: { verdict: result.verdict, stats: result.stats, findings, places: (result.places || []).slice(0, 300).map(({ kind, file, line, call }) => ({ kind, file, line, call })) },
     };
   }
   throw rpcError(-32602, `Unknown tool: ${name}`);

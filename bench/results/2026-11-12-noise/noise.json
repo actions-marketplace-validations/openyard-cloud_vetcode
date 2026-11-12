@@ -1,0 +1,282 @@
+{
+ "scanner": "0.8.5",
+ "repos": [
+  {
+   "repo": "AmintaCCCP/GithubStarsManager",
+   "sha": "776ea89e38",
+   "files": 1009,
+   "total": 0,
+   "flagged": [],
+   "signs": [],
+   "categories": {},
+   "rules": {},
+   "places": 15,
+   "placeKinds": {
+    "command": 8,
+    "html": 7
+   },
+   "placeRules": {
+    "sink-command-js-2": 8,
+    "postmessage-no-origin": 2,
+    "xss-inner-html": 2,
+    "xss-react-dangerous": 3
+   }
+  },
+  {
+   "repo": "louislam/uptime-kuma",
+   "sha": "fb8ef0fa82",
+   "files": 916,
+   "total": 5,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 3,
+    "secrets": 2
+   },
+   "rules": {
+    "tls-verify-off": 2,
+    "secret-assignment": 2,
+    "weak-cipher": 1
+   },
+   "places": 22,
+   "placeKinds": {
+    "command": 18,
+    "html": 4
+   },
+   "placeRules": {
+    "cmd-injection-js": 9,
+    "sink-command-js-2": 6,
+    "sink-command-js": 3,
+    "xss-inner-html": 1,
+    "xss-framework-raw": 3
+   }
+  },
+  {
+   "repo": "usememos/memos",
+   "sha": "9ee06fdc47",
+   "files": 1352,
+   "total": 3,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 1,
+    "malware": 2
+   },
+   "rules": {
+    "tls-verify-off": 1,
+    "mal-download-exec-script": 2
+   },
+   "places": 2,
+   "placeKinds": {
+    "html": 2
+   },
+   "placeRules": {
+    "xss-inner-html": 2
+   }
+  },
+  {
+   "repo": "gethomepage/homepage",
+   "sha": "91b28e8a6e",
+   "files": 1479,
+   "total": 4,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 4
+   },
+   "rules": {
+    "tls-verify-off": 2,
+    "weak-password-hash": 2
+   },
+   "places": 0,
+   "placeKinds": {},
+   "placeRules": {}
+  },
+  {
+   "repo": "miniflux/v2",
+   "sha": "9447aaeceb",
+   "files": 661,
+   "total": 3,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "config": 1,
+    "web": 2
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "weak-password-hash": 1,
+    "tls-verify-off": 1
+   },
+   "places": 0,
+   "placeKinds": {},
+   "placeRules": {}
+  },
+  {
+   "repo": "umami-software/umami",
+   "sha": "559e3c607c",
+   "files": 1701,
+   "total": 1,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "config": 1
+   },
+   "rules": {
+    "compose-literal-password": 1
+   },
+   "places": 4,
+   "placeKinds": {
+    "command": 1,
+    "sql": 3
+   },
+   "placeRules": {
+    "cmd-injection-js": 1,
+    "sql-unsafe-raw": 3
+   }
+  },
+  {
+   "repo": "healthchecks/healthchecks",
+   "sha": "255075ce65",
+   "files": 1127,
+   "total": 5,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 5
+   },
+   "rules": {
+    "csrf-disabled": 5
+   },
+   "places": 9,
+   "placeKinds": {
+    "html": 9
+   },
+   "placeRules": {
+    "xss-template-unescaped": 6,
+    "xss-inner-html": 3
+   }
+  },
+  {
+   "repo": "linkwarden/linkwarden",
+   "sha": "24adcc146b",
+   "files": 910,
+   "total": 2,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 1,
+    "secrets": 1
+   },
+   "rules": {
+    "secret-in-client-env": 1,
+    "secret-assignment": 1
+   },
+   "places": 6,
+   "placeKinds": {
+    "command": 2,
+    "html": 4
+   },
+   "placeRules": {
+    "sink-command-js-2": 2,
+    "xss-inner-html": 3,
+    "xss-react-dangerous": 1
+   }
+  },
+  {
+   "repo": "louislam/dockge",
+   "sha": "0329dabb50",
+   "files": 148,
+   "total": 3,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "config": 3
+   },
+   "rules": {
+    "compose-docker-socket": 1,
+    "compose-db-exposed": 1,
+    "compose-literal-password": 1
+   },
+   "places": 0,
+   "placeKinds": {},
+   "placeRules": {}
+  },
+  {
+   "repo": "pocketbase/pocketbase",
+   "sha": "7f2773ec23",
+   "files": 889,
+   "total": 0,
+   "flagged": [],
+   "signs": [],
+   "categories": {},
+   "rules": {},
+   "places": 5,
+   "placeKinds": {
+    "command": 4,
+    "html": 1
+   },
+   "placeRules": {
+    "sink-command-go": 4,
+    "xss-inner-html": 1
+   }
+  },
+  {
+   "repo": "maybe-finance/maybe",
+   "sha": "77b5469832",
+   "files": 1604,
+   "total": 4,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 4
+   },
+   "rules": {
+    "weak-password-hash": 1,
+    "csrf-disabled": 2,
+    "prototype-pollution": 1
+   },
+   "places": 18,
+   "placeKinds": {
+    "code": 7,
+    "command": 4,
+    "html": 7
+   },
+   "placeRules": {
+    "sink-code-rb-2": 7,
+    "sink-command-rb-2": 3,
+    "sink-command-rb": 1,
+    "xss-inner-html": 4,
+    "xss-template-unescaped": 3
+   }
+  },
+  {
+   "repo": "firefly-iii/firefly-iii",
+   "sha": "d65e916130",
+   "files": 2183,
+   "total": 3,
+   "flagged": [],
+   "signs": [],
+   "categories": {
+    "web": 1,
+    "supply-chain": 2
+   },
+   "rules": {
+    "weak-password-hash": 1,
+    "gha-unpinned-action": 2
+   },
+   "places": 12,
+   "placeKinds": {
+    "code": 2,
+    "command": 1,
+    "html": 9
+   },
+   "placeRules": {
+    "sink-code-php-2": 2,
+    "sink-command-php-2": 1,
+    "xss-inner-html": 4,
+    "xss-template-unescaped": 5
+   }
+  }
+ ]
+}

@@ -37,14 +37,14 @@ const SEV = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
 
 // The bug classes, by the weakness ids advisories carry, and the rules that speak about each.
 export const CLASSES = {
-  xss: { cwes: [79, 80], rules: /^xss-|^template-|ssti|^dom-|postmessage/ },
-  sqli: { cwes: [89, 564], rules: /^sql-|^nosql-|^orm-/ },
-  command: { cwes: [78, 77, 88], rules: /^cmd-|^command-|shell|^code-eval|^exec-/ },
-  ssrf: { cwes: [918], rules: /^ssrf-|^url-fetch|^request-/ },
-  path: { cwes: [22, 23, 73], rules: /^path-|^zip-slip|traversal|^file-/ },
-  redirect: { cwes: [601], rules: /redirect/ },
-  code: { cwes: [94, 95, 1336], rules: /^code-|eval|ssti|template|^deserial|^cmd-/ },
-  deserialize: { cwes: [502], rules: /deserial|pickle|yaml-load|unserialize|^code-/ },
+  xss: { cwes: [79, 80], rules: /^xss-|^template-|ssti|^dom-|postmessage/, places: ["html"] },
+  sqli: { cwes: [89, 564], rules: /^sql-|^nosql-|^orm-/, places: ["sql"] },
+  command: { cwes: [78, 77, 88], rules: /^cmd-|^command-|shell|^code-eval|^exec-/, places: ["command"] },
+  ssrf: { cwes: [918], rules: /^ssrf|^url-fetch|^request-/, places: [] },
+  path: { cwes: [22, 23, 73], rules: /^path-|^zip-slip|traversal|^file-/, places: [] },
+  redirect: { cwes: [601], rules: /redirect/, places: [] },
+  code: { cwes: [94, 95, 1336], rules: /^code-|eval|ssti|template|^deserial|^cmd-/, places: ["code"] },
+  deserialize: { cwes: [502], rules: /deserial|pickle|yaml-load|unserialize|^code-/, places: ["deserialize"] },
 };
 const CODE = /\.(?:c?m?[jt]sx?|vue|svelte|astro|pyw?|php|phtml|rb|erb|go|java|kt|cs|cshtml|razor|rs|html?|ejs|hbs|handlebars|mustache|twig|jinja2?|j2|tpl|jsp|liquid|haml|slim|pug)$/i;
 const NOT_CODE = /(^|\/)(tests?|__tests__|spec|specs|testing|testdata|fixtures?|e2e|cypress|playwright|docs?|examples?|samples?|benchmarks?|changelog|vendor|node_modules|dist|build|locales?|i18n)\/|\.(?:test|spec)\.\w+$|_test\.\w+$|(^|\/)test_[\w.-]+$|Tests?\.(?:java|cs|kt|php)$|\.min\.\w+$|\.d\.ts$/i;
@@ -131,7 +131,8 @@ async function scan(c, side) {
   // The cache sits inside this repository and is ignored by it; a repository of its own makes the scanner read the files.
   if (!fs.existsSync(path.join(dir, ".git"))) execFileSync("git", ["-C", dir, "init", "-q"], { stdio: "ignore" });
   const res = await vet(dir, { tools: false, noIgnore: true, log: () => {} });
-  return res.findings.map(f => ({ rule: f.rule, category: f.category, severity: f.severity, confidence: f.confidence, file: f.file, line: f.line }));
+  return { findings: res.findings.map(f => ({ rule: f.rule, category: f.category, severity: f.severity, confidence: f.confidence, file: f.file, line: f.line })),
+    places: (res.places || []).map(p => ({ kind: p.kind, rule: p.rule || p.sink || null, file: p.file, line: p.line })) };
 }
 
 const nearest = (lines, n) => lines.reduce((best, l) => Math.min(best, Math.abs(l - n)), Infinity);
@@ -146,8 +147,9 @@ async function run() {
     const bad = await scan(c, "bad"), good = await scan(c, "good");
     console.log(`${c.ghsa} ${c.class} ${c.repo}\n${c.summary}\nfix ${c.fix.slice(0, 10)}, files:`);
     for (const f of c.files) console.log(`  ${f.path}  changed lines (before the fix): ${f.old.join(",")}`);
-    console.log("before the fix:"); for (const f of bad || []) console.log(`  ${f.severity} ${f.rule} ${f.file}:${f.line}`);
-    console.log("after the fix:"); for (const f of good || []) console.log(`  ${f.severity} ${f.rule} ${f.file}:${f.line}`);
+    const list = r => { for (const f of r?.findings || []) console.log(`  ${f.severity} ${f.rule} ${f.file}:${f.line}`); for (const p of r?.places || []) console.log(`  place ${p.kind}${p.rule ? ` (${p.rule})` : ""} ${p.file}:${p.line}`); };
+    console.log("before the fix:"); list(bad);
+    console.log("after the fix:"); list(good);
     return;
   }
   const cases = all.filter(c => !only || c.half === only);
@@ -156,27 +158,33 @@ async function run() {
     const bad = await scan(c, "bad").catch(() => null), good = bad && await scan(c, "good").catch(() => null);
     if (!bad || !good) { process.stderr.write(`${c.ghsa}: source not available, left out\n`); continue; }
     const cls = CLASSES[c.class];
-    const at = (findings, key) => findings.filter(f => c.files.some(x => x.path === f.file && nearest(x[key], f.line) <= NEAR));
-    const nearBad = at(bad, "old"), nearGood = at(good, "new");
-    const inFile = bad.filter(f => c.files.some(x => x.path === f.file));
+    const at = (items, key) => items.filter(f => c.files.some(x => x.path === f.file && nearest(x[key], f.line) <= NEAR));
+    const nearBad = at(bad.findings, "old"), nearGood = at(good.findings, "new");
     const top = fs => fs.reduce((m, f) => Math.max(m, SEV[f.severity]), -1);
     const rightKind = nearBad.filter(f => cls.rules.test(f.rule));
-    // Gone after the fix: a rule that pointed at the bug and no longer points at the same place.
-    const gone = rightKind.filter(f => !nearGood.some(g => g.rule === f.rule && g.file === f.file));
+    // A place of the kind that speaks about this class, where the fix is.
+    const placeBad = at(bad.places, "old").filter(p => cls.places.includes(p.kind)), placeGood = at(good.places, "new").filter(p => cls.places.includes(p.kind));
+    // Gone after the fix: what pointed at the bug no longer points at the same place.
+    const stillFinding = rightKind.some(f => nearGood.some(g => g.rule === f.rule && g.file === f.file));
+    const stillPlace = placeBad.some(p => placeGood.some(g => g.kind === p.kind && g.file === p.file));
+    const pointed = rightKind.length > 0 || placeBad.length > 0;
     rows.push({ ghsa: c.ghsa, class: c.class, half: c.half, repo: c.repo, eco: c.eco, ext: [...new Set(c.files.map(f => path.extname(f.path).toLowerCase()))].join(","),
-      near: top(nearBad), kind: top(rightKind), file: top(inFile), stillAfter: rightKind.length > 0 && gone.length === 0,
-      rules: [...new Set(rightKind.map(f => f.rule))], otherRules: [...new Set(nearBad.filter(f => !cls.rules.test(f.rule)).map(f => f.rule))] });
+      kind: top(rightKind), place: placeBad.length > 0, pointed, anything: nearBad.length > 0 || at(bad.places, "old").length > 0,
+      inFile: bad.findings.some(f => c.files.some(x => x.path === f.file)) || bad.places.some(p => c.files.some(x => x.path === p.file)),
+      stillAfter: pointed && (rightKind.length ? stillFinding : true) && (placeBad.length ? stillPlace : true),
+      // Every rule that spoke here, whether it reports findings or places: the calibration needs both.
+      rules: [...new Set([...rightKind.map(f => f.rule), ...placeBad.map(p => p.rule).filter(Boolean)])], placeKinds: [...new Set(placeBad.map(p => p.kind))] });
   }
   const pct = (n, d) => d ? `${n}/${d} (${Math.round(n * 100 / d)}%)` : "0/0";
   const table = (title, groups) => {
-    console.log(`\n${title}\n\n| | Cases | Right kind of finding at the fix, medium or above | …any severity | Any finding at the fix | Any finding in a changed file | Still flagged after the fix |\n|---|---|---|---|---|---|---|`);
+    console.log(`\n${title}\n\n| | Cases | A finding of the right kind at the fix, medium or above | A finding or a place of the right kind at the fix | Anything at the fix | Anything in a changed file | Still pointed at after the fix |\n|---|---|---|---|---|---|---|`);
     for (const [name, rs] of groups) {
       if (!rs.length) continue;
-      const k2 = rs.filter(r => r.kind >= 2).length, k0 = rs.filter(r => r.kind >= 0).length;
-      console.log(`| ${name} | ${rs.length} | ${pct(k2, rs.length)} | ${pct(k0, rs.length)} | ${pct(rs.filter(r => r.near >= 0).length, rs.length)} | ${pct(rs.filter(r => r.file >= 0).length, rs.length)} | ${pct(rs.filter(r => r.stillAfter).length, k0)} |`);
+      const p = rs.filter(r => r.pointed).length;
+      console.log(`| ${name} | ${rs.length} | ${pct(rs.filter(r => r.kind >= 2).length, rs.length)} | ${pct(p, rs.length)} | ${pct(rs.filter(r => r.anything).length, rs.length)} | ${pct(rs.filter(r => r.inFile).length, rs.length)} | ${pct(rs.filter(r => r.stillAfter).length, p)} |`);
     }
   };
-  console.log(`vetcode ${VERSION}, ${rows.length} cases, a finding counts when it is within ${NEAR} lines of a line the fix changed.`);
+  console.log(`vetcode ${VERSION}, ${rows.length} cases, a finding or a place counts when it is within ${NEAR} lines of a line the fix changed.`);
   table("By half", [["all", rows], ["tune", rows.filter(r => r.half === "tune")], ["check", rows.filter(r => r.half === "check")]]);
   table("By class", Object.keys(CLASSES).map(k => [k, rows.filter(r => r.class === k)]));
   const exts = [...new Set(rows.map(r => r.ext.split(",")[0]))].map(e => [e, rows.filter(r => r.ext.split(",")[0] === e)]).filter(([, rs]) => rs.length >= 5).sort((a, b) => b[1].length - a[1].length);
@@ -188,7 +196,7 @@ async function run() {
   const out = arg("--out", "");
   if (out) {
     fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
-    const sum = rs => ({ cases: rs.length, rightKindMedium: rs.filter(r => r.kind >= 2).length, rightKind: rs.filter(r => r.kind >= 0).length, anyAtFix: rs.filter(r => r.near >= 0).length, anyInFile: rs.filter(r => r.file >= 0).length, stillAfterFix: rs.filter(r => r.stillAfter).length });
+    const sum = rs => ({ cases: rs.length, findingMedium: rs.filter(r => r.kind >= 2).length, findingOrPlace: rs.filter(r => r.pointed).length, place: rs.filter(r => r.place).length, anythingAtFix: rs.filter(r => r.anything).length, anythingInFile: rs.filter(r => r.inFile).length, stillAfterFix: rs.filter(r => r.stillAfter).length });
     const byClass = rs => Object.fromEntries(Object.keys(CLASSES).map(k => [k, sum(rs.filter(r => r.class === k))]));
     // The check half is stored as totals only: which of its cases were missed is not something to look up.
     fs.writeFileSync(out, JSON.stringify({ scanner: VERSION, near: NEAR, all: sum(rows), tune: { ...sum(rows.filter(r => r.half === "tune")), byClass: byClass(rows.filter(r => r.half === "tune")) },

@@ -1,7 +1,7 @@
 name: Release
 # Releases happen on their own: merge a change to main that raises the version in package.json
-# (and the four other version fields) and this workflow tags it, runs the tests, publishes the
-# GitHub release with vetcode-skill.zip, puts the plugin on the `plugin` branch (the one the
+# (and the five other version fields) and this workflow tags it, runs the tests, publishes the
+# GitHub release with vetcode-skill.zip and the Gemini CLI extension, puts the plugin on the `plugin` branch (the one the
 # Claude plugin directory follows), attaches vetcode.mcpb and publishes it to the MCP Registry,
 # and publishes the npm package with provenance.
 # Pushes that keep the same version are skipped. Run it by hand from Actions to retry.
@@ -76,6 +76,16 @@ jobs:
           else
             gh release create "v$V" vetcode-skill.zip --target "$GITHUB_SHA" --title "vetcode $V" --generate-notes
           fi
+      # Gemini CLI installs an extension from the latest release, picking the asset named for its
+      # platform; without one it would install the repository, whose hooks/hooks.json is Claude Code's.
+      - name: Gemini CLI extension
+        if: steps.v.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          sh .github/gemini/build.sh "$RUNNER_TEMP/gemini"
+          gh release upload "v$V" "$RUNNER_TEMP/gemini/darwin.vetcode.tar.gz" "$RUNNER_TEMP/gemini/linux.vetcode.tar.gz" "$RUNNER_TEMP/gemini/win32.vetcode.zip" --clobber
       # The Claude plugin directory follows the `plugin` branch: only what the plugin installs
       # (manifest, skill, hooks and its own README), one commit whenever that changes.
       - name: Plugin branch

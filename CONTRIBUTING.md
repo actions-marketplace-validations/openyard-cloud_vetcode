@@ -27,4 +27,4 @@ Changes go through pull requests; `main` is protected.
 
 ## Releasing
 
-Raise the version in all five places (`package.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `skills/vetcode/SKILL.md`, `skills/vetcode/scripts/lib/index.mjs`) and the `#vX.Y.Z` pins in the README, then merge to main. The Release workflow tags the version and publishes the GitHub release with `vetcode-skill.zip`. vetcode is not on npm yet: the workflow also tries to publish there and only warns when the registry refuses, so a release never depends on it. Pushes that keep the same version do nothing.
+Raise the version in all six places (`package.json`, `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `gemini-extension.json`, `skills/vetcode/SKILL.md`, `skills/vetcode/scripts/lib/index.mjs`) and the `#vX.Y.Z` pins in the README, then merge to main. The Release workflow tags the version and publishes the GitHub release with `vetcode-skill.zip`. vetcode is not on npm yet: the workflow also tries to publish there and only warns when the registry refuses, so a release never depends on it. Pushes that keep the same version do nothing.

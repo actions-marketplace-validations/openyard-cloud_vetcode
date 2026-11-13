@@ -20,9 +20,11 @@
 <style>
   /* Design system (ui-ux-pro-max, "developer security tool", variance 9, motion 6): Brutalism on a
      code-dark ground. Sharp corners, 2px borders, a visible grid, large blocks, 700+ mono type,
-     hard offset shadows instead of soft ones, instant hover states. Layout: an asymmetric bento grid
-     for the hero and proof, then full-width bands. Motion: one staggered entrance of the grid cells
-     and a typed terminal, both skipped under reduced motion. Colour: run green for the action, the
+     hard offset shadows instead of soft ones, quick hover lifts. Layout: an asymmetric bento grid
+     for the hero and proof, a ticker, then full-width bands. Motion: a staggered entrance of the grid
+     cells, the highlight swept in, a typed terminal whose answers are stamped, a scan line, numbers
+     that count up and blocks that rise as they scroll into view. Under reduced motion all of it is
+     skipped and the page shows its final state; without JavaScript nothing is hidden. Colour: run green for the action, the
      guard's own three answers (deny red, ask amber, allow green) as the only other colours. */
   :root {
     --bg: #0F172A;
@@ -45,7 +47,6 @@
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
   body {
     margin: 0; color: var(--ink); font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased;
     background-color: var(--bg);
@@ -125,10 +126,52 @@
     .bento > .cell:nth-child(2) { animation-delay: .06s; } .bento > .cell:nth-child(3) { animation-delay: .12s; }
     .bento > .cell:nth-child(4) { animation-delay: .18s; } .bento > .cell:nth-child(5) { animation-delay: .24s; }
     .bento > .cell:nth-child(6) { animation-delay: .30s; }
+    html { scroll-behavior: smooth; }
+
+    /* the highlight is painted left to right after the headline lands */
+    .hero h1 mark { background-size: 100% 100%; background-repeat: no-repeat; animation: sweep .6s cubic-bezier(.7, 0, .2, 1) .45s both; }
+
+    /* the guard's answers are stamped on as they appear, then the prompt waits */
+    .o1 .chip { animation: stamp .32s cubic-bezier(.34, 1.6, .64, 1) 1.5s both; }
+    .o2 .chip { animation: stamp .32s cubic-bezier(.34, 1.6, .64, 1) 2.75s both; }
+    .o3 .chip { animation: stamp .32s cubic-bezier(.34, 1.6, .64, 1) 3.95s both; }
+    .o4 { animation: appear .01s 4.3s both; }
+    .cursor { animation: blink 1.1s steps(1) 4.3s infinite; }
+    .term::after { content: ""; position: absolute; left: 0; right: 0; top: 42px; height: 56px; pointer-events: none;
+      background: linear-gradient(transparent, rgba(34, 197, 94, .09) 70%, rgba(34, 197, 94, .35) 96%, transparent);
+      animation: scan 3.6s linear 4.6s infinite both; }
+
+    .ticker-track { animation: marquee 38s linear infinite; }
+    .ticker:hover .ticker-track { animation-play-state: paused; }
+
+    /* blocks below the fold rise in when they scroll into view; hidden only once the script runs */
+    .anim .reveal:not(.in) { opacity: 0; }
+    .anim .reveal.in { animation: rise .5s cubic-bezier(.2, .8, .2, 1) var(--d, 0s) backwards; }
+    .anim tbody tr.reveal.in { animation-name: slide; }
+
+    .check, .limit, .answer { transition: transform .14s ease-out, box-shadow .14s ease-out, background-color .14s ease-out; }
+    .check:hover { transform: translate(-4px, -4px); box-shadow: 8px 8px 0 var(--accent); }
+    .limit:hover { transform: translate(-3px, -3px); box-shadow: 6px 6px 0 var(--deny); }
+    .answer:hover { background: var(--cell-2); }
   }
   @keyframes typing { from { width: 0; } }
   @keyframes appear { from { opacity: 0; } }
   @keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+  @keyframes slide { from { opacity: 0; transform: translateX(-24px); } }
+  @keyframes sweep { from { background-size: 0% 100%; color: var(--ink); } }
+  @keyframes stamp { from { opacity: 0; transform: scale(1.9) rotate(-8deg); } }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes scan { from { transform: translateY(-60px); opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } to { transform: translateY(260px); opacity: 0; } }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+
+  .cursor { display: inline-block; width: .62em; height: 1.15em; background: var(--accent); vertical-align: text-bottom; }
+  .term { overflow: hidden; }
+
+  /* ticker: what the guard watches, as a moving band */
+  .ticker { margin-top: 16px; border: var(--b); background: var(--ink); color: var(--bg); overflow: hidden; }
+  .ticker-track { display: flex; width: max-content; }
+  .ticker-track span { display: flex; align-items: center; gap: 22px; padding: 12px 0 12px 22px; font: 800 15px var(--heading); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+  .ticker-track span::after { content: ""; width: 10px; height: 10px; background: var(--accent); outline: 2px solid var(--bg); }
 
   /* bands */
   section { margin-top: 96px; }
@@ -187,6 +230,41 @@
   footer a { color: var(--soft); text-decoration: none; }
   footer a:hover { color: var(--accent); }
 
+  /* check a repository: the form, the wait, the result */
+  .try { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .tryform { display: flex; border: var(--b); background: var(--term); box-shadow: var(--shadow); }
+  .tryform label { display: flex; align-items: center; padding: 0 0 0 16px; font: 800 16px var(--heading); color: var(--accent); }
+  .tryform input { flex: 1; min-width: 0; min-height: 56px; padding: 0 12px; border: 0; background: transparent; color: var(--ink); font: 600 16px var(--heading); }
+  .tryform input::placeholder { color: var(--muted); }
+  .tryform input:focus { outline: none; }
+  .tryform:focus-within { outline: 3px solid var(--ask); outline-offset: 3px; }
+  .tryform button { flex: none; min-width: 120px; border: 0; border-left: var(--b); background: var(--accent); color: var(--on-accent); font: 800 14px var(--heading); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+  .tryform button:hover { background: var(--ink); }
+  .tryform button:disabled { background: var(--muted); cursor: progress; }
+  .trymsg { margin: 0; color: var(--ask); font: 600 14px var(--heading); }
+  .trymsg.err { color: var(--deny); }
+  .tryfine { margin: 0; font-size: 14px; color: var(--muted); }
+  .trywait { display: flex; align-items: center; gap: 14px; border: var(--b); background: var(--cell); padding: 18px 20px; font: 600 15px var(--heading); }
+  .trywait .bar { flex: none; width: 14px; height: 14px; background: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) { .trywait .bar { animation: blink 1s steps(1) infinite; } }
+  .report { border: var(--b); background: var(--cell); }
+  .report .verdict { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; padding: 18px 20px; border-bottom: var(--b); font: 800 clamp(18px, 2.4vw, 24px) var(--heading); letter-spacing: -.02em; }
+  .report .verdict.clear { background: var(--accent); color: var(--on-accent); }
+  .report .verdict.review { background: var(--ask); color: var(--on-accent); }
+  .report .verdict.warning { background: var(--deny); color: #FFFFFF; }
+  .report .verdict a { color: inherit; font: 700 13px var(--heading); text-transform: uppercase; letter-spacing: .05em; }
+  .report .meta { margin: 0; padding: 12px 20px; border-bottom: 1px solid #334155; color: var(--muted); font-size: 14px; }
+  .report .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .report .rcol { padding: 18px 20px; min-width: 0; }
+  .report .rcol + .rcol { border-left: 1px solid #334155; }
+  .report h3 { margin: 0 0 10px; font: 800 13px var(--heading); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .report ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .report li { color: var(--soft); font-size: 15px; overflow-wrap: anywhere; }
+  .report li b { font: 800 11px/1 var(--heading); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; margin-right: 8px; background: var(--ask); color: var(--on-accent); vertical-align: 1px; }
+  .report li b.critical, .report li b.high { background: var(--deny); color: #FFFFFF; }
+  .report li a { color: var(--soft); }
+  .report li small { color: var(--muted); }
+
   @media (max-width: 1024px) {
     .hero { grid-column: span 12; grid-row: auto; }
     .stat { grid-column: span 6; }
@@ -201,6 +279,11 @@
     .cmd-box .copy { border-left: 0; border-top: var(--b); }
     .hero { padding: 24px; }
     .tab { flex: 1 1 45%; border-bottom: var(--b); }
+    .tryform { flex-wrap: wrap; }
+    .tryform input { flex-basis: 70%; }
+    .tryform button { flex: 1 1 100%; min-height: 52px; border-left: 0; border-top: var(--b); }
+    .report .cols { grid-template-columns: minmax(0, 1fr); }
+    .report .rcol + .rcol { border-left: 0; border-top: 1px solid #334155; }
   }
 </style>
 </head>
@@ -219,6 +302,7 @@
   <header class="top">
     <a class="brand" href="./"><img src="logo.svg" alt="" width="30" height="30">vetcode</a>
     <nav aria-label="Sections">
+      <a class="optional" href="#check">Try it</a>
       <a class="optional" href="#what">Checks</a>
       <a class="optional" href="#numbers">Numbers</a>
       <a class="optional" href="#install">Install</a>
@@ -266,6 +350,8 @@
           <p class="gap"></p>
           <p class="cmdline"><span class="type t3">npm install express</span></p>
           <p class="out o3"><span class="chip allow">allow</span><span class="dim">well known, settled version: the install runs, nothing is shown</span></p>
+          <p class="gap"></p>
+          <p class="cmdline o4"><span class="cursor"></span></p>
         </div>
       </div>
 
@@ -275,6 +361,26 @@
         <div class="answer allow"><b>ALLOW</b><span>Well-known packages at settled versions. Silently.</span></div>
       </div>
     </div>
+
+    <div class="ticker" aria-hidden="true"><div class="ticker-track"><span>npm install</span><span>pip install</span><span>uv add</span><span>cargo add</span><span>go get</span><span>pnpm add</span><span>yarn add</span><span>bun add</span><span>git clone</span><span>claude mcp add</span><span>CLAUDE.md</span><span>.claude/settings.json</span><span>postinstall</span><span>SKILL.md</span><span>npm install</span><span>pip install</span><span>uv add</span><span>cargo add</span><span>go get</span><span>pnpm add</span><span>yarn add</span><span>bun add</span><span>git clone</span><span>claude mcp add</span><span>CLAUDE.md</span><span>.claude/settings.json</span><span>postinstall</span><span>SKILL.md</span></div></div>
+
+    <section id="check" aria-labelledby="check-h">
+      <div class="band-head">
+        <h2 id="check-h">Check a repository</h2>
+        <p>Paste a public GitHub link. vetcode reads it on a throwaway GitHub runner, never running it, and tells you what the code can do and whether anything looks like malware.</p>
+      </div>
+      <div class="try">
+        <form class="tryform" id="try" action="https://openyard.cloud/check" method="get" novalidate>
+          <label for="try-repo" aria-hidden="true">$</label>
+          <input id="try-repo" name="repo" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo" aria-label="GitHub repository" required>
+          <button type="submit">Check</button>
+        </form>
+        <div id="try-ts"></div>
+        <p class="trymsg" id="try-msg" role="status" hidden></p>
+        <div id="try-out" aria-live="polite"></div>
+        <p class="tryfine">Checks run on <a href="https://openyard.cloud/check">openyard.cloud</a>, the community site vetcode comes from. Results are public, like the repositories. Patterns, not proof: read the code before you trust it.</p>
+      </div>
+    </section>
 
     <section id="what" aria-labelledby="what-h">
       <div class="band-head">
@@ -409,6 +515,115 @@
       show(next); next.focus();
     });
   });
+  // Motion: blocks rise in as they scroll into view and numbers count up. Only when the reader has
+  // not asked for reduced motion; the page's HTML already holds the final state.
+  if (matchMedia("(prefers-reduced-motion: no-preference)").matches && "IntersectionObserver" in window) {
+    document.documentElement.classList.add("anim");
+    const groups = [".band-head", ".checks > .check", "tbody tr", ".limits > .limit", ".tablewrap", ".source", ".tabs", ".panel:not([hidden])", ".note", ".closing"];
+    for (const sel of groups) document.querySelectorAll(sel).forEach((el, i) => {
+      el.classList.add("reveal");
+      el.style.setProperty("--d", (i % 6) * 0.07 + "s");
+    });
+    const count = el => {
+      const node = [...el.childNodes].find(n => n.nodeType === 3 && /\d/.test(n.textContent));
+      if (!node) return;
+      const text = node.textContent, target = Number(text.replace(/[^\d]/g, ""));
+      if (target < 10) return;
+      const start = performance.now(), ms = 1100;
+      const tick = now => {
+        const t = Math.min(1, (now - start) / ms), v = Math.round(target * (1 - Math.pow(1 - t, 3)));
+        node.textContent = text.includes(",") ? v.toLocaleString("en-US") : String(v);
+        if (t < 1) requestAnimationFrame(tick); else node.textContent = text;
+      };
+      requestAnimationFrame(tick);
+    };
+    const io = new IntersectionObserver(entries => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add("in");
+        if (e.target.matches(".stat .n, td strong")) count(e.target);
+        io.unobserve(e.target);
+      }
+    }, { rootMargin: "0px 0px -6% 0px", threshold: 0.15 });
+    document.querySelectorAll(".reveal, .stat .n, td strong").forEach(el => io.observe(el));
+  }
+  // Check a repository. The form works without JavaScript (it opens the check on openyard.cloud);
+  // with it, the check is asked for, waited on and shown here. Everything that comes back is set as
+  // text, and only links to GitHub and openyard.cloud become links: the repository is not ours.
+  (() => {
+    const API = "https://openyard.cloud", SITEKEY = "0x4AAAAAAFzE7AU_0L_sZhiu";
+    const form = document.getElementById("try"), input = document.getElementById("try-repo"), button = form.querySelector("button");
+    const msg = document.getElementById("try-msg"), out = document.getElementById("try-out");
+    const say = (text, err) => { msg.textContent = text; msg.className = "trymsg" + (err ? " err" : ""); msg.hidden = !text; };
+    const el = (tag, props = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(props)) n[k] = v; n.append(...kids.filter(k => k != null)); return n; };
+    const safeLink = (href, text) => /^https:\/\/(?:github\.com|openyard\.cloud)\//.test(href || "") ? el("a", { href, target: "_blank", rel: "noopener", textContent: text }) : document.createTextNode(text);
+    let tsReady = null;
+    const turnstileToken = () => {
+      if (!tsReady) tsReady = new Promise(resolve => {
+        window.onTryTs = () => turnstile.render("#try-ts", { sitekey: SITEKEY, theme: "dark", appearance: "interaction-only", callback: resolve, "error-callback": () => resolve("") });
+        const sc = document.createElement("script");
+        sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTryTs&render=explicit"; sc.async = true; sc.onerror = () => resolve("");
+        document.head.appendChild(sc);
+      });
+      return Promise.race([tsReady, new Promise(r => setTimeout(() => r(""), 15000))]);
+    };
+    input.addEventListener("focus", () => { turnstileToken(); }, { once: true });
+    const repoOf = v => {
+      const parts = v.trim().replace(/^https?:\/\//, "").replace(/^(?:www\.)?github\.com\//, "").replace(/[#?].*$/, "").split("/").slice(0, 2);
+      const name = parts.join("/").replace(/\.git$/, "");
+      return parts.length === 2 && /^[\w.-]+\/[\w.-]+$/.test(name) ? name : null;
+    };
+    const getJSON = async path => { const r = await fetch(API + path, { cache: "no-store" }); return r.json(); };
+    function render(rep) {
+      const when = rep.scannedAt ? new Date(rep.scannedAt).toISOString().slice(0, 10) : "";
+      const abilities = rep.abilities.length
+        ? rep.abilities.map(a => el("li", {}, a.text, " ", el("small", { textContent: `(${a.files} file${a.files === 1 ? "" : "s"})` })))
+        : [el("li", { textContent: "None of the sensitive abilities checked: secrets, network, other programs, user details, startup folders, code built at runtime." })];
+      const findings = rep.findings.length
+        ? rep.findings.slice(0, 8).map(f => el("li", {}, el("b", { className: String(f.severity).toLowerCase(), textContent: f.severity }), f.title, " ", el("small", {}, "at ", safeLink(f.url, `${f.file}:${f.line}`))))
+        : [el("li", { textContent: "None." })];
+      if (rep.findings.length > 8) findings.push(el("li", {}, el("small", { textContent: `and ${rep.findings.length - 8} more in the full report` })));
+      out.replaceChildren(el("div", { className: "report" },
+        el("div", { className: "verdict " + (["clear", "review", "warning"].includes(rep.verdict) ? rep.verdict : "review") },
+          el("span", { textContent: `${rep.repo}: ${rep.verdictText}` }), safeLink(rep.page, "Full report →")),
+        el("p", { className: "meta", textContent: `${rep.files} files read at commit ${String(rep.commit).slice(0, 7)} by vetcode ${rep.version}, ${when}. Nothing was run.` }),
+        el("div", { className: "cols" },
+          el("div", { className: "rcol" }, el("h3", { textContent: "What the code can do" }), el("ul", {}, ...abilities)),
+          el("div", { className: "rcol" }, el("h3", { textContent: "Malware and supply-chain findings" }), el("ul", {}, ...findings)))));
+    }
+    async function wait(repo) {
+      const t0 = Date.now(), clock = el("span", { textContent: "0s" });
+      out.replaceChildren(el("div", { className: "trywait" }, el("span", { className: "bar", ariaHidden: "true" }), el("span", {}, `Reading ${repo}… usually under two minutes `), clock));
+      const tick = setInterval(() => { clock.textContent = Math.round((Date.now() - t0) / 1000) + "s"; }, 1000);
+      try {
+        while (Date.now() - t0 < 10 * 60000) {
+          await new Promise(r => setTimeout(r, 4000));
+          const s = await getJSON("/api/check/status?repo=" + encodeURIComponent(repo)).catch(() => ({}));
+          if (s.status === "failed") throw new Error(s.error || "The check did not finish.");
+          if (s.status === "done") return getJSON("/api/check/report?repo=" + encodeURIComponent(repo));
+        }
+        throw new Error("This is taking longer than usual. The result will appear on openyard.cloud.");
+      } finally { clearInterval(tick); }
+    }
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const repo = repoOf(input.value);
+      if (!repo) return say("Paste a link like https://github.com/owner/repo", true);
+      button.disabled = true; say("");
+      try {
+        const ts = await turnstileToken();
+        const r = await fetch(API + "/api/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: "https://github.com/" + repo, ts }) });
+        const d = await r.json();
+        if (!r.ok) { if (window.turnstile) { turnstile.reset("#try-ts"); tsReady = null; } throw new Error(d.error || "The check was refused."); }
+        const rep = d.status === "done" ? await getJSON("/api/check/report?repo=" + encodeURIComponent(d.repo)) : await wait(d.repo);
+        if (rep.status !== "done") throw new Error(rep.error || "The check did not finish.");
+        render(rep);
+      } catch (x) {
+        out.replaceChildren();
+        say(x instanceof TypeError ? "Could not reach openyard.cloud. Try again, or open the check there." : x.message, true);
+      } finally { button.disabled = false; }
+    });
+  })();
   // Copy buttons, with a selection as the fallback when the clipboard is refused.
   for (const b of document.querySelectorAll(".copy")) {
     b.addEventListener("click", async () => {

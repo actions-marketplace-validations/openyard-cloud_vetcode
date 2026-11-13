@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "^(?:run_shell_command|write_file|replace)$",
+        "hooks": [
+          {
+            "name": "vetcode-guard",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}skills${/}vetcode${/}scripts${/}guard.mjs\"",
+            "timeout": 45000,
+            "description": "Checks the packages a shell command would install, and the programs an MCP configuration would start, before they run."
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "^run_shell_command$",
+        "hooks": [
+          {
+            "name": "vetcode-clone-check",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}skills${/}vetcode${/}scripts${/}guard.mjs\"",
+            "timeout": 90000,
+            "description": "Reads a repository right after git clone, before anything from it runs."
+          }
+        ]
+      }
+    ]
+  }
+}

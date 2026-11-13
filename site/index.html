@@ -20,9 +20,11 @@
 <style>
   /* Design system (ui-ux-pro-max, "developer security tool", variance 9, motion 6): Brutalism on a
      code-dark ground. Sharp corners, 2px borders, a visible grid, large blocks, 700+ mono type,
-     hard offset shadows instead of soft ones, instant hover states. Layout: an asymmetric bento grid
-     for the hero and proof, then full-width bands. Motion: one staggered entrance of the grid cells
-     and a typed terminal, both skipped under reduced motion. Colour: run green for the action, the
+     hard offset shadows instead of soft ones, quick hover lifts. Layout: an asymmetric bento grid
+     for the hero and proof, a ticker, then full-width bands. Motion: a staggered entrance of the grid
+     cells, the highlight swept in, a typed terminal whose answers are stamped, a scan line, numbers
+     that count up and blocks that rise as they scroll into view. Under reduced motion all of it is
+     skipped and the page shows its final state; without JavaScript nothing is hidden. Colour: run green for the action, the
      guard's own three answers (deny red, ask amber, allow green) as the only other colours. */
   :root {
     --bg: #0F172A;
@@ -45,7 +47,6 @@
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
   body {
     margin: 0; color: var(--ink); font: 16px/1.6 var(--body); -webkit-font-smoothing: antialiased;
     background-color: var(--bg);
@@ -125,10 +126,52 @@
     .bento > .cell:nth-child(2) { animation-delay: .06s; } .bento > .cell:nth-child(3) { animation-delay: .12s; }
     .bento > .cell:nth-child(4) { animation-delay: .18s; } .bento > .cell:nth-child(5) { animation-delay: .24s; }
     .bento > .cell:nth-child(6) { animation-delay: .30s; }
+    html { scroll-behavior: smooth; }
+
+    /* the highlight is painted left to right after the headline lands */
+    .hero h1 mark { background-size: 100% 100%; background-repeat: no-repeat; animation: sweep .6s cubic-bezier(.7, 0, .2, 1) .45s both; }
+
+    /* the guard's answers are stamped on as they appear, then the prompt waits */
+    .o1 .chip { animation: stamp .32s cubic-bezier(.34, 1.6, .64, 1) 1.5s both; }
+    .o2 .chip { animation: stamp .32s cubic-bezier(.34, 1.6, .64, 1) 2.75s both; }
+    .o3 .chip { animation: stamp .32s cubic-bezier(.34, 1.6, .64, 1) 3.95s both; }
+    .o4 { animation: appear .01s 4.3s both; }
+    .cursor { animation: blink 1.1s steps(1) 4.3s infinite; }
+    .term::after { content: ""; position: absolute; left: 0; right: 0; top: 42px; height: 56px; pointer-events: none;
+      background: linear-gradient(transparent, rgba(34, 197, 94, .09) 70%, rgba(34, 197, 94, .35) 96%, transparent);
+      animation: scan 3.6s linear 4.6s infinite both; }
+
+    .ticker-track { animation: marquee 38s linear infinite; }
+    .ticker:hover .ticker-track { animation-play-state: paused; }
+
+    /* blocks below the fold rise in when they scroll into view; hidden only once the script runs */
+    .anim .reveal:not(.in) { opacity: 0; }
+    .anim .reveal.in { animation: rise .5s cubic-bezier(.2, .8, .2, 1) var(--d, 0s) backwards; }
+    .anim tbody tr.reveal.in { animation-name: slide; }
+
+    .check, .limit, .answer { transition: transform .14s ease-out, box-shadow .14s ease-out, background-color .14s ease-out; }
+    .check:hover { transform: translate(-4px, -4px); box-shadow: 8px 8px 0 var(--accent); }
+    .limit:hover { transform: translate(-3px, -3px); box-shadow: 6px 6px 0 var(--deny); }
+    .answer:hover { background: var(--cell-2); }
   }
   @keyframes typing { from { width: 0; } }
   @keyframes appear { from { opacity: 0; } }
   @keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+  @keyframes slide { from { opacity: 0; transform: translateX(-24px); } }
+  @keyframes sweep { from { background-size: 0% 100%; color: var(--ink); } }
+  @keyframes stamp { from { opacity: 0; transform: scale(1.9) rotate(-8deg); } }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes scan { from { transform: translateY(-60px); opacity: 0; } 8% { opacity: 1; } 92% { opacity: 1; } to { transform: translateY(260px); opacity: 0; } }
+  @keyframes marquee { to { transform: translateX(-50%); } }
+
+  .cursor { display: inline-block; width: .62em; height: 1.15em; background: var(--accent); vertical-align: text-bottom; }
+  .term { overflow: hidden; }
+
+  /* ticker: what the guard watches, as a moving band */
+  .ticker { margin-top: 16px; border: var(--b); background: var(--ink); color: var(--bg); overflow: hidden; }
+  .ticker-track { display: flex; width: max-content; }
+  .ticker-track span { display: flex; align-items: center; gap: 22px; padding: 12px 0 12px 22px; font: 800 15px var(--heading); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+  .ticker-track span::after { content: ""; width: 10px; height: 10px; background: var(--accent); outline: 2px solid var(--bg); }
 
   /* bands */
   section { margin-top: 96px; }
@@ -266,6 +309,8 @@
           <p class="gap"></p>
           <p class="cmdline"><span class="type t3">npm install express</span></p>
           <p class="out o3"><span class="chip allow">allow</span><span class="dim">well known, settled version: the install runs, nothing is shown</span></p>
+          <p class="gap"></p>
+          <p class="cmdline o4"><span class="cursor"></span></p>
         </div>
       </div>
 
@@ -275,6 +320,8 @@
         <div class="answer allow"><b>ALLOW</b><span>Well-known packages at settled versions. Silently.</span></div>
       </div>
     </div>
+
+    <div class="ticker" aria-hidden="true"><div class="ticker-track"><span>npm install</span><span>pip install</span><span>uv add</span><span>cargo add</span><span>go get</span><span>pnpm add</span><span>yarn add</span><span>bun add</span><span>git clone</span><span>claude mcp add</span><span>CLAUDE.md</span><span>.claude/settings.json</span><span>postinstall</span><span>SKILL.md</span><span>npm install</span><span>pip install</span><span>uv add</span><span>cargo add</span><span>go get</span><span>pnpm add</span><span>yarn add</span><span>bun add</span><span>git clone</span><span>claude mcp add</span><span>CLAUDE.md</span><span>.claude/settings.json</span><span>postinstall</span><span>SKILL.md</span></div></div>
 
     <section id="what" aria-labelledby="what-h">
       <div class="band-head">
@@ -409,6 +456,38 @@
       show(next); next.focus();
     });
   });
+  // Motion: blocks rise in as they scroll into view and numbers count up. Only when the reader has
+  // not asked for reduced motion; the page's HTML already holds the final state.
+  if (matchMedia("(prefers-reduced-motion: no-preference)").matches && "IntersectionObserver" in window) {
+    document.documentElement.classList.add("anim");
+    const groups = [".band-head", ".checks > .check", "tbody tr", ".limits > .limit", ".tablewrap", ".source", ".tabs", ".panel:not([hidden])", ".note", ".closing"];
+    for (const sel of groups) document.querySelectorAll(sel).forEach((el, i) => {
+      el.classList.add("reveal");
+      el.style.setProperty("--d", (i % 6) * 0.07 + "s");
+    });
+    const count = el => {
+      const node = [...el.childNodes].find(n => n.nodeType === 3 && /\d/.test(n.textContent));
+      if (!node) return;
+      const text = node.textContent, target = Number(text.replace(/[^\d]/g, ""));
+      if (target < 10) return;
+      const start = performance.now(), ms = 1100;
+      const tick = now => {
+        const t = Math.min(1, (now - start) / ms), v = Math.round(target * (1 - Math.pow(1 - t, 3)));
+        node.textContent = text.includes(",") ? v.toLocaleString("en-US") : String(v);
+        if (t < 1) requestAnimationFrame(tick); else node.textContent = text;
+      };
+      requestAnimationFrame(tick);
+    };
+    const io = new IntersectionObserver(entries => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        e.target.classList.add("in");
+        if (e.target.matches(".stat .n, td strong")) count(e.target);
+        io.unobserve(e.target);
+      }
+    }, { rootMargin: "0px 0px -6% 0px", threshold: 0.15 });
+    document.querySelectorAll(".reveal, .stat .n, td strong").forEach(el => io.observe(el));
+  }
   // Copy buttons, with a selection as the fallback when the clipboard is refused.
   for (const b of document.querySelectorAll(".copy")) {
     b.addEventListener("click", async () => {

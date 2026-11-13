@@ -230,6 +230,41 @@
   footer a { color: var(--soft); text-decoration: none; }
   footer a:hover { color: var(--accent); }
 
+  /* check a repository: the form, the wait, the result */
+  .try { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .tryform { display: flex; border: var(--b); background: var(--term); box-shadow: var(--shadow); }
+  .tryform label { display: flex; align-items: center; padding: 0 0 0 16px; font: 800 16px var(--heading); color: var(--accent); }
+  .tryform input { flex: 1; min-width: 0; min-height: 56px; padding: 0 12px; border: 0; background: transparent; color: var(--ink); font: 600 16px var(--heading); }
+  .tryform input::placeholder { color: var(--muted); }
+  .tryform input:focus { outline: none; }
+  .tryform:focus-within { outline: 3px solid var(--ask); outline-offset: 3px; }
+  .tryform button { flex: none; min-width: 120px; border: 0; border-left: var(--b); background: var(--accent); color: var(--on-accent); font: 800 14px var(--heading); text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+  .tryform button:hover { background: var(--ink); }
+  .tryform button:disabled { background: var(--muted); cursor: progress; }
+  .trymsg { margin: 0; color: var(--ask); font: 600 14px var(--heading); }
+  .trymsg.err { color: var(--deny); }
+  .tryfine { margin: 0; font-size: 14px; color: var(--muted); }
+  .trywait { display: flex; align-items: center; gap: 14px; border: var(--b); background: var(--cell); padding: 18px 20px; font: 600 15px var(--heading); }
+  .trywait .bar { flex: none; width: 14px; height: 14px; background: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) { .trywait .bar { animation: blink 1s steps(1) infinite; } }
+  .report { border: var(--b); background: var(--cell); }
+  .report .verdict { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; padding: 18px 20px; border-bottom: var(--b); font: 800 clamp(18px, 2.4vw, 24px) var(--heading); letter-spacing: -.02em; }
+  .report .verdict.clear { background: var(--accent); color: var(--on-accent); }
+  .report .verdict.review { background: var(--ask); color: var(--on-accent); }
+  .report .verdict.warning { background: var(--deny); color: #FFFFFF; }
+  .report .verdict a { color: inherit; font: 700 13px var(--heading); text-transform: uppercase; letter-spacing: .05em; }
+  .report .meta { margin: 0; padding: 12px 20px; border-bottom: 1px solid #334155; color: var(--muted); font-size: 14px; }
+  .report .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .report .rcol { padding: 18px 20px; min-width: 0; }
+  .report .rcol + .rcol { border-left: 1px solid #334155; }
+  .report h3 { margin: 0 0 10px; font: 800 13px var(--heading); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .report ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .report li { color: var(--soft); font-size: 15px; overflow-wrap: anywhere; }
+  .report li b { font: 800 11px/1 var(--heading); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; margin-right: 8px; background: var(--ask); color: var(--on-accent); vertical-align: 1px; }
+  .report li b.critical, .report li b.high { background: var(--deny); color: #FFFFFF; }
+  .report li a { color: var(--soft); }
+  .report li small { color: var(--muted); }
+
   @media (max-width: 1024px) {
     .hero { grid-column: span 12; grid-row: auto; }
     .stat { grid-column: span 6; }
@@ -244,6 +279,11 @@
     .cmd-box .copy { border-left: 0; border-top: var(--b); }
     .hero { padding: 24px; }
     .tab { flex: 1 1 45%; border-bottom: var(--b); }
+    .tryform { flex-wrap: wrap; }
+    .tryform input { flex-basis: 70%; }
+    .tryform button { flex: 1 1 100%; min-height: 52px; border-left: 0; border-top: var(--b); }
+    .report .cols { grid-template-columns: minmax(0, 1fr); }
+    .report .rcol + .rcol { border-left: 0; border-top: 1px solid #334155; }
   }
 </style>
 </head>
@@ -262,6 +302,7 @@
   <header class="top">
     <a class="brand" href="./"><img src="logo.svg" alt="" width="30" height="30">vetcode</a>
     <nav aria-label="Sections">
+      <a class="optional" href="#check">Try it</a>
       <a class="optional" href="#what">Checks</a>
       <a class="optional" href="#numbers">Numbers</a>
       <a class="optional" href="#install">Install</a>
@@ -322,6 +363,24 @@
     </div>
 
     <div class="ticker" aria-hidden="true"><div class="ticker-track"><span>npm install</span><span>pip install</span><span>uv add</span><span>cargo add</span><span>go get</span><span>pnpm add</span><span>yarn add</span><span>bun add</span><span>git clone</span><span>claude mcp add</span><span>CLAUDE.md</span><span>.claude/settings.json</span><span>postinstall</span><span>SKILL.md</span><span>npm install</span><span>pip install</span><span>uv add</span><span>cargo add</span><span>go get</span><span>pnpm add</span><span>yarn add</span><span>bun add</span><span>git clone</span><span>claude mcp add</span><span>CLAUDE.md</span><span>.claude/settings.json</span><span>postinstall</span><span>SKILL.md</span></div></div>
+
+    <section id="check" aria-labelledby="check-h">
+      <div class="band-head">
+        <h2 id="check-h">Check a repository</h2>
+        <p>Paste a public GitHub link. vetcode reads it on a throwaway GitHub runner, never running it, and tells you what the code can do and whether anything looks like malware.</p>
+      </div>
+      <div class="try">
+        <form class="tryform" id="try" action="https://openyard.cloud/check" method="get" novalidate>
+          <label for="try-repo" aria-hidden="true">$</label>
+          <input id="try-repo" name="repo" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo" aria-label="GitHub repository" required>
+          <button type="submit">Check</button>
+        </form>
+        <div id="try-ts"></div>
+        <p class="trymsg" id="try-msg" role="status" hidden></p>
+        <div id="try-out" aria-live="polite"></div>
+        <p class="tryfine">Checks run on <a href="https://openyard.cloud/check">openyard.cloud</a>, the community site vetcode comes from. Results are public, like the repositories. Patterns, not proof: read the code before you trust it.</p>
+      </div>
+    </section>
 
     <section id="what" aria-labelledby="what-h">
       <div class="band-head">
@@ -488,6 +547,83 @@
     }, { rootMargin: "0px 0px -6% 0px", threshold: 0.15 });
     document.querySelectorAll(".reveal, .stat .n, td strong").forEach(el => io.observe(el));
   }
+  // Check a repository. The form works without JavaScript (it opens the check on openyard.cloud);
+  // with it, the check is asked for, waited on and shown here. Everything that comes back is set as
+  // text, and only links to GitHub and openyard.cloud become links: the repository is not ours.
+  (() => {
+    const API = "https://openyard.cloud", SITEKEY = "0x4AAAAAAFzE7AU_0L_sZhiu";
+    const form = document.getElementById("try"), input = document.getElementById("try-repo"), button = form.querySelector("button");
+    const msg = document.getElementById("try-msg"), out = document.getElementById("try-out");
+    const say = (text, err) => { msg.textContent = text; msg.className = "trymsg" + (err ? " err" : ""); msg.hidden = !text; };
+    const el = (tag, props = {}, ...kids) => { const n = document.createElement(tag); for (const [k, v] of Object.entries(props)) n[k] = v; n.append(...kids.filter(k => k != null)); return n; };
+    const safeLink = (href, text) => /^https:\/\/(?:github\.com|openyard\.cloud)\//.test(href || "") ? el("a", { href, target: "_blank", rel: "noopener", textContent: text }) : document.createTextNode(text);
+    let tsReady = null;
+    const turnstileToken = () => {
+      if (!tsReady) tsReady = new Promise(resolve => {
+        window.onTryTs = () => turnstile.render("#try-ts", { sitekey: SITEKEY, theme: "dark", appearance: "interaction-only", callback: resolve, "error-callback": () => resolve("") });
+        const sc = document.createElement("script");
+        sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTryTs&render=explicit"; sc.async = true; sc.onerror = () => resolve("");
+        document.head.appendChild(sc);
+      });
+      return Promise.race([tsReady, new Promise(r => setTimeout(() => r(""), 15000))]);
+    };
+    input.addEventListener("focus", () => { turnstileToken(); }, { once: true });
+    const repoOf = v => {
+      const parts = v.trim().replace(/^https?:\/\//, "").replace(/^(?:www\.)?github\.com\//, "").replace(/[#?].*$/, "").split("/").slice(0, 2);
+      const name = parts.join("/").replace(/\.git$/, "");
+      return parts.length === 2 && /^[\w.-]+\/[\w.-]+$/.test(name) ? name : null;
+    };
+    const getJSON = async path => { const r = await fetch(API + path, { cache: "no-store" }); return r.json(); };
+    function render(rep) {
+      const when = rep.scannedAt ? new Date(rep.scannedAt).toISOString().slice(0, 10) : "";
+      const abilities = rep.abilities.length
+        ? rep.abilities.map(a => el("li", {}, a.text, " ", el("small", { textContent: `(${a.files} file${a.files === 1 ? "" : "s"})` })))
+        : [el("li", { textContent: "None of the sensitive abilities checked: secrets, network, other programs, user details, startup folders, code built at runtime." })];
+      const findings = rep.findings.length
+        ? rep.findings.slice(0, 8).map(f => el("li", {}, el("b", { className: String(f.severity).toLowerCase(), textContent: f.severity }), f.title, " ", el("small", {}, "at ", safeLink(f.url, `${f.file}:${f.line}`))))
+        : [el("li", { textContent: "None." })];
+      if (rep.findings.length > 8) findings.push(el("li", {}, el("small", { textContent: `and ${rep.findings.length - 8} more in the full report` })));
+      out.replaceChildren(el("div", { className: "report" },
+        el("div", { className: "verdict " + (["clear", "review", "warning"].includes(rep.verdict) ? rep.verdict : "review") },
+          el("span", { textContent: `${rep.repo}: ${rep.verdictText}` }), safeLink(rep.page, "Full report →")),
+        el("p", { className: "meta", textContent: `${rep.files} files read at commit ${String(rep.commit).slice(0, 7)} by vetcode ${rep.version}, ${when}. Nothing was run.` }),
+        el("div", { className: "cols" },
+          el("div", { className: "rcol" }, el("h3", { textContent: "What the code can do" }), el("ul", {}, ...abilities)),
+          el("div", { className: "rcol" }, el("h3", { textContent: "Malware and supply-chain findings" }), el("ul", {}, ...findings)))));
+    }
+    async function wait(repo) {
+      const t0 = Date.now(), clock = el("span", { textContent: "0s" });
+      out.replaceChildren(el("div", { className: "trywait" }, el("span", { className: "bar", ariaHidden: "true" }), el("span", {}, `Reading ${repo}… usually under two minutes `), clock));
+      const tick = setInterval(() => { clock.textContent = Math.round((Date.now() - t0) / 1000) + "s"; }, 1000);
+      try {
+        while (Date.now() - t0 < 10 * 60000) {
+          await new Promise(r => setTimeout(r, 4000));
+          const s = await getJSON("/api/check/status?repo=" + encodeURIComponent(repo)).catch(() => ({}));
+          if (s.status === "failed") throw new Error(s.error || "The check did not finish.");
+          if (s.status === "done") return getJSON("/api/check/report?repo=" + encodeURIComponent(repo));
+        }
+        throw new Error("This is taking longer than usual. The result will appear on openyard.cloud.");
+      } finally { clearInterval(tick); }
+    }
+    form.addEventListener("submit", async e => {
+      e.preventDefault();
+      const repo = repoOf(input.value);
+      if (!repo) return say("Paste a link like https://github.com/owner/repo", true);
+      button.disabled = true; say("");
+      try {
+        const ts = await turnstileToken();
+        const r = await fetch(API + "/api/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ repo: "https://github.com/" + repo, ts }) });
+        const d = await r.json();
+        if (!r.ok) { if (window.turnstile) { turnstile.reset("#try-ts"); tsReady = null; } throw new Error(d.error || "The check was refused."); }
+        const rep = d.status === "done" ? await getJSON("/api/check/report?repo=" + encodeURIComponent(d.repo)) : await wait(d.repo);
+        if (rep.status !== "done") throw new Error(rep.error || "The check did not finish.");
+        render(rep);
+      } catch (x) {
+        out.replaceChildren();
+        say(x instanceof TypeError ? "Could not reach openyard.cloud. Try again, or open the check there." : x.message, true);
+      } finally { button.disabled = false; }
+    });
+  })();
   // Copy buttons, with a selection as the fallback when the clipboard is refused.
   for (const b of document.querySelectorAll(".copy")) {
     b.addEventListener("click", async () => {

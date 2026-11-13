@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // vetcode guard: checks what a shell command would install before it runs.
 //
-// As a Claude Code hook (see hooks/hooks.json) it reads the hook's JSON on stdin. Before a Bash
+// As a Claude Code hook (see hooks/hooks.json) or a Gemini CLI hook (.github/gemini/hooks.json,
+// shipped in the Gemini extension) it reads the hook's JSON on stdin. Before a Bash
 // command runs it answers allow, ask or deny for the packages the command would install: the
 // ones it names, the ones a bare `npm install` or `pip install -r` would add, and the ones an
 // MCP server registered with `claude mcp add` would run. Before an MCP configuration file is
@@ -26,7 +27,26 @@
 // its own errors. Packages that come from a private registry (a registry line in .npmrc, or
 // PIP_INDEX_URL and the like) are not looked up anywhere.
 
+import path from "node:path";
+
 const MODE = (process.env.VETCODE_GUARD || "on").toLowerCase();
+// Gemini CLI calls the same moments and tools by other names; the answers are written in its own format.
+const GEMINI_TOOLS = { run_shell_command: "Bash", write_file: "Write", replace: "Edit" };
+const GEMINI_EVENTS = { BeforeTool: "PreToolUse", AfterTool: "PostToolUse" };
+let gemini = false;
+// One answer, in the format of the agent that asked. kind: deny, ask, note (before a call), found (after a clone).
+function answer(kind, text) {
+  if (gemini) {
+    // Gemini has no "ask" for a hook: the person sees the warning, then Gemini's own confirmation of the command.
+    if (kind === "deny") console.log(JSON.stringify({ decision: "deny", reason: text }));
+    else if (kind === "ask") console.log(JSON.stringify({ systemMessage: text }));
+    else if (kind === "found") console.log(JSON.stringify({ systemMessage: text, hookSpecificOutput: { additionalContext: text } }));
+    return;
+  }
+  if (kind === "found") console.log(JSON.stringify({ decision: "block", reason: text }));
+  else if (kind === "note") console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: text } }));
+  else console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: kind, permissionDecisionReason: text } }));
+}
 // Most shell commands install nothing: decide that before doing any work.
 const MAYBE = /\b(?:npm|pnpm|yarn|bun|npx|bunx|pnpx|pip[\d.]*|uv|uvx|pipx|poetry)\b|\b(?:curl|wget)\b[^|]*\||\bmcp\s+add|\bcargo\s+(?:add|install)\b|\bgo\s+(?:get|install|run)\b/;
 // Files that tell an agent which programs to start: MCP servers, and hooks in agent settings.
@@ -39,6 +59,12 @@ async function main() {
     let input = ""; for await (const chunk of process.stdin) input += chunk;
     let j; try { j = JSON.parse(input); } catch { return; }
     cwd = j.cwd || cwd; hook = true;
+    if (GEMINI_EVENTS[j.hook_event_name]) {
+      gemini = true;
+      j.hook_event_name = GEMINI_EVENTS[j.hook_event_name];
+      j.tool_name = GEMINI_TOOLS[j.tool_name] || j.tool_name;
+      if (typeof j.tool_input?.dir_path === "string") cwd = path.resolve(cwd, j.tool_input.dir_path);
+    }
     if (/^(?:Write|Edit|MultiEdit)$/.test(j.tool_name)) {
       // A configuration file about to be written: check the servers and commands it would start.
       const file = j.tool_input?.file_path || "";
@@ -54,7 +80,7 @@ async function main() {
       if (MODE === "off" || !/\b(?:clone|degit|tiged|giget)\b/.test(command)) return;
       const [{ parseClones, checkClone }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
       const found = (await Promise.all(parseClones(command, { cwd }).map(c => checkClone(c.dir, { vet }).catch(() => null)))).filter(Boolean);
-      if (found.length) console.log(JSON.stringify({ decision: "block", reason: found.map(f => f.message).join(" ") }));
+      if (found.length) answer("found", found.map(f => f.message).join(" "));
       return;
     }
   }
@@ -71,15 +97,14 @@ async function main() {
   }
   // The guard never approves a call and never changes its input. It denies, or it hands the
   // question to the person; otherwise it stays silent and Claude Code's own permission flow
-  // decides as it would without the guard.
+  // decides as it would without the guard (in Gemini CLI, its own confirmation of the command).
   if (res.decision !== "deny" && res.decision !== "ask") {
     // Nothing to stop: say something only if it is worth knowing; the agent sees it with the result.
-    if (res.notes.length) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: `vetcode checked this install. ${res.notes.join(" ")}` } }));
+    if (res.notes.length) answer("note", `vetcode checked this install. ${res.notes.join(" ")}`);
     return;
   }
   const reason = config ? res.message.replace(/^vetcode: /, `vetcode: ${config} would make the agent start a program that needs a look. `) : res.message;
-  if (res.decision === "deny") console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } }));
-  else console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: reason } }));
+  answer(res.decision, reason);
 }
 
 // A guard that fails must not stop the work: any error means "no opinion".

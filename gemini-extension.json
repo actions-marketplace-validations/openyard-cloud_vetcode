@@ -1,0 +1,11 @@
+{
+  "name": "vetcode",
+  "version": "0.8.7",
+  "description": "Security check for coding agents: a guard that checks packages before they install and repositories after a clone, a scanner for malware, supply-chain attacks, leaked secrets and risky config, and a review skill.",
+  "mcpServers": {
+    "vetcode": {
+      "command": "node",
+      "args": ["${extensionPath}${/}mcp${/}server.mjs"]
+    }
+  }
+}

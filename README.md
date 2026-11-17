@@ -19,7 +19,7 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.7 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.8 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
@@ -47,6 +47,7 @@ Every number here is measured, on samples the rules were not tuned on unless it 
 | The guard, shown malware as if nobody had reported it yet | blocks or questions 95% of npm, 88% of PyPI, and 3% of clean npm packages | |
 | A package whose newest release is hours old, asked for 3 times | the agent installs the previous, settled version 3 times | the agent alone installs the new release 3 times |
 | Wrong "this is malicious" verdicts on 72 real applications (228,000 files) | **1** | |
+| Wrong verdicts on 200 Rust crates it had never seen (ranks 201–400 by downloads; build scripts and proc macros read, never built) | **0** | |
 | Findings an agent has to read on those applications | about 4 per 1,000 files, plus 8 places to read | |
 | Real injection bugs the scanner points at, of 480 advisories | 55 (11%); 6% on the half no rule was tuned on | |
 | Real authorization bugs found by Claude Code with vetcode, of 49 advisories | 41% | Claude Code alone does as well |
@@ -133,7 +134,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.7", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.8", "vetcode-mcp"] }
   }
 }
 ```
@@ -146,7 +147,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.7", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.8", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -154,7 +155,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.7", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.8", "vetcode-mcp"]
 ```
 
 </details>
@@ -244,7 +245,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.7 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.8 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -279,7 +280,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.7   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.8   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```

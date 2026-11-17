@@ -8,3 +8,6 @@ bench/mutate.mjs
 bench/agent.mjs
 # Writes stand-in package managers into a temp folder and makes them executable, next to registry lookups.
 bench/guard.mjs
+# Stand-ins for the proc-macro1 and onering build scripts, and the Rust benchmark that rewrites them.
+bench/rust-samples.mjs
+bench/rust.mjs

@@ -8,7 +8,10 @@
 // MCP server registered with `claude mcp add` would run. Before an MCP configuration file is
 // written it does the same for the servers in it. After a `git clone` it reads the cloned
 // folder and tells the agent if it holds signs of malware or of an attack on coding agents,
-// before anything from it is run. By hand:
+// before anything from it is run. Around Rust builds it compares Cargo.lock with the last commit:
+// after `cargo update` or `cargo add` it tells the agent what now runs at build time, and before
+// `cargo build`, `check`, `test` or `run` it stops a crate with a verdict and asks about new build
+// scripts and build-time abilities. By hand:
 //
 //   node guard.mjs "npm install expres"        # prints the decision and the reasons
 //   echo '{"tool_name":"Bash","tool_input":{"command":"pip install requessts"}}' | node guard.mjs
@@ -77,11 +80,30 @@ async function main() {
     else command = j.tool_input?.command || "";
     // After a clone: read what arrived, before the agent runs anything from it.
     if (j.hook_event_name === "PostToolUse") {
-      if (MODE === "off" || !/\b(?:clone|degit|tiged|giget)\b/.test(command)) return;
+      if (MODE === "off") return;
+      if (/\bcargo\b/.test(command)) {
+        const rust = await import("./lib/rust.mjs");
+        if (rust.CARGO_LOCKS.test(command)) {
+          const [{ vet }, { spawnSync }] = await Promise.all([import("./lib/index.mjs"), import("node:child_process")]);
+          const r = await rust.cargoLockCheck(cwd, { spawnSync, vet });
+          if (r) answer("found", r.text);
+          return;
+        }
+      }
+      if (!/\b(?:clone|degit|tiged|giget)\b/.test(command)) return;
       const [{ parseClones, checkClone }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
       const found = (await Promise.all(parseClones(command, { cwd }).map(c => checkClone(c.dir, { vet }).catch(() => null)))).filter(Boolean);
       if (found.length) answer("found", found.map(f => f.message).join(" "));
       return;
+    }
+  }
+  // Before a Rust build: what the uncommitted Cargo.lock brings in runs now.
+  if (hook && MODE !== "off" && command && /\bcargo\b/.test(command)) {
+    const rust = await import("./lib/rust.mjs");
+    if (rust.CARGO_BUILDS.test(command)) {
+      const [{ vet }, { spawnSync }] = await Promise.all([import("./lib/index.mjs"), import("node:child_process")]);
+      const r = await rust.cargoLockCheck(cwd, { spawnSync, vet });
+      if (r) return answer(MODE === "strict" ? "deny" : r.level, r.text);
     }
   }
   if (MODE === "off" || !command || !MAYBE.test(command)) return;

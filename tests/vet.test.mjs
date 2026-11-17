@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process";
 import { vet } from "../skills/vetcode/scripts/lib/index.mjs";
 import { markdown } from "../skills/vetcode/scripts/lib/report.mjs";
 import { lookalike } from "../skills/vetcode/scripts/lib/supply.mjs";
+import { PROC_MACRO1, ONERING } from "../bench/rust-samples.mjs";
 import { githubChecksum } from "../skills/vetcode/scripts/lib/secrets.mjs";
 import { settleLookalikes } from "../skills/vetcode/scripts/lib/supply.mjs";
 import { verdict, decidesAlone } from "../skills/vetcode/scripts/lib/verdict.mjs";
@@ -343,7 +344,103 @@ test("build and install time code in Rust, Go, Ruby, PHP, .NET and JVM projects"
     "build.gradle": "plugins { id 'java' }\ntask ver { doLast { exec { commandLine 'git', 'describe', '--tags' } } }\nrepositories { mavenCentral() }\n",
     "gradle/wrapper/gradle-wrapper.properties": "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.10-bin.zip\n",
   }), { noIgnore: true });
-  assert.deepEqual(good.findings.filter(f => Object.keys(bad).includes(f.rule) || f.rule === "rust-build-script-network").map(f => `${f.rule} ${f.file}`), []);
+  assert.deepEqual(good.findings.filter(f => Object.keys(bad).includes(f.rule) || f.rule.startsWith("rust-build-time")).map(f => `${f.rule} ${f.file}`), []);
+});
+
+test("Rust build time: the proc-macro1 dropper and the onering exfiltrator get a verdict; busy legitimate build scripts do not", async () => {
+  for (const [name, files] of [["proc-macro1", PROC_MACRO1], ["onering", ONERING]]) {
+    const r = await run(project(files), { noIgnore: true });
+    const f = r.findings.find(x => x.rule === "rust-build-time-capabilities");
+    assert.ok(f, name);
+    assert.equal(f.severity, "critical", name);
+    assert.equal(r.verdict.level, "critical", name);
+    const crate = r.profiles.find(p => p.kind === "crate" && p.name === name);
+    assert.ok(crate.buildTime.capabilities["uses the network"], name);
+    assert.equal(crate.buildTime.buildScript, "build.rs");
+  }
+  // A -sys crate that downloads a prebuilt library (ort-sys, onnxruntime-sys), one that starts a
+  // compiler and pkg-config, and a version stamp read from git: worth a look at most, never a verdict.
+  const clean = {
+    download: { "Cargo.toml": "[package]\nname = \"thing-sys\"\nversion = \"1.0.0\"\n\n[build-dependencies]\nureq = \"2\"\nsha2 = \"0.10\"\n",
+      "build.rs": "fn main() {\n  let out = std::env::var(\"OUT_DIR\").unwrap();\n  let lib = ureq::get(\"https://github.com/x/thing/releases/download/v1/libthing.tgz\").call().unwrap();\n  let dest = std::path::Path::new(&out).join(\"libthing.tgz\");\n  std::io::copy(&mut lib.into_reader(), &mut std::fs::File::create(&dest).unwrap()).unwrap();\n  std::process::Command::new(\"tar\").arg(\"xzf\").arg(&dest).arg(\"-C\").arg(&out).status().unwrap();\n  println!(\"cargo:rustc-link-search={out}\");\n}\n" },
+    compile: { "Cargo.toml": "[package]\nname = \"zlibish-sys\"\nversion = \"1.0.0\"\nbuild = \"build/main.rs\"\n\n[build-dependencies]\ncc = \"1\"\npkg-config = \"0.3\"\n",
+      "build/main.rs": "mod find;\nfn main() { if !find::system() { cc::Build::new().file(\"src/zlib/inflate.c\").compile(\"z\"); } }\n",
+      "build/find.rs": "pub fn system() -> bool { std::process::Command::new(\"pkg-config\").args([\"--exists\", \"zlib\"]).status().map(|s| s.success()).unwrap_or(false) }\n" },
+    stamp: { "Cargo.toml": "[package]\nname = \"app\"\nversion = \"1.0.0\"\n",
+      "build.rs": "fn main() {\n  let rev = std::process::Command::new(\"git\").args([\"rev-parse\", \"--short\", \"HEAD\"]).output().unwrap();\n  println!(\"cargo:rustc-env=GIT_REV={}\", String::from_utf8_lossy(&rev.stdout));\n}\n" },
+  };
+  for (const [name, files] of Object.entries(clean)) {
+    const r = await run(project(files), { noIgnore: true });
+    assert.equal(r.verdict.level, null, name);
+    assert.deepEqual(r.findings.filter(f => f.rule.startsWith("rust-build-time") && f.severity !== "medium").map(f => f.rule), [], name);
+  }
+  const compile = (await run(project(clean.compile), { noIgnore: true })).profiles.find(p => p.name === "zlibish-sys");
+  assert.equal(compile.buildTime.buildScript, "build/main.rs");
+  assert.deepEqual(compile.buildTime.capabilities["runs other programs"], ["build/find.rs"], "the build script's own modules are read");
+  assert.deepEqual(compile.buildTime.buildDependencies, ["cc", "pkg-config"]);
+});
+
+test("--cargo-diff: arrayref 0.3.9 -> 0.3.10 names proc-macro1 and its build-time network and dropper; onering 1.4.1 gained a build script", async () => {
+  const { cargoDiff, cargoDiffMarkdown } = await import("../skills/vetcode/scripts/lib/rust.mjs");
+  // crates.io, served from fixtures: each .crate is a tar.gz with one top folder, as on static.crates.io.
+  const crates = {
+    "arrayref-0.3.9": { "Cargo.toml": "[package]\nname = \"arrayref\"\nversion = \"0.3.9\"\n", "src/lib.rs": "pub fn array_ref() {}\n" },
+    "arrayref-0.3.10": { "Cargo.toml": "[package]\nname = \"arrayref\"\nversion = \"0.3.10\"\n\n[dependencies]\nproc-macro1 = \"1.0.107\"\n", "src/lib.rs": "pub fn array_ref() {}\n" },
+    "proc-macro1-1.0.107": PROC_MACRO1,
+    "onering-1.4.0": { "Cargo.toml": "[package]\nname = \"onering\"\nversion = \"1.4.0\"\n", "src/lib.rs": "pub struct Ring;\n" },
+    "onering-1.4.1": ONERING,
+  };
+  const tarballs = {};
+  for (const [id, files] of Object.entries(crates)) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-crate-src-"));
+    for (const [rel, text] of Object.entries(files)) { fs.mkdirSync(path.join(dir, id, path.dirname(rel)), { recursive: true }); fs.writeFileSync(path.join(dir, id, rel), text); }
+    spawnSync("tar", ["-czf", path.join(dir, "c.crate"), "-C", dir, id]);
+    tarballs[id] = fs.readFileSync(path.join(dir, "c.crate"));
+  }
+  const fetchFn = async url => { const id = /\/([^/]+)\.crate$/.exec(url)[1]; const b = tarballs[id]; return b ? { ok: true, arrayBuffer: async () => b } : { ok: false }; };
+  const src = "registry+https://github.com/rust-lang/crates.io-index";
+  const lock = pkgs => "version = 4\n" + pkgs.map(([n, v, deps = []]) => `\n[[package]]\nname = "${n}"\nversion = "${v}"\nsource = "${src}"\ndependencies = [${deps.map(d => `"${d}"`).join(", ")}]\n`).join("");
+  const d = await cargoDiff(lock([["arrayref", "0.3.9"], ["onering", "1.4.0"]]), lock([["arrayref", "0.3.10", ["proc-macro1"]], ["proc-macro1", "1.0.107"], ["onering", "1.4.1"]]), { fetch: fetchFn, vet });
+  assert.equal(d.level, "warning");
+  const pm = d.crates.find(c => c.name === "proc-macro1");
+  assert.equal(pm.status, "added");
+  assert.deepEqual(pm.requiredBy, ["arrayref 0.3.10"]);
+  assert.equal(pm.level, "warning");
+  for (const a of ["uses the network", "starts a program it wrote", "decodes or builds code at runtime", "turns off certificate checks"]) assert.ok(pm.abilities.includes(a), a);
+  const ring = d.crates.find(c => c.name === "onering");
+  assert.equal(ring.newBuildScript, true);
+  assert.deepEqual(ring.newBuildDependencies, ["uuid"]);
+  assert.ok(ring.gained.includes("uses the network") && ring.gained.includes("reads the project's git history"), ring.gained.join(", "));
+  assert.equal(d.crates.find(c => c.name === "arrayref").level, "ok", "arrayref's own code did not change at build time");
+  const md = cargoDiffMarkdown(d);
+  assert.match(md, /## Do not build yet[\s\S]*proc-macro1 1\.0\.107\*\*, new, required by arrayref 0\.3\.10/);
+  assert.match(md, /onering 1\.4\.0 → 1\.4\.1\*\*: now has a build script; new build-dependencies: uuid/);
+});
+
+test("the guard's Rust triggers: which commands build or change Cargo.lock, and the lock against the last commit", async () => {
+  const { CARGO_BUILDS, CARGO_LOCKS, lockSinceHead } = await import("../skills/vetcode/scripts/lib/rust.mjs");
+  for (const c of ["cargo build", "cargo build --release", "cargo +nightly check", "cargo t", "cd x && cargo run -p app", "cargo clippy --all"]) assert.ok(CARGO_BUILDS.test(c), c);
+  for (const c of ["cargo update", "cargo update -p serde", "cargo add tokio", "cargo generate-lockfile", "cargo +stable update"]) assert.ok(CARGO_LOCKS.test(c), c);
+  for (const c of ["cargo fmt", "cargo --version", "echo cargo build-std", "cargo install ripgrep", "mycargo build"]) assert.ok(!CARGO_BUILDS.test(c) && !CARGO_LOCKS.test(c), c);
+  const dir = project({ "Cargo.lock": "version = 4\n", "crates/a/Cargo.toml": "[package]\nname = \"a\"\n" });
+  const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  git("init", "-q"); git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x");
+  assert.equal(lockSinceHead(path.join(dir, "crates/a"), { spawnSync }), null, "unchanged");
+  fs.writeFileSync(path.join(dir, "Cargo.lock"), "version = 4\n\n[[package]]\nname = \"x\"\nversion = \"1.0.0\"\n");
+  const l = lockSinceHead(path.join(dir, "crates/a"), { spawnSync });
+  assert.equal(l.rel, "Cargo.lock", "found from a member crate's folder");
+  assert.match(l.after, /name = "x"/);
+});
+
+test("Rust manifests and lockfiles: build settings, proc macros, and what an update changed", async () => {
+  const { cargoManifest, lockChanges } = await import("../skills/vetcode/scripts/lib/rust.mjs");
+  const m = cargoManifest("[package]\nname = \"x\"\nversion = \"0.1.0\"\nbuild = false # none\n\n[lib]\nproc-macro = true\n\n[target.'cfg(windows)'.build-dependencies]\nwinres = \"0.1\"\n\n[build-dependencies.cc]\nversion = \"1\"\n");
+  assert.deepEqual([m.name, m.build, m.procMacro, m.buildDependencies], ["x", false, true, ["winres", "cc"]]);
+  const lock = pkgs => "version = 4\n" + pkgs.map(([n, v]) => `\n[[package]]\nname = "${n}"\nversion = "${v}"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "00"\n`).join("");
+  const c = lockChanges(lock([["arrayref", "0.3.9"], ["serde", "1.0.200"], ["gone", "1.0.0"]]), lock([["arrayref", "0.3.10"], ["serde", "1.0.200"], ["proc-macro1", "1.0.107"]]));
+  assert.deepEqual(c.changed.map(p => `${p.name} ${p.from.version}->${p.version}`), ["arrayref 0.3.9->0.3.10"]);
+  assert.deepEqual(c.added.map(p => p.name), ["proc-macro1"]);
+  assert.deepEqual(c.removed.map(p => p.name), ["gone"]);
 });
 
 test("vulnerabilities in Java/Kotlin, C#, Ruby, Go and Rust", async () => {

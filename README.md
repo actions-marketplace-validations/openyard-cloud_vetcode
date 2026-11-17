@@ -207,6 +207,7 @@ node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
 | `npm install`, `npm ci`, `pnpm install`, `yarn`, `bun install`, `pip install -r requirements.txt` | the dependencies added since the lockfile was written, one by one; and everything the lockfile or requirements file pins, against malware advisories |
 | `claude mcp add … -- npx x`, `codex mcp add`, `gemini mcp add` | the package the server would run, and the server's address |
 | writing `.mcp.json`, `claude_desktop_config.json`, agent `settings.json` or Codex `config.toml` | the same, for every server or hook command in the text being written |
+| `cargo build`, `check`, `test`, `run` when `Cargo.lock` differs from the last commit; after `cargo update` or `cargo add` | every crate the change adds or updates, both versions read from crates.io: a new build script or proc macro, new build-dependencies, and build-time code that now reaches the network, starts a shell or a file it wrote, reads secrets or git history, or decodes code |
 
 **After a clone.** When the agent runs `git clone`, `gh repo clone` or `npx degit`, the guard reads the folder that arrived and, if it holds signs of malware or of an attack on coding agents, tells the agent before it installs, builds or runs anything from it. A clean clone gets no message.
 
@@ -258,6 +259,7 @@ node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 | `--baseline old.json` | show only findings that are not in an earlier `--json` report |
 | `--mcp-lock file` | record the project's MCP servers and tool descriptions; later runs report anything that changed |
 | `--fail-on <severity>` | exit 1 if a finding at that level or worse exists |
+| `--cargo-diff <old> [new]` | what a `Cargo.lock` update brings in: `old` and `new` are files or git refs (`--cargo-diff HEAD` compares with the working copy). Each added or updated crate is downloaded and read, never built |
 | `--no-tools` | do not run external tools (gitleaks and zizmor run automatically if installed) |
 
 ### Pull request review on GitHub
@@ -325,7 +327,7 @@ Name the rule. Folders can go in `.vetcodeignore` (gitignore syntax). Every repo
 |---|---|
 | **Malware** | decode-then-`eval`, download-and-run, reverse shells, credential and wallet theft (`~/.ssh`, `~/.aws`, browser profiles), a file that gathers the keys of several unrelated services, env-var exfiltration to webhooks, `_0x` obfuscation, hidden Unicode payloads (GlassWorm), Trojan Source bidi characters, AI CLIs started with permission prompts off, self-spreading `npm publish` worms, `.pth` autoruns, miners, beacons that report host, user and IP, `.exe` droppers |
 | **Supply chain** | install-time code that combines network access with secrets, programs or hidden code; dependency-confusion probes; suspicious `preinstall`/`postinstall`; typosquats (`expresss`, `@angullar/core`, `reqeusts`); git and URL dependencies; lockfile packages from foreign hosts; `setup.py` that runs code; VS Code tasks that run on folder open; git hooks; known vulnerable and **known malicious** packages via [OSV.dev](https://osv.dev) |
-| **Build and install time, beyond npm and PyPI** | Rust `build.rs` and proc macros, `go:generate` lines and Go `init()`, `go.mod` replace directives, Ruby gem extensions, Composer scripts, MSBuild `Exec` tasks and build events, NuGet `install.ps1`, Gradle builds and wrappers, Maven exec plugins, package repositories over plain HTTP |
+| **Build and install time, beyond npm and PyPI** | Rust build scripts and proc macros, with a label of what each crate's build-time code can do (network access together with secrets, a shell, a downloaded program, decoding, host details or git history is a verdict; a download alone is worth a look), `go:generate` lines and Go `init()`, `go.mod` replace directives, Ruby gem extensions, Composer scripts, MSBuild `Exec` tasks and build events, NuGet `install.ps1`, Gradle builds and wrappers, Maven exec plugins, package repositories over plain HTTP |
 | **AI agents** | project `.claude/settings.json` with hooks, API base-URL redirects or auto-approved MCP servers; prompt injection and hidden comments in `CLAUDE.md`, `AGENTS.md`, `.cursorrules` and skills; poisoned MCP tool descriptions; unpinned or plain-HTTP MCP servers |
 | **Secrets** | 40+ providers (cloud, AI, payment, SaaS, registries), private keys, database URLs, Supabase `service_role` keys, committed `.env`, secrets in git history, secrets behind `NEXT_PUBLIC_`/`VITE_` prefixes |
 | **Web and API**, as places to read (JavaScript/TypeScript, Python, PHP, Java/Kotlin, C#, Go, Ruby, Rust) | SQL, NoSQL and command injection, XSS, SSTI, path traversal, SSRF, open redirects, unsafe deserialisation, weak JWT handling, TLS checks off, permissive CORS, mass assignment, weak password hashing, zip slip, XXE, prototype pollution, model output passed to `eval` |

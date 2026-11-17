@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
 import { profiles, purposeMismatches } from "./profile.mjs";
+import { crateProfiles, scanBuildTime } from "./rust.mjs";
 import { npmHistory } from "./npmhistory.mjs";
 import { scanLines, scanFile, options, rank, finding, SEVERITIES, TEST, VENDORED, LOCALE, DEVTOOL, DEVSTACK, TOOLCHAIN } from "./engine.mjs";
 import { scanSecrets, scanSecretFiles, scanHistory } from "./secrets.mjs";
@@ -47,7 +48,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
 let PLACE_RULES = new Set();
 try { PLACE_RULES = new Set(JSON.parse(fs.readFileSync(new URL("./data/web-places.json", import.meta.url), "utf8")).places); } catch {}
 
-export const VERSION = "0.8.7";
+export const VERSION = "0.8.8";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -187,7 +188,10 @@ export async function vet(target, opts = {}) {
   const atInstall = scanProjectInstallEntries(root, files, findings);
   // Where a finding sits matters as much as what it is: code an install script starts runs
   // before anyone chose to run it. The verdict counts that as evidence of its own.
-  for (const f of findings) if (atInstall.has(f.file) || f.file === "setup.py") f.atInstall = true;
+  // Rust build scripts and proc macros run during `cargo build`: the same standing as install scripts.
+  const crates = crateProfiles(root, files);
+  const atBuild = scanBuildTime(crates, findings);
+  for (const f of findings) if (atInstall.has(f.file) || atBuild.has(f.file) || f.file === "setup.py") f.atInstall = true;
   scanPythonImportTime(files, findings);
   if (!only) hardeningAdvice(root, files, findings);
   const mcpLock = opts.mcpLock ? checkMcpLock(opts.mcpLock, files, findings) : null;
@@ -259,7 +263,10 @@ export async function vet(target, opts = {}) {
     stats: { files: files.length, packages, ms: Date.now() - started, counts, tools, osv, history: !!opts.history,
       ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },
     surprises: surprises(files, reported),
-    profiles: prof.map(({ kind, name, file, purpose, capabilities }) => ({ kind, name, file, purpose, capabilities })),
+    profiles: [...prof.map(({ kind, name, file, purpose, capabilities }) => ({ kind, name, file, purpose, capabilities })),
+      // Each crate, with what its build-time code (build script, proc macro) can do kept apart.
+      ...crates.filter(c => Object.keys(c.capabilities).length || c.buildFiles.length).map(c => ({ kind: "crate", name: c.name, file: c.file, purpose: c.description, capabilities: c.capabilities,
+        buildTime: { capabilities: c.buildTime, buildScript: c.buildScript, procMacro: c.procMacro, buildDependencies: c.buildDependencies } }))],
     places, placeKinds: KINDS,
     findings: reported,
   };

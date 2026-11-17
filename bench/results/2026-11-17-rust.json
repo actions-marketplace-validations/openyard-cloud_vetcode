@@ -1,0 +1,85 @@
+{
+  "date": "2026-11-17",
+  "version": "0.8.8",
+  "firstLook": {
+    "set": "top 200 by downloads + 28 look-alikes",
+    "crates": 228,
+    "verdicts": [
+      "rustversion 1.0.23: rust-proc-macro-side-effects",
+      "rusty_v8 0.32.1: rust-build-time-capabilities",
+      "torch-sys 0.27.0: rust-build-time-capabilities"
+    ],
+    "standinsCaught": 7,
+    "standinsMissed": [
+      "onering charcode",
+      "onering reverse",
+      "onering include"
+    ]
+  },
+  "afterFixes": {
+    "top200": {
+      "crates": 228,
+      "verdicts": [],
+      "worthALook": [
+        "ort-sys",
+        "onnxruntime-sys",
+        "tikv-jemalloc-sys",
+        "rusty_v8",
+        "torch-sys"
+      ],
+      "buildScripts": 52,
+      "procMacros": 16
+    },
+    "ranks201to400FirstLook": {
+      "crates": 200,
+      "verdicts": [],
+      "signs": 2,
+      "worthALook": [],
+      "buildScripts": 30,
+      "procMacros": 14
+    },
+    "standins": [
+      "proc-macro1 none: caught",
+      "proc-macro1 concat: caught",
+      "proc-macro1 charcode: caught",
+      "proc-macro1 reverse: caught",
+      "proc-macro1 include: caught",
+      "onering none: caught",
+      "onering concat: caught",
+      "onering charcode: caught",
+      "onering reverse: caught",
+      "onering include: caught"
+    ],
+    "runner": {
+      "run": "https://github.com/openyard-cloud/vetcode/actions/runs/44011523685",
+      "clean": 228,
+      "verdicts": [],
+      "real": [
+        {
+          "update": "append-only-vec 0.1.8 -> 0.1.9",
+          "level": "look",
+          "crates": [
+            "proc-macro1 1.0.107 added: could not download it from crates.io (a removed version is one reason)",
+            "append-only-vec 0.1.9 changed: ok"
+          ]
+        },
+        {
+          "update": "arrayref 0.3.9 -> 0.3.10",
+          "level": "look",
+          "crates": [
+            "arrayref 0.3.10 changed: could not download it from crates.io (a removed version is one reason)",
+            "proc-macro1 1.0.107 added: could not download it from crates.io (a removed version is one reason)"
+          ]
+        },
+        {
+          "update": "internment 0.8.6 -> 0.8.7",
+          "level": "look",
+          "crates": [
+            "internment 0.8.7 changed: could not download it from crates.io (a removed version is one reason)",
+            "proc-macro1 1.0.107 added: could not download it from crates.io (a removed version is one reason)"
+          ]
+        }
+      ]
+    }
+  }
+}

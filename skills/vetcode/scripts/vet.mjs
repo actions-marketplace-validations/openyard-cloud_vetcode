@@ -16,6 +16,13 @@
 //     --no-tools        do not run external tools even if installed
 //     --fail-on <sev>   exit 1 if a finding at this severity or worse exists (for CI)
 //     --quiet           no progress messages
+//
+//   node vet.mjs --cargo-diff <old> [new] [path]
+//     What a Cargo.lock update brings in. <old> and <new> are Cargo.lock files or git refs
+//     (HEAD, main, HEAD~1); without <new>, the Cargo.lock in path. Every crate the update adds
+//     or changes is downloaded from crates.io and read, never built; the report names new build
+//     scripts, new build-dependencies and build-time abilities the new version did not have.
+//     Exit 1 when a crate gets a verdict. Takes --json and --quiet.
 import fs from "node:fs";
 import { vet, VERSION } from "./lib/index.mjs";
 import { markdown } from "./lib/report.mjs";
@@ -35,6 +42,30 @@ const value = (name, optional = false) => {
 
 if (flag("--help") || flag("-h")) { console.log(fs.readFileSync(new URL(import.meta.url), "utf8").split("\n").filter(l => l.startsWith("//")).map(l => l.slice(3)).join("\n")); process.exit(0); }
 if (flag("--version")) { console.log(VERSION); process.exit(0); }
+
+if (args.includes("--cargo-diff")) {
+  const { spawnSync } = await import("node:child_process");
+  const path = await import("node:path");
+  const { cargoDiff, cargoDiffMarkdown } = await import("./lib/rust.mjs");
+  const json = value("--json"), quiet = flag("--quiet");
+  const i = args.indexOf("--cargo-diff"), rest = args.slice(i + 1).filter(a => !a.startsWith("--"));
+  const dir = rest.length === 3 ? rest[2] : rest.length === 2 && fs.existsSync(rest[1]) && fs.statSync(rest[1]).isDirectory() ? rest[1] : ".";
+  const [oldSpec, newSpec] = [rest[0], rest[1] && rest[1] !== dir ? rest[1] : null];
+  if (!oldSpec) { console.error("--cargo-diff needs the old Cargo.lock or a git ref"); process.exit(2); }
+  const lockOf = spec => {
+    if (fs.existsSync(spec) && fs.statSync(spec).isFile()) return fs.readFileSync(spec, "utf8");
+    const top = spawnSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout.trim();
+    const rel = top ? path.relative(top, path.resolve(dir, "Cargo.lock")).split(path.sep).join("/") : "Cargo.lock";
+    const r = spawnSync("git", ["-C", dir, "show", `${spec}:${rel}`], { encoding: "utf8", maxBuffer: 64 << 20 });
+    if (r.status !== 0) { console.error(`Could not read ${spec}: not a file, and git has no ${rel} at that ref`); process.exit(2); }
+    return r.stdout;
+  };
+  const before = lockOf(oldSpec), after = newSpec ? lockOf(newSpec) : fs.readFileSync(path.join(dir, "Cargo.lock"), "utf8");
+  const d = await cargoDiff(before, after, { vet, log: quiet ? () => {} : m => console.error(`vetcode: ${m}`) });
+  if (json) fs.writeFileSync(json, JSON.stringify(d, null, 2));
+  process.stdout.write(cargoDiffMarkdown(d, `${oldSpec} → ${newSpec || "working Cargo.lock"}`));
+  process.exit(d.level === "warning" ? 1 : 0);
+}
 
 const opts = {
   json: value("--json"), sarif: value("--sarif"), baseline: value("--baseline"), mcpLock: value("--mcp-lock"), failOn: value("--fail-on"), diff: value("--diff", true),

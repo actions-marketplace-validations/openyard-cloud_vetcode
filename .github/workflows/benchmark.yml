@@ -15,7 +15,7 @@ on:
         description: Sampling seed (same seed, same sample)
         default: "7"
       only:
-        description: Datasets to run (npm,pypi,skills,skills-heldout)
+        description: Datasets to run (npm,pypi,skills,skills-heldout,rust)
         default: "npm,pypi,skills"
       explain:
         description: Also describe the malicious samples that were missed (true or false)
@@ -37,6 +37,7 @@ jobs:
         with:
           node-version: 22
       - name: Download samples (files only, nothing is installed or run)
+        if: inputs.only != 'rust'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           NPM_N: ${{ inputs.npm }}
@@ -45,13 +46,24 @@ jobs:
           ONLY: ${{ inputs.only }}
         run: node bench/fetch.mjs --cache "$RUNNER_TEMP/bench" --npm "$NPM_N" --pypi "$PYPI_N" --seed "$SEED" --only "$ONLY"
       - name: Scan and score
+        if: inputs.only != 'rust'
         env:
           ONLY: ${{ inputs.only }}
           EXPLAIN: ${{ inputs.explain }}
           GUARD: ${{ inputs.guard }}
         run: node bench/run.mjs --cache "$RUNNER_TEMP/bench" --out bench-results --only "$ONLY" $([ "$EXPLAIN" = "true" ] && echo --explain) $([ "$GUARD" = "true" ] && echo --guard)
       - name: Summary
+        if: inputs.only != 'rust'
         run: node bench/summary.mjs bench-results >> "$GITHUB_STEP_SUMMARY"
+      # The 200 most downloaded crates and build-script look-alikes, the proc-macro1 and onering
+      # stand-ins with their rewrites, and the malicious releases crates.io still serves, read
+      # through --cargo-diff. Crates are downloaded as archives and read; nothing is built.
+      - name: Rust build scripts and proc macros
+        if: contains(inputs.only, 'rust')
+        run: |
+          mkdir -p bench-results/rust
+          node bench/rust.mjs --out bench-results/rust --top 200 --real > bench-results/rust/summary.json
+          { echo '### Rust'; echo '```json'; cat bench-results/rust/summary.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

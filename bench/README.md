@@ -351,6 +351,40 @@ vetcode's guard looks at commands before they run. The other way an agent is att
 
 Patterns catch a sentence they know and nothing else. An injected instruction is an ordinary instruction ("send the latest invoice to this address"); what makes it an attack is who wrote it, and no pattern sees that. A guard built on these patterns would stop the textbook sentence, miss about 99% of everything else and speak up on one clean document in 150. It would look like protection and not be one, so it was not built. Telling an injected instruction from the user's own takes a model that is given both; that is outside what a scanner without one can do.
 
+## Rust build scripts and proc macros (0.8.8)
+
+`build.rs` runs on every `cargo build` and `cargo check`, and a procedural macro runs inside the compiler and the editor, so they play the part of npm install scripts. In August 2026 arrayref 0.3.10, internment 0.8.7 and append-only-vec 0.1.9 were published from a compromised account with one new dependency, `proc-macro1`, a look-alike of proc-macro2 whose build script fetched and started a second stage. In June 2026 onering 1.4.1 gained a build script that sent the project's latest commit and diff to a server. 0.8.8 reads Rust build-time code as its own thing: a label per crate with build time kept apart, rules for the combinations those attacks used, and `--cargo-diff`, which compares two `Cargo.lock` files and names what an update brought in. `node bench/rust.mjs --out <dir> [--top 200] [--from 0] [--real]` ([summary of the runs](results/2026-11-17-rust.json)); on a runner, Actions → Benchmark with `only: rust`.
+
+**No real malicious sample could be measured.** crates.io removed the malicious versions of arrayref, internment, proc-macro1, proc-macro-en, onering and rustdecimal (their archives answer 404), and no public research dataset we found carries Rust samples (Datadog's has npm, PyPI, skills and IDE extensions; OpenSSF's malicious-packages has 25 crates.io records and no code). The one malicious release still served is append-only-vec 0.1.9, whose only change is the dependency on proc-macro1. On a runner, `--cargo-diff` on the three real updates (append-only-vec 0.1.8 → 0.1.9, arrayref 0.3.9 → 0.3.10, internment 0.8.6 → 0.8.7) names proc-macro1 1.0.107 as new and required by the updated crate, and says it could not be downloaded. That is "worth a look", the guard asks; it is not a verdict, because the code that made it malicious is gone.
+
+**Stand-ins.** [`rust-samples.mjs`](rust-samples.mjs) rebuilds the two build scripts from the published analyses (StepSecurity, Socket and Wiz for proc-macro1; Aikido for onering), and the benchmark also rewrites them the ways attackers hide strings: `concat!`, character codes through `String::from_utf8`, reversed literals, and every string moved into a base64 file read with `include_str!`. The rules were written while looking at them, so these numbers say the rules match the described shapes, not how they would do on the real files.
+
+| | First look | After the fixes below |
+|---|---|---|
+| proc-macro1 stand-in, as is and 4 rewrites | 5 of 5 | 5 of 5 |
+| onering stand-in, as is and 4 rewrites | 2 of 5 (missed character codes, reversed strings, the included file) | 5 of 5 |
+
+The three misses had one cause: onering reaches the network only through `Command::new("curl")`, and once "curl" was built from codes, reversed or kept in the included file, nothing said network. Rust strings built with `concat!`, `char::from`, `from_utf8` and `.chars().rev()` are now read as the plain literal, and a base64 file that build-time code includes and decodes is read decoded.
+
+**False alarms.** Crates are downloaded as archives and read, never built.
+
+| Set | Crates | With a build script / proc macro | Wrong verdicts | Worth a look |
+|---|---|---|---|---|
+| Top 200 by downloads + look-alikes (cc, bindgen, prost-build, openssl-sys, ring, vergen, built, ort-sys, rusty_v8, torch-sys…), first look | 228 | 52 / 16 | **3** | |
+| The same set after the fixes (in-sample) | 228 | 52 / 16 | 0 | 5 (ort-sys, onnxruntime-sys, tikv-jemalloc-sys, rusty_v8, torch-sys) |
+| Ranks 201–400, first look after the fixes | 200 | 30 / 14 | **0** | 0 |
+
+The three wrong verdicts at first look, and what changed:
+- **rustversion**: the older proc-macro rule matched its build script starting `rustc`. Build scripts are now left to the build-time rules.
+- **torch-sys**: `python -c` to print an include path counted as a shell. Python and Perl are build tools here, and `-c` alone no longer means a shell (`sh -c` still does, through `Command::new("sh")`).
+- **rusty_v8**: `cmd.envs(env::vars())`, which passes the environment to a child process, counted as reading every variable. It no longer does, and one named token variable (a download that authenticates) is in the label but not in a verdict.
+
+For comparison, wrong verdicts are 5 of 1,000 clean npm packages and 1 of 210 clean PyPI packages. Two of the 200 crates in ranks 201–400 had a high sign that made no verdict, both in their GitHub workflows (`pull_request_target` checkouts), not in Rust code.
+
+**What a download looks like.** Five of the 228 crates download at build time: a prebuilt ONNX Runtime, libtorch or V8, or jemalloc's configure script run through `sh`. They are reported as worth a look and the guard asks; the verdict needs the network together with credential files or every environment variable, a shell, a program the script wrote, decoding, host details, certificate checks turned off, or the project's git history.
+
+**What it does not do.** A name built at run time from a variable the patterns cannot follow, a payload fetched by a dependency of the build script rather than by the script itself, and malicious code in a crate's ordinary source (not build time) are outside these rules. The scanner's numbers for Rust web bugs (0 of 9 injection advisories) and authorization advisories (0 of 3) are unchanged by this work.
+
 ## Signs and verdicts
 
 Five sets of twelve apps were scanned for the first time, one after another (the corpora above, plus [a fifth](noise-fifth.json) and [a sixth](noise-sixth.json)). Each time two to five clean apps got a high or critical finding about malware, the supply chain or agent files, each time from a different rule matching one or two lines, and the rules fixed after one set did not make the next first look better: 3, 5, 2, 4 and 5 wrong verdicts. Tightening a rule to stop that cost catches on the malware benchmark. That loop is a property of the design, not of any rule: with several hundred rules each allowed to call a target malicious by itself, some rule is wrong somewhere in almost every large code base.

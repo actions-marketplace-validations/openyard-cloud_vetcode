@@ -27,13 +27,9 @@ export const ECOSYSTEM_FILE_RULES = [
       if (net && risky) return hit(text, net, `${net[0]} + ${risky[0]}`);
       return risky && /\.ssh\b|id_rsa|id_ed25519|\.aws\b|wallet|Login Data/.test(risky[0]) ? hit(text, risky) : [];
     } },
-  { ...rule({ id: "rust-build-script-network", severity: "medium", title: "Rust build script downloads at build time",
-      why: "Some -sys crates fetch a prebuilt library; it is still code from the network entering your build, unpinned unless the script checks a hash." }),
-    files: /(^|\/)build\.rs$/,
-    test(text) { const m = /\b(?:reqwest|ureq|attohttpc|minreq)::|Command::new\(\s*"(?:curl|wget)"/.exec(text); return m && !/sha256|Sha256|checksum|hash/i.test(text) ? hit(text, m) : []; } },
   { ...rule({ id: "rust-proc-macro-side-effects", severity: "high", title: "Procedural macro runs programs or uses the network",
       why: "Proc macros execute inside the compiler and inside rust-analyzer as soon as the project is opened. Generating code needs neither the network nor other programs." }),
-    files: /\.rs$/,
+    files: /\.rs$/, skip: /(^|\/)build\.rs$|(^|\/)build\/[^/]+\.rs$/,
     test(text) {
       if (!/#\[proc_macro(?:_derive|_attribute)?\b/.test(text)) return [];
       const m = first(text, /std::process::Command|Command::new\(/, /TcpStream::connect|\b(?:reqwest|ureq)::/, /std::fs::(?:read_to_string|read)\([^)]*(?:home|\.ssh|\.aws|env::var)/);

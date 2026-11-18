@@ -70,7 +70,9 @@ const SECRETISH = /TOKEN|SECRET|PASSWORD|PASSWD|PRIVATE_KEY|API_KEY|ACCESS_KEY|C
 const PROC_MEM = /\/proc\/(?:\$\{?\w+\}?|\d+|self|\*|[\w${}]+)\/(?:mem|maps|environ)\b|Runner\.Worker|memdump/;
 // A download that is then run: piped into an interpreter, or saved, made executable and started.
 // Decoding into a shell is the same thing without the download (reviewdog/action-setup's install.sh).
-const DOWNLOAD_RUN = /base64\s+(?:-d|--decode)\b[^\n;]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b|(?:curl|wget)\b[^\n|;]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b|(?:curl|wget)\b[^\n|;]*\|\s*(?:sudo\s+)?(?:python3?|node|perl|ruby)\b|(?:curl|wget)\b[^\n]*-[oO]\s*(\S+)[\s\S]{0,300}?chmod\s+\+?[0-7]*x[\s\S]{0,200}?\.\/|downloadTool\([\s\S]{0,400}?(?:chmod|exec(?:File)?)\(/;
+// Decoded text piped into any program, also one named by a variable ("| $SCRIPT_RUNNER", as in the real
+// reviewdog commit), or handed to eval, is run all the same.
+const DOWNLOAD_RUN = /base64\s+(?:-d|--decode|-D)\b[^\n;]*\|\s*(?:sudo\s+)?(?:(?:ba|z|da)?sh\b|python3?\b|perl\b|node\b|"?\$\{?[A-Za-z_]\w*\}?)|\beval\s+"?\$\([^)\n]*base64\s+(?:-d|--decode)|(?:curl|wget)\b[^\n|;]*\|\s*(?:sudo\s+)?(?:ba|z|da)?sh\b|(?:curl|wget)\b[^\n|;]*\|\s*(?:sudo\s+)?(?:python3?|node|perl|ruby)\b|(?:curl|wget)\b[^\n]*-[oO]\s*(\S+)[\s\S]{0,300}?chmod\s+\+?[0-7]*x[\s\S]{0,200}?\.\/|downloadTool\([\s\S]{0,400}?(?:chmod|exec(?:File)?)\(/;
 const SHELL_BUILTINS = new Set("echo printf cd export set unset if then else elif fi for do done while case esac in function return exit local read test true false shift source eval exec trap wait sleep cat ls cp mv rm mkdir touch grep sed awk tr cut head tail sort uniq wc find xargs tee dirname basename pwd env date seq jq yq [ [[ ]] ]] { } ( ) shopt declare readonly let".split(" "));
 
 function shellFacts(text, f) {

@@ -1773,3 +1773,27 @@ test("memory ledger: memory and hooks changed outside an agent are reported at s
   assert.equal(r.hookSpecificOutput.hookEventName, "SessionStart");
   assert.equal(start(), null, "reported once");
 });
+
+// ---- GitHub Action bumps (lib/actions.mjs) ----
+test("--action-diff: the tj-actions and reviewdog stand-ins add serious things; a bump that changes nothing adds nothing", async () => {
+  const { actionProfile, actionDiff, usesOf, bumpsBetween, actionDiffMarkdown } = await import("../skills/vetcode/scripts/lib/actions.mjs");
+  const { TJ_ACTIONS, REVIEWDOG } = await import("../bench/action-samples.mjs");
+  const at = files => project(files);
+  const tj = actionDiff(actionProfile(at(TJ_ACTIONS.before)), actionProfile(at(TJ_ACTIONS.after)));
+  assert.ok(tj.serious.some(s => /downloads and runs code: curl .*gist\.githubusercontent\.com.*\| sudo python3/.test(s)), tj.serious.join("; "));
+  assert.ok(tj.serious.some(s => /runner's process memory/.test(s)));
+  assert.deepEqual(tj.hosts, ["gist.githubusercontent.com"]);
+  const rd = actionDiff(actionProfile(at(REVIEWDOG.before)), actionProfile(at(REVIEWDOG.after)));
+  assert.deepEqual(rd.serious, ["downloads and runs code: base64 -d | bash"], "the official installer piped to sh was already there; only the new line counts");
+  const same = actionDiff(actionProfile(at(REVIEWDOG.before)), actionProfile(at(REVIEWDOG.before)));
+  assert.equal(same.any, false);
+  // A docker action that gains a pre step and a token default is serious too.
+  const dock = (pre, def) => at({ "action.yml": `name: d\ninputs:\n  token:\n    default: ${def}\nruns:\n  using: docker\n  image: Dockerfile\n${pre ? "  pre-entrypoint: /pre.sh\n  pre: x\n" : ""}`, "Dockerfile": "FROM alpine\nRUN apk add git\n" });
+  assert.ok(actionDiff(actionProfile(dock(false, "''")), actionProfile(dock(true, "${{ github.token }}"))).serious.some(s => /pre step/.test(s)));
+  // Workflows: which uses: lines changed, with Dependabot's version comment next to a SHA.
+  const wf = ref => `jobs:\n  a:\n    steps:\n      - uses: actions/checkout@${ref}\n      - uses: ./local\n      - uses: docker://alpine:3\n      - uses: github/codeql-action/init@v3\n`;
+  assert.deepEqual(usesOf(wf("v4")).map(u => u.key), ["actions/checkout", "github/codeql-action/init"]);
+  const b = bumpsBetween([wf("v4")], [wf("08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0")]);
+  assert.deepEqual(b.map(x => `${x.key} ${x.from.ref} -> ${x.to.comment}`), ["actions/checkout v4 -> v5.0.0"]);
+  assert.match(actionDiffMarkdown([{ action: "a/b", from: "v1", to: "v2", diff: rd }]), /this bump adds\n  - downloads and runs code: base64 -d \| bash/);
+});

@@ -19,7 +19,7 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.9 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.10 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
@@ -134,7 +134,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.9", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.10", "vetcode-mcp"] }
   }
 }
 ```
@@ -147,7 +147,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.9", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.10", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -155,7 +155,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.9", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.10", "vetcode-mcp"]
 ```
 
 </details>
@@ -249,7 +249,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.9 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.10 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -264,6 +264,7 @@ node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 | `--baseline old.json` | show only findings that are not in an earlier `--json` report |
 | `--mcp-lock file` | record the project's MCP servers and tool descriptions; later runs report anything that changed |
 | `--fail-on <severity>` | exit 1 if a finding at that level or worse exists |
+| `--action-diff <owner/repo@old> <owner/repo@new>` | what a GitHub Action bump adds: both versions are downloaded as source and read, never run. Also `--action-diff <old-ref> [new-ref]` on a repository: every `uses:` whose ref changed in its workflows. Exit 1 on a serious addition (code that is downloaded or decoded and run, runner memory, a new token or secret name, a new pre or post step) |
 | `--cargo-diff <old> [new]` | what a `Cargo.lock` update brings in: `old` and `new` are files or git refs (`--cargo-diff HEAD` compares with the working copy). Each added or updated crate is downloaded and read, never built |
 | `--no-tools` | do not run external tools (gitleaks and zizmor run automatically if installed) |
 
@@ -284,7 +285,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.9   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.10   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```

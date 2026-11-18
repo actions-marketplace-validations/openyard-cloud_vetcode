@@ -23,6 +23,14 @@
 //     or changes is downloaded from crates.io and read, never built; the report names new build
 //     scripts, new build-dependencies and build-time abilities the new version did not have.
 //     Exit 1 when a crate gets a verdict. Takes --json and --quiet.
+//
+//   node vet.mjs --action-diff <owner/repo@old> <owner/repo@new>
+//   node vet.mjs --action-diff <old-ref> [new-ref] [path]
+//     What a GitHub Action bump adds: the two versions of one action, or every `uses:` whose ref
+//     changed in .github/workflows (and composite actions) between two git refs (without new-ref,
+//     the working tree). Both versions are downloaded from GitHub and read, never run. Exit 1 when
+//     a bump adds something serious (a download that is run, runner memory, a new secret name, a
+//     new pre or post step). Takes --json.
 import fs from "node:fs";
 import { vet, VERSION } from "./lib/index.mjs";
 import { markdown } from "./lib/report.mjs";
@@ -42,6 +50,34 @@ const value = (name, optional = false) => {
 
 if (flag("--help") || flag("-h")) { console.log(fs.readFileSync(new URL(import.meta.url), "utf8").split("\n").filter(l => l.startsWith("//")).map(l => l.slice(3)).join("\n")); process.exit(0); }
 if (flag("--version")) { console.log(VERSION); process.exit(0); }
+
+if (args.includes("--action-diff")) {
+  const { spawnSync } = await import("node:child_process");
+  const path = await import("node:path");
+  const { diffAction, bumpsBetween, actionDiffMarkdown } = await import("./lib/actions.mjs");
+  const json = value("--json");
+  const rest = args.slice(args.indexOf("--action-diff") + 1).filter(a => !a.startsWith("--"));
+  const spec = s => /^([\w.-]+)\/([\w.-]+)((?:\/[^@]+)?)@(.+)$/.exec(s || "");
+  let results = [];
+  if (spec(rest[0])) {
+    const [a, b] = [spec(rest[0]), spec(rest[1])];
+    if (!b) { console.error("--action-diff owner/repo@old owner/repo@new"); process.exit(2); }
+    results.push(await diffAction(a[1], a[2], a[4], b[4], { subpath: a[3].replace(/^\//, "") }));
+  } else {
+    const dir = rest.length === 3 ? rest[2] : rest[1] && fs.existsSync(rest[1]) && fs.statSync(rest[1]).isDirectory() ? rest[1] : ".";
+    const [oldRef, newRef] = [rest[0], rest[1] && rest[1] !== dir ? rest[1] : null];
+    if (!oldRef) { console.error("--action-diff needs two actions or a git ref"); process.exit(2); }
+    const git = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8", maxBuffer: 64 << 20 });
+    const listAt = ref => (ref ? git("ls-tree", "-r", "--name-only", ref) : git("ls-files")).stdout.split("\n").filter(f => /^\.github\/workflows\/[^/]+\.ya?ml$|(?:^|\/)action\.ya?ml$/.test(f));
+    const textAt = (ref, f) => ref ? git("show", `${ref}:${f}`).stdout || "" : (() => { try { return fs.readFileSync(path.join(dir, f), "utf8"); } catch { return ""; } })();
+    const bumps = bumpsBetween(listAt(oldRef).map(f => textAt(oldRef, f)), listAt(newRef).map(f => textAt(newRef, f)));
+    for (const b of bumps) results.push(await diffAction(b.to.owner, b.to.repo, b.from.ref, b.to.ref, { subpath: b.to.path }).then(r => ({ ...r, from: b.from.comment || b.from.ref, to: b.to.comment || b.to.ref })));
+    if (!bumps.length) { console.log("No `uses:` line changed its ref."); process.exit(0); }
+  }
+  if (json) fs.writeFileSync(json, JSON.stringify(results, (k, v) => v instanceof Set ? [...v] : v, 2));
+  console.log(actionDiffMarkdown(results));
+  process.exit(results.some(r => r.diff?.serious.length) ? 1 : 0);
+}
 
 if (args.includes("--cargo-diff")) {
   const { spawnSync } = await import("node:child_process");

@@ -14,3 +14,6 @@ bench/rust.mjs
 # Places InjecAgent's attacker instructions in synthetic transcripts, and writes a stand-in postinstall that edits memory and hooks.
 bench/memory.mjs
 bench/memory-paraphrases.json
+# Stand-ins for the tj-actions and reviewdog action compromises, and the Actions benchmark.
+bench/action-samples.mjs
+bench/actions.mjs

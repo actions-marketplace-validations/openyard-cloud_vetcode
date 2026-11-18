@@ -385,6 +385,29 @@ For comparison, wrong verdicts are 5 of 1,000 clean npm packages and 1 of 210 cl
 
 **What it does not do.** A name built at run time from a variable the patterns cannot follow, a payload fetched by a dependency of the build script rather than by the script itself, and malicious code in a crate's ordinary source (not build time) are outside these rules. The scanner's numbers for Rust web bugs (0 of 9 injection advisories) and authorization advisories (0 of 3) are unchanged by this work.
 
+## GitHub Action bumps (0.8.10)
+
+Dependabot and Renovate bump the actions a workflow uses, and almost nobody reads the change. In the tj-actions/changed-files and reviewdog/action-setup attacks (March 2025) it sat in a bundled `dist/index.js` or an `install.sh` while the readable source looked unchanged. `--action-diff` downloads both versions of an action as source, reads what runs (the `main`, `pre` and `post` entry points, composite `run:` steps and the scripts they call, a Dockerfile) and lists what the new version can do that the old one could not: the six abilities, and finer facts (hosts it names, programs it starts, environment and secret names it reads, code downloaded or decoded and then run, reads of the runner's process memory, a new `pre` or `post` step, `runs.using`, token inputs). `node bench/actions.mjs --out <dir> [--real]` ([summary](results/2026-11-18-actions.json)); on a runner, Actions → Benchmark with `only: actions`.
+
+**Ceilings, set on the issue before looking** ([#72](https://github.com/openyard-cloud/vetcode/issues/72#issuecomment-6966267586)): serious additions on at most 5% of clean bumps, or they do not fail anything; any addition on at most 25% of clean bumps for an automatic comment on bump pull requests, or the diff ships on the command line only.
+
+**Clean side**: the three most recent release-to-release bumps of 20 popular actions (checkout, setup-node/python/go/java, cache, upload/download-artifact, github-script, docker/login, build-push, setup-buildx, metadata, aws-actions/configure-aws-credentials, github/codeql-action, peaceiris/actions-gh-pages, softprops/action-gh-release, codecov/codecov-action, pnpm/action-setup, create-github-app-token), 60 bumps.
+
+| | Clean bumps | Ceiling | Result |
+|---|---|---|---|
+| Any addition ("this bump adds …") | **22 of 60 (36.7%)**: new environment names 19, hosts 9, programs 9, abilities 2 | 25% | **Above: no automatic comment.** `--action-diff` ships on the command line |
+| Serious addition | **1 of 60 (1.7%)**: codecov-action v5.5.5 → v7.1.0 starts reading `INPUT_CODECOV_TOKEN` and `INPUT_TOKEN` | 5% | Under: a serious addition makes `--action-diff` exit 1 |
+
+Most of the noise is bundle churn: an action that updates a library it bundles (`@actions/cache`, the AWS SDK) gains that library's environment names and hosts. That is true and worth a glance, but on a third of all bumps it would be a comment people learn to skip.
+
+**Malicious side.** The real commits, on a runner only:
+- **tj-actions/changed-files `0e58ed8`**: GitHub still resolves the commit but no longer serves its source, so it could not be measured.
+- **reviewdog/action-setup `f0d342d`** against v1.3.0: **missed at first look**, "nothing new". Its composite step calls `"$GITHUB_ACTION_PATH/install.sh"`, and the first version only followed scripts written as `${{ github.action_path }}/…`, so `install.sh`, where the payload sat, was not read. Our stand-in had been written with the other spelling, which is why it passed. After the fix (all three spellings are followed), the diff says the commit adds the program `base64` and four environment names (`VALUES`, `SCRIPT_RUNNER`, `RUNNER_OS`, `RUNNER_ENVIRONMENT`): **a "this bump adds" line, not a serious one**. A rule for decoded text piped into a program named by a variable or into `eval` was tried next and did not change that; how the payload is started is not visible to us without reading the sample, which stays on the runner, so the rule was not pushed further. Both results after the first look are in-sample.
+
+**Stand-ins** ([action-samples.mjs](action-samples.mjs)), rebuilt from the published analyses and in-sample by construction: the tj-actions shape (a base64 string in `dist/index.js` that decodes to a download piped to `sudo python3` reading runner memory) and the reviewdog shape (base64 decoded into `bash` in `install.sh`) are both serious.
+
+**What this means.** `--action-diff` is a reading aid: run it on a bump you are about to merge, and it lists what is new. It is not a gate: one of the two real attacks we could fetch would have shown up only as "adds `base64`".
+
 ## Memory provenance (0.8.9)
 
 Agents write their own memory, and every later session loads it, so one poisoned line outlives the page that carried it. Earlier we measured why judging the text fails ([above](#instructions-injected-into-what-an-agent-reads-a-guard-that-was-not-built)). This asks where the text came from instead: Claude Code's hook input names the session transcript, which records what the person typed, what the assistant wrote and what each tool returned. Before a memory write, every concrete piece the write adds (URL, domain, IP address, email, command, package, path outside the project, environment variable name) is traced; a piece that first appeared in a tool result and never in anything the person typed would be asked about. The project's own GitHub links and paths, and what the assistant wrote before any tool showed it, do not count. No model and no network. `node bench/memory.mjs attack` and `node bench/memory.mjs clean` ([attack counts](results/2026-11-18-memory-attack.json), [clean counts](results/2026-11-18-memory-clean.json)).

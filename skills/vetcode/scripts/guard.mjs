@@ -20,6 +20,13 @@
 //   VETCODE_GUARD=off       do nothing
 //   VETCODE_GUARD=strict    turn every "ask" into "deny"
 //   VETCODE_GUARD_MIN_AGE_HOURS=72   how old a release must be before it installs without a question
+//   VETCODE_MEMORY=ledger|ask|note|off   memory checks: the ledger alone (default); also trace memory writes
+//                                        and ask or tell about pieces that came from a tool result; or nothing
+//
+// Memory (lib/memory.mjs): before an agent writes MEMORY.md, its memory files, CLAUDE.md, AGENTS.md,
+// GEMINI.md or Cursor/Windsurf rules, the concrete pieces it adds are traced through the session
+// transcript; at session start, memory files and Claude Code's hooks are compared with a ledger of
+// what agents last wrote.
 //
 // What leaves the machine (every destination is in PRIVACY.md): the names and versions of the
 // packages in the command, to the package registry (npm, PyPI, crates.io, the Go proxy) and to
@@ -30,9 +37,14 @@
 // its own errors. Packages that come from a private registry (a registry line in .npmrc, or
 // PIP_INDEX_URL and the like) are not looked up anywhere.
 
+import fs from "node:fs";
 import path from "node:path";
 
 const MODE = (process.env.VETCODE_GUARD || "on").toLowerCase();
+// Tracing memory writes (Part A) is off unless asked for: on 125 real memory writes it would have
+// asked about 63, far above the 15% agreed before measuring (bench/README.md). The ledger stays on.
+const MEMORY = (process.env.VETCODE_MEMORY || "ledger").toLowerCase();
+const TRACE = MEMORY === "ask" || MEMORY === "note";
 // Gemini CLI calls the same moments and tools by other names; the answers are written in its own format.
 const GEMINI_TOOLS = { run_shell_command: "Bash", write_file: "Write", replace: "Edit" };
 const GEMINI_EVENTS = { BeforeTool: "PreToolUse", AfterTool: "PostToolUse" };
@@ -43,10 +55,12 @@ function answer(kind, text) {
     // Gemini has no "ask" for a hook: the person sees the warning, then Gemini's own confirmation of the command.
     if (kind === "deny") console.log(JSON.stringify({ decision: "deny", reason: text }));
     else if (kind === "ask") console.log(JSON.stringify({ systemMessage: text }));
-    else if (kind === "found") console.log(JSON.stringify({ systemMessage: text, hookSpecificOutput: { additionalContext: text } }));
+    else if (kind === "found" || kind === "note") console.log(JSON.stringify({ systemMessage: text, hookSpecificOutput: { additionalContext: text } }));
+    else if (kind === "session") console.log(JSON.stringify({ systemMessage: text }));
     return;
   }
-  if (kind === "found") console.log(JSON.stringify({ decision: "block", reason: text }));
+  if (kind === "session") console.log(JSON.stringify({ systemMessage: text, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: text } }));
+  else if (kind === "found") console.log(JSON.stringify({ decision: "block", reason: text }));
   else if (kind === "note") console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: text } }));
   else console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: kind, permissionDecisionReason: text } }));
 }
@@ -54,6 +68,16 @@ function answer(kind, text) {
 const MAYBE = /\b(?:npm|pnpm|yarn|bun|npx|bunx|pnpx|pip[\d.]*|uv|uvx|pipx|poetry)\b|\b(?:curl|wget)\b[^|]*\||\bmcp\s+add|\bcargo\s+(?:add|install)\b|\bgo\s+(?:get|install|run)\b/;
 // Files that tell an agent which programs to start: MCP servers, and hooks in agent settings.
 const AGENT_CONFIG = /(?:^|[\\/])(?:\.?mcp(?:[._-]config)?\.json|claude_desktop_config\.json|\.claude\.json|settings(?:\.local)?\.json|config\.toml)$/i;
+
+// Part A of the memory check: the concrete pieces being saved that came from a tool result.
+async function memoryCheck(mem, j, file, added) {
+  if (!TRACE || j.hook_event_name !== "PreToolUse" || !j.transcript_path || !added.trim()) return false;
+  const { spawnSync } = await import("node:child_process");
+  const pieces = mem.foreignPieces(added, await mem.readTranscript(j.transcript_path), mem.projectOf(j.cwd || process.cwd(), { spawnSync }));
+  if (!pieces.length) return false;
+  answer(MODE === "strict" ? "deny" : MEMORY === "note" ? "note" : "ask", mem.provenanceMessage(file, pieces));
+  return true;
+}
 
 async function main() {
   const arg = process.argv[2];
@@ -68,9 +92,24 @@ async function main() {
       j.tool_name = GEMINI_TOOLS[j.tool_name] || j.tool_name;
       if (typeof j.tool_input?.dir_path === "string") cwd = path.resolve(cwd, j.tool_input.dir_path);
     }
+    // A new session: memory and hooks that changed since an agent last wrote them.
+    if (j.hook_event_name === "SessionStart") {
+      if (MODE === "off" || MEMORY === "off") return;
+      const { changesSinceLedger } = await import("./lib/memory.mjs");
+      const msg = changesSinceLedger(cwd);
+      if (msg) answer("session", msg);
+      return;
+    }
     if (/^(?:Write|Edit|MultiEdit)$/.test(j.tool_name)) {
-      // A configuration file about to be written: check the servers and commands it would start.
       const file = j.tool_input?.file_path || "";
+      const mem = await import("./lib/memory.mjs");
+      if (mem.isMemoryFile(file)) {
+        if (MODE === "off" || MEMORY === "off") return;
+        const abs = path.resolve(cwd, file);
+        if (j.hook_event_name === "PostToolUse") return mem.recordWrite(abs);
+        return void await memoryCheck(mem, j, abs, mem.addedText(j.tool_name, j.tool_input, (() => { try { return fs.readFileSync(abs, "utf8"); } catch { return ""; } })()));
+      }
+      // A configuration file about to be written: check the servers and commands it would start.
       if (MODE === "off" || j.hook_event_name !== "PreToolUse" || !AGENT_CONFIG.test(file)) return;
       const text = [j.tool_input.content, j.tool_input.new_string, ...(Array.isArray(j.tool_input.edits) ? j.tool_input.edits.map(e => e?.new_string) : [])].filter(x => typeof x === "string").join("\n");
       if (!/command|url/i.test(text) || (/config\.toml$/i.test(file) && !/mcp/i.test(text))) return;
@@ -78,6 +117,15 @@ async function main() {
       command = mcpCommands(text).join("\n"); config = file.split(/[\\/]/).pop();
     } else if (j.tool_name !== "Bash") return;
     else command = j.tool_input?.command || "";
+    // A memory file written from the shell (>>, >, tee, a heredoc): the same two checks.
+    if (MODE !== "off" && MEMORY !== "off" && /(?:>>?|\btee\b)/.test(command)) {
+      const mem = await import("./lib/memory.mjs");
+      const targets = [...command.matchAll(/(?:>>?|\btee\s+(?:-a\s+)?)\s*["']?((?:~|\$HOME)?[^\s"';|&<>]+)/g)].map(m => m[1].replace(/^(?:~|\$HOME)(?=\/)/, process.env.HOME || "")).filter(mem.isMemoryFile);
+      if (targets.length) {
+        if (j.hook_event_name === "PostToolUse") { for (const t of targets) mem.recordWrite(path.resolve(cwd, t)); return; }
+        if (await memoryCheck(mem, j, path.resolve(cwd, targets[0]), command)) return;
+      }
+    }
     // After a clone: read what arrived, before the agent runs anything from it.
     if (j.hook_event_name === "PostToolUse") {
       if (MODE === "off") return;

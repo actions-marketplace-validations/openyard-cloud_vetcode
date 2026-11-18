@@ -62,7 +62,10 @@ if (REAL) {
   // The tag before each compromise, and the malicious commit the tag was moved to (from the advisories).
   for (const [owner, repo, from, to] of [["tj-actions", "changed-files", "v45.0.7", "0e58ed8671d6b60d0890c21b07f8835ace038e67"], ["reviewdog", "action-setup", "v1.3.0", "f0d342d24037bb11d26b9bd8496e0808ba32e9ec"]]) {
     const res = await diffAction(owner, repo, from, to);
-    real.push({ action: `${owner}/${repo}`, from, to, error: res.error || null, serious: res.diff?.serious || [], any: !!res.diff?.any });
+    // Names only (abilities, programs, hosts, environment names): a description of the change, not the sample.
+    const d = res.diff;
+    real.push({ action: `${owner}/${repo}`, from, to, error: res.error || null, serious: d?.serious || [], any: !!d?.any,
+      added: d ? { abilities: d.abilities, programs: d.programs, hosts: d.hosts, env: d.env.map(e => e.replace(/[^A-Z0-9_]/g, "")).slice(0, 20), files: res.files } : null });
   }
 }
 

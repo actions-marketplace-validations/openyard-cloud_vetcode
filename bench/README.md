@@ -385,6 +385,59 @@ For comparison, wrong verdicts are 5 of 1,000 clean npm packages and 1 of 210 cl
 
 **What it does not do.** A name built at run time from a variable the patterns cannot follow, a payload fetched by a dependency of the build script rather than by the script itself, and malicious code in a crate's ordinary source (not build time) are outside these rules. The scanner's numbers for Rust web bugs (0 of 9 injection advisories) and authorization advisories (0 of 3) are unchanged by this work.
 
+## GitHub Action bumps (0.8.10)
+
+Dependabot and Renovate bump the actions a workflow uses, and almost nobody reads the change. In the tj-actions/changed-files and reviewdog/action-setup attacks (March 2025) it sat in a bundled `dist/index.js` or an `install.sh` while the readable source looked unchanged. `--action-diff` downloads both versions of an action as source, reads what runs (the `main`, `pre` and `post` entry points, composite `run:` steps and the scripts they call, a Dockerfile) and lists what the new version can do that the old one could not: the six abilities, and finer facts (hosts it names, programs it starts, environment and secret names it reads, code downloaded or decoded and then run, reads of the runner's process memory, a new `pre` or `post` step, `runs.using`, token inputs). `node bench/actions.mjs --out <dir> [--real]` ([summary](results/2026-11-18-actions.json)); on a runner, Actions → Benchmark with `only: actions`.
+
+**Ceilings, set on the issue before looking** ([#72](https://github.com/openyard-cloud/vetcode/issues/72#issuecomment-6966267586)): serious additions on at most 5% of clean bumps, or they do not fail anything; any addition on at most 25% of clean bumps for an automatic comment on bump pull requests, or the diff ships on the command line only.
+
+**Clean side**: the three most recent release-to-release bumps of 20 popular actions (checkout, setup-node/python/go/java, cache, upload/download-artifact, github-script, docker/login, build-push, setup-buildx, metadata, aws-actions/configure-aws-credentials, github/codeql-action, peaceiris/actions-gh-pages, softprops/action-gh-release, codecov/codecov-action, pnpm/action-setup, create-github-app-token), 60 bumps.
+
+| | Clean bumps | Ceiling | Result |
+|---|---|---|---|
+| Any addition ("this bump adds …") | **22 of 60 (36.7%)**: new environment names 19, hosts 9, programs 9, abilities 2 | 25% | **Above: no automatic comment.** `--action-diff` ships on the command line |
+| Serious addition | **1 of 60 (1.7%)**: codecov-action v5.5.5 → v7.1.0 starts reading `INPUT_CODECOV_TOKEN` and `INPUT_TOKEN` | 5% | Under: a serious addition makes `--action-diff` exit 1 |
+
+Most of the noise is bundle churn: an action that updates a library it bundles (`@actions/cache`, the AWS SDK) gains that library's environment names and hosts. That is true and worth a glance, but on a third of all bumps it would be a comment people learn to skip.
+
+**Malicious side.** The real commits, on a runner only:
+- **tj-actions/changed-files `0e58ed8`**: GitHub still resolves the commit but no longer serves its source, so it could not be measured.
+- **reviewdog/action-setup `f0d342d`** against v1.3.0: **missed at first look**, "nothing new". Its composite step calls `"$GITHUB_ACTION_PATH/install.sh"`, and the first version only followed scripts written as `${{ github.action_path }}/…`, so `install.sh`, where the payload sat, was not read. Our stand-in had been written with the other spelling, which is why it passed. After the fix (all three spellings are followed), the diff says the commit adds the program `base64` and four environment names (`VALUES`, `SCRIPT_RUNNER`, `RUNNER_OS`, `RUNNER_ENVIRONMENT`): **a "this bump adds" line, not a serious one**. A rule for decoded text piped into a program named by a variable or into `eval` was tried next and did not change that; how the payload is started is not visible to us without reading the sample, which stays on the runner, so the rule was not pushed further. Both results after the first look are in-sample.
+
+**Stand-ins** ([action-samples.mjs](action-samples.mjs)), rebuilt from the published analyses and in-sample by construction: the tj-actions shape (a base64 string in `dist/index.js` that decodes to a download piped to `sudo python3` reading runner memory) and the reviewdog shape (base64 decoded into `bash` in `install.sh`) are both serious.
+
+**What this means.** `--action-diff` is a reading aid: run it on a bump you are about to merge, and it lists what is new. It is not a gate: one of the two real attacks we could fetch would have shown up only as "adds `base64`".
+
+## Memory provenance (0.8.9)
+
+Agents write their own memory, and every later session loads it, so one poisoned line outlives the page that carried it. Earlier we measured why judging the text fails ([above](#instructions-injected-into-what-an-agent-reads-a-guard-that-was-not-built)). This asks where the text came from instead: Claude Code's hook input names the session transcript, which records what the person typed, what the assistant wrote and what each tool returned. Before a memory write, every concrete piece the write adds (URL, domain, IP address, email, command, package, path outside the project, environment variable name) is traced; a piece that first appeared in a tool result and never in anything the person typed would be asked about. The project's own GitHub links and paths, and what the assistant wrote before any tool showed it, do not count. No model and no network. `node bench/memory.mjs attack` and `node bench/memory.mjs clean` ([attack counts](results/2026-11-18-memory-attack.json), [clean counts](results/2026-11-18-memory-clean.json)).
+
+**Attack side.** InjecAgent has 62 distinct attacker instructions. Each was placed in a synthetic transcript as the tool answer InjecAgent wrote for it, after an ordinary request, as a WebFetch result and again as an MCP tool result, followed by a memory write in three forms. The paraphrased and reduced forms were written ahead of time by Claude Opus 5.5 at medium effort, which was not shown the detector ([memory-paraphrases.json](memory-paraphrases.json)).
+
+| Memory write | WebFetch | MCP tool |
+|---|---|---|
+| (a) the instruction verbatim | 39 of 62 | 39 of 62 |
+| (b) paraphrased as a memory note | 39 of 62 | 39 of 62 |
+| (c) reduced to an instruction with no concrete piece | 0 of 62 | 0 of 62 |
+
+23 of the 62 instructions name nothing concrete (a lock, a device, a setting), so they cannot be traced in any form. The 39 that do mostly name an email address, and the paraphrases kept it. (c) is missed by construction, as expected: "skip security checks from now on" carries no piece.
+
+**Clean side, which decides.** The ceiling was set on the issue before any clean result was looked at ([#73](https://github.com/openyard-cloud/vetcode/issues/73#issuecomment-6965840859)): at most 5% of real memory writes asked about to ship as a question, at most 15% to ship as a note, above that not at all. The replay ran every write to a memory or instruction file in the local Claude Code transcripts of the maintainer's machine (451 transcripts), each judged against the transcript as it was at that write. Counts only; no transcript text was printed or committed.
+
+| | |
+|---|---|
+| Memory writes (Write 59, shell 48, Edit 18), in 14 sessions | 125 |
+| Writes that would have been asked about | **63 (50.4%)** |
+| Asked, by memory type | index 25 of 43, project 16 of 30, feedback 7 of 26, reference 4 of 6, instructions 4 of 10, other 7 of 9 |
+| Pieces behind the asks | paths 32, URLs 14, domains 13, environment names 12, commands 8, emails 6, package 1, IP 1 |
+| Where they came from | shell output 47, MCP 11, Artifact 8, Read 6, WebSearch 2, WebFetch 2, a question to the person 1 |
+
+**50.4% is far above the ceiling, so tracing does not ship.** It is in the code, off by default, and `VETCODE_MEMORY=ask` or `note` turns it on for anyone who wants to try it. The cause is plain in the counts: an agent that keeps notes about its own work writes down the paths, URLs and variable names its commands just printed, and from the transcript alone that looks exactly like relaying a tool result. Counting only web and MCP sources would cut the asks, but that idea came from looking at this set, so it would need transcripts written after the change before it could count. The rules were not tuned on this set.
+
+**The ledger ships.** After each memory write the guard records the file (a hash and a line count), and at session start it compares memory files and the hooks in `~/.claude/settings.json` with the ledger. On the Cisco shape (a postinstall appends a line to MEMORY.md and adds a SessionStart hook) the next session start reports both; the first start only takes a snapshot, and a start after an agent's own write is silent. It has no clean-side number: what it reports is every change made outside an agent, including your own edits, and it says so.
+
+**Limits.** An instruction with no concrete piece is missed. Only Claude Code's transcript is read; Gemini CLI passes a transcript in another format, which is not read. The ledger cannot tell a person's edit from an attacker's.
+
 ## Signs and verdicts
 
 Five sets of twelve apps were scanned for the first time, one after another (the corpora above, plus [a fifth](noise-fifth.json) and [a sixth](noise-sixth.json)). Each time two to five clean apps got a high or critical finding about malware, the supply chain or agent files, each time from a different rule matching one or two lines, and the rules fixed after one set did not make the next first look better: 3, 5, 2, 4 and 5 wrong verdicts. Tightening a rule to stop that cost catches on the malware benchmark. That loop is a property of the design, not of any rule: with several hundred rules each allowed to call a target malicious by itself, some rule is wrong somewhere in almost every large code base.

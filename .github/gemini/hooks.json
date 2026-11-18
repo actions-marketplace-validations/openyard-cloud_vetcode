@@ -16,7 +16,7 @@
     ],
     "AfterTool": [
       {
-        "matcher": "^run_shell_command$",
+        "matcher": "^(?:run_shell_command|write_file|replace)$",
         "hooks": [
           {
             "name": "vetcode-clone-check",
@@ -24,6 +24,19 @@
             "command": "node \"${extensionPath}${/}skills${/}vetcode${/}scripts${/}guard.mjs\"",
             "timeout": 90000,
             "description": "Reads a repository right after git clone, before anything from it runs."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "name": "vetcode-memory-ledger",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}skills${/}vetcode${/}scripts${/}guard.mjs\"",
+            "timeout": 20000,
+            "description": "Reports memory files and hooks that changed since an agent last wrote them."
           }
         ]
       }

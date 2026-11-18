@@ -48,7 +48,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
 let PLACE_RULES = new Set();
 try { PLACE_RULES = new Set(JSON.parse(fs.readFileSync(new URL("./data/web-places.json", import.meta.url), "utf8")).places); } catch {}
 
-export const VERSION = "0.8.9";
+export const VERSION = "0.8.10";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */

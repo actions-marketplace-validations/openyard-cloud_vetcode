@@ -19,7 +19,7 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.8 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.9 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
@@ -134,7 +134,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.8", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.9", "vetcode-mcp"] }
   }
 }
 ```
@@ -147,7 +147,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.8", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.9", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -155,7 +155,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.8", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.9", "vetcode-mcp"]
 ```
 
 </details>
@@ -214,7 +214,11 @@ node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
 
 **Other agents.** Agents without hooks can call the same check as the MCP tool `vetcode_guard`, or run the script above before installing.
 
-**Settings** (environment variables): `VETCODE_GUARD=off` turns it off, `VETCODE_GUARD=strict` turns every ask into deny, `VETCODE_GUARD_MIN_AGE_HOURS=72` sets how old a release must be.
+**Memory.** Agents write their own memory (MEMORY.md and its files, CLAUDE.md, AGENTS.md, GEMINI.md, Cursor and Windsurf rules), and every later session loads it. After each memory write the guard records the file in a ledger (a hash, no contents), and at the start of a session it says which memory files, and whether the hooks in `~/.claude/settings.json`, changed without an agent write: the shape of an npm package that rewrote Claude Code's memory and hooks from its install script. It reports changes; it cannot tell your own edit from someone else's.
+
+Tracing where a memory line came from (did its URL, command or path first appear in a tool result, and never in what you typed?) is built but off: on 125 real memory writes it would have asked about half of them ([why](bench/README.md#memory-provenance-089)). `VETCODE_MEMORY=ask` or `note` turns it on to try it.
+
+**Settings** (environment variables): `VETCODE_GUARD=off` turns it off, `VETCODE_GUARD=strict` turns every ask into deny, `VETCODE_GUARD_MIN_AGE_HOURS=72` sets how old a release must be, `VETCODE_MEMORY=off` turns off the memory ledger.
 
 **What it sends.** The names and versions of the packages in the command, to the registry the install would contact anyway (npm, PyPI, crates.io or the Go proxy) and to OSV.dev, plus a download of the package archive, which is read and deleted. Packages from a private registry are not looked up anywhere. Every destination is listed in [PRIVACY.md](PRIVACY.md).
 
@@ -245,7 +249,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.8 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.9 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -280,7 +284,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.8   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.9   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```

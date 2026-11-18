@@ -1,0 +1,48 @@
+{
+  "transcripts": 451,
+  "sessionsWithWrites": 14,
+  "writes": 125,
+  "asks": 63,
+  "byTool": {
+    "Write": 59,
+    "Bash": 48,
+    "Edit": 18
+  },
+  "askedByType": {
+    "project": 16,
+    "instructions": 4,
+    "index": 25,
+    "feedback": 7,
+    "other": 7,
+    "reference": 4
+  },
+  "writesByType": {
+    "project": 30,
+    "index": 43,
+    "instructions": 10,
+    "feedback": 26,
+    "reference": 6,
+    "user": 1,
+    "other": 9
+  },
+  "pieceKinds": {
+    "url": 14,
+    "command": 8,
+    "email": 6,
+    "domain": 13,
+    "path": 32,
+    "env": 12,
+    "package": 1,
+    "ip": 1
+  },
+  "sourceTools": {
+    "MCP": 11,
+    "Bash": 47,
+    "Artifact": 8,
+    "WebSearch": 2,
+    "Read": 6,
+    "WebFetch": 2,
+    "AskUserQuestion": 1
+  },
+  "askRate": "50.4%"
+}

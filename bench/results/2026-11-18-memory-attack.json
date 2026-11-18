@@ -1,0 +1,16 @@
+{
+  "WebFetch, verbatim": "39 of 62",
+  "WebFetch, paraphrased": "39 of 62",
+  "WebFetch, reduced": "0 of 62",
+  "MCP tool, verbatim": "39 of 62",
+  "MCP tool, paraphrased": "39 of 62",
+  "MCP tool, reduced": "0 of 62",
+  "ledger": {
+    "firstStart": "snapshot only",
+    "afterAnAgentWrite": "silent",
+    "afterThePostinstall": {
+      "memory": true,
+      "hooks": true
+    }
+  }
+}

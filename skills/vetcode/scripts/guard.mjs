@@ -20,7 +20,8 @@
 //   VETCODE_GUARD=off       do nothing
 //   VETCODE_GUARD=strict    turn every "ask" into "deny"
 //   VETCODE_GUARD_MIN_AGE_HOURS=72   how old a release must be before it installs without a question
-//   VETCODE_MEMORY=ask|note|off      a memory write that saves what came from a tool result: ask (default), tell, or nothing
+//   VETCODE_MEMORY=ledger|ask|note|off   memory checks: the ledger alone (default); also trace memory writes
+//                                        and ask or tell about pieces that came from a tool result; or nothing
 //
 // Memory (lib/memory.mjs): before an agent writes MEMORY.md, its memory files, CLAUDE.md, AGENTS.md,
 // GEMINI.md or Cursor/Windsurf rules, the concrete pieces it adds are traced through the session
@@ -40,7 +41,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const MODE = (process.env.VETCODE_GUARD || "on").toLowerCase();
-const MEMORY = (process.env.VETCODE_MEMORY || "ask").toLowerCase();
+// Tracing memory writes (Part A) is off unless asked for: on 125 real memory writes it would have
+// asked about 63, far above the 15% agreed before measuring (bench/README.md). The ledger stays on.
+const MEMORY = (process.env.VETCODE_MEMORY || "ledger").toLowerCase();
+const TRACE = MEMORY === "ask" || MEMORY === "note";
 // Gemini CLI calls the same moments and tools by other names; the answers are written in its own format.
 const GEMINI_TOOLS = { run_shell_command: "Bash", write_file: "Write", replace: "Edit" };
 const GEMINI_EVENTS = { BeforeTool: "PreToolUse", AfterTool: "PostToolUse" };
@@ -67,7 +71,7 @@ const AGENT_CONFIG = /(?:^|[\\/])(?:\.?mcp(?:[._-]config)?\.json|claude_desktop_
 
 // Part A of the memory check: the concrete pieces being saved that came from a tool result.
 async function memoryCheck(mem, j, file, added) {
-  if (j.hook_event_name !== "PreToolUse" || !j.transcript_path || !added.trim()) return false;
+  if (!TRACE || j.hook_event_name !== "PreToolUse" || !j.transcript_path || !added.trim()) return false;
   const { spawnSync } = await import("node:child_process");
   const pieces = mem.foreignPieces(added, await mem.readTranscript(j.transcript_path), mem.projectOf(j.cwd || process.cwd(), { spawnSync }));
   if (!pieces.length) return false;

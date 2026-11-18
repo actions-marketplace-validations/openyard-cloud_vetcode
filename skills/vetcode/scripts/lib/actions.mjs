@@ -108,7 +108,9 @@ export function actionProfile(dir) {
   for (const file of js) { const t = read(file); if (t) { f.files.push(path.relative(dir, file)); jsFacts(t, f); } }
   for (const block of m.runBlocks) { shellFacts(block, f); for (const c of capabilitiesOf(block)) f.abilities.add(c); if (/\bcurl\b|\bwget\b/.test(block)) f.abilities.add("uses the network"); }
   // Scripts a composite step runs from the action's own folder.
-  for (const block of m.runBlocks) for (const s of block.matchAll(/\$\{\{\s*github\.action_path\s*\}\}\/([\w./-]+\.(?:sh|js|mjs|cjs|py))/g)) {
+  // The action's folder is written three ways: ${{ github.action_path }}, $GITHUB_ACTION_PATH, ${GITHUB_ACTION_PATH}.
+  // (reviewdog/action-setup runs "$GITHUB_ACTION_PATH/install.sh"; the first look read only the first form and missed it.)
+  for (const block of m.runBlocks) for (const s of block.matchAll(/(?:\$\{\{\s*github\.action_path\s*\}\}|\$\{?GITHUB_ACTION_PATH\}?)\/([\w./-]+\.(?:sh|bash|js|mjs|cjs|py|ps1))/g)) {
     const t = read(path.join(dir, s[1]));
     if (t) { f.files.push(s[1]); (/\.(c|m)?js$/.test(s[1]) ? jsFacts : shellFacts)(t, f); for (const c of capabilitiesOf(t)) f.abilities.add(c); }
   }

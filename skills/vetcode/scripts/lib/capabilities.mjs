@@ -15,9 +15,17 @@ const CAPS = {
   "decodes or builds code at runtime": /\batob\s*\(|Buffer\.from\([^)]*["']base64["']|base64\.b64decode|String\.fromCharCode|\beval\s*\(|new\s+Function\s*\(|\bexec\s*\(\s*(?:compile|base64|zlib|marshal)/,
 };
 
+// The same file is asked about by several checks (profiles, surprises, sandbox evasion): answered once.
+const seen = new Map();
 export function capabilitiesOf(text) {
-  return Object.entries(CAPS).filter(([, re]) => re.test(text)).map(([name]) => name);
+  let caps = seen.get(text);
+  if (caps) return [...caps];
+  caps = Object.entries(CAPS).filter(([, re]) => re.test(text)).map(([name]) => name);
+  if (seen.size > 20000) seen.clear();
+  seen.set(text, caps);
+  return [...caps];
 }
+export const forgetCapabilities = () => seen.clear();
 
 // Files a package runs at install: "node scripts/x.js", "python setup.py", "sh ./install.sh".
 // What a published library runs when imported: its main/bin/module entry points.

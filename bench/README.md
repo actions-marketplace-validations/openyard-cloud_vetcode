@@ -130,6 +130,8 @@ the Python toolchain's own installers alone.
 
 **Speed.** On the same 30 PyPI packages (659 MB), GuardDog took 1,104 s and vetcode 299 s; vetcode has since become another third faster.
 
+**Speed on big projects (0.8.11).** The 72 applications of the noise corpus (about 300,000 files) took 424 s to scan with 0.8.10 and take 194 s with 0.8.11, on an 8-core Mac, with the same results: every report (findings, places, surprises, profiles, verdict) hashed identical, app by app, and again with four threads forced on the small apps. The largest gain is on the largest projects: snipe-it 24.0 → 7.9 s, Invoice Ninja 20.2 → 7.9 s, Ghost 19.2 → 7.8 s. Two changes: files are scanned on several threads when a project has 400 files or more (`VETCODE_THREADS=1` turns it off), and a few checks first look for the one character their pattern needs (a look-alike letter, `(0x`, a run of 150 spaces) before running the pattern.
+
 ## Evasion: does it still catch the sample once it is disguised?
 
 `mutate.mjs` rewrites malicious samples the way attackers do to get past scanners, without

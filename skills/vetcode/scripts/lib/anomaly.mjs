@@ -28,6 +28,7 @@ export const ANOMALY_FILE_RULES = [
   { ...rule({ id: "anom-whitespace-hidden", severity: "high", confidence: "high", title: "Code pushed far off-screen with whitespace",
       why: "Hundreds of spaces move code past the right edge of editors and review tools, so a reviewer sees a harmless line." }),
     test(text) {
+      if (!/[ \t]{150}/.test(text)) return [];
       const lines = text.split("\n");
       if (text.length / lines.length > 300) return []; // bundles: long runs of spaces come from templates
       for (let i = 0; i < lines.length; i++) {
@@ -41,6 +42,7 @@ export const ANOMALY_FILE_RULES = [
   { ...rule({ id: "anom-homoglyph-identifier", severity: "high", confidence: "high", title: "Identifier mixes Latin with look-alike Cyrillic or Greek letters",
       why: "A name with one Cyrillic or Greek letter in place of a Latin one looks identical to the real name but refers to a different function or variable." }),
     test(text) {
+      if (!LOOKALIKE.test(text)) return [];
       for (const m of codeOnly(text).matchAll(/[A-Za-z_$\u0370-\u03FF\u0400-\u04FF][\w$\u0370-\u03FF\u0400-\u04FF]*/gu)) {
         const swapped = [...m[0]].filter(c => LOOKALIKE.test(c)).length, latin = (m[0].match(/[A-Za-z]/g) || []).length;
         if (swapped >= 1 && swapped <= 2 && latin >= 2 && latin >= swapped * 2 && ![...m[0]].some(c => /[\u0400-\u04FF\u0370-\u03FF]/.test(c) && !LOOKALIKE.test(c))) {
@@ -92,6 +94,7 @@ export const ANOMALY_FILE_RULES = [
     test(text) {
       const names = new Set((text.match(/\b(?:virtualbox|vmware|qemu|vbox|sandboxie|wireshark|procmon|processhacker|x64dbg|ollydbg|ida64|fiddler|httpdebugger|cuckoo|any\.run|joesandbox|malware|analysis)\b/gi) || []).map(s => s.toLowerCase()));
       const hw = /os\.cpus\(\)\.length\s*<\s*\d|os\.totalmem\(\)\s*<|os\.uptime\(\)\s*<|psutil\.virtual_memory\(\)\.total\s*<|multiprocessing\.cpu_count\(\)\s*<\s*\d/.exec(text);
+      if (names.size < 3 && !hw) return [];
       const caps = capabilitiesOf(text), acts = caps.includes("uses the network") || caps.includes("runs other programs");
       if (!acts) return [];
       if (names.size >= 3) return [{ line: lineOf(text, text.toLowerCase().indexOf([...names][0])), evidence: [...names].slice(0, 6).join(", ") }];
@@ -137,7 +140,18 @@ export function scanBinaries(root, listed, out) {
   }
 }
 
-const entropy = s => { if (!s.length) return 0; const n = {}; for (const c of s) n[c] = (n[c] || 0) + 1; return Object.values(n).reduce((h, k) => h - (k / s.length) * Math.log2(k / s.length), 0); };
+// Per character (code point), counted by number rather than by one-letter strings.
+const entropy = s => {
+  if (!s.length) return 0;
+  const n = new Map();
+  for (let i = 0; i < s.length; i++) {
+    let c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) { const d = s.charCodeAt(i + 1); if (d >= 0xdc00 && d <= 0xdfff) { c = ((c - 0xd800) << 10) + (d - 0xdc00) + 0x10000; i++; } }
+    n.set(c, (n.get(c) || 0) + 1);
+  }
+  let h = 0; for (const k of n.values()) h -= (k / s.length) * Math.log2(k / s.length);
+  return h;
+};
 const W = { critical: 12, high: 7, medium: 3, low: 1, info: 0 };
 
 /**

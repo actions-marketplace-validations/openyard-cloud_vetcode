@@ -1797,3 +1797,17 @@ test("--action-diff: the tj-actions and reviewdog stand-ins add serious things; 
   assert.deepEqual(b.map(x => `${x.key} ${x.from.ref} -> ${x.to.comment}`), ["actions/checkout v4 -> v5.0.0"]);
   assert.match(actionDiffMarkdown([{ action: "a/b", from: "v1", to: "v2", diff: rd }]), /this bump adds\n  - downloads and runs code: base64 -d \| bash/);
 });
+
+test("scan threads: the findings, places and suppressions are the ones a single thread gives, in the same order", async () => {
+  const files = {};
+  for (let i = 0; i < 120; i++) {
+    files[`src/m${i}.js`] = i % 3 ? `const x${i} = require("child_process");\nx${i}.exec(req.query.cmd${i});\n` : `export const v${i} = ${i};\n`;
+    if (i % 10 === 0) files[`src/s${i}.py`] = `import os\nos.system(request.args["c"])\nAPI_KEY = "${fake("", 32)}"\nSECRET_KEY = "${fake("", 32, "Zx9Yw8Vu7T")}"  # vetcode-ignore\n`;
+  }
+  files["setup.py"] = `import os, base64\nexec(base64.b64decode("cHJpbnQoMSk="))\n`;
+  const dir = project(files);
+  const run = async n => { process.env.VETCODE_THREADS = String(n); try { const r = await vet(dir, { tools: false }); delete r.stats.ms; return r; } finally { delete process.env.VETCODE_THREADS; } };
+  const one = await run(1), three = await run(3);
+  assert.ok(one.findings.length > 0 && one.places.length > 0 && one.stats.suppressedLines > 0);
+  assert.deepEqual(three, one);
+});

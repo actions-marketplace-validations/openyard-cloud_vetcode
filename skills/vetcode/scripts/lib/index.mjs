@@ -16,7 +16,7 @@ import { kindOfRule, KINDS } from "./sinks.mjs";
 import { lockedPackages, queryOsv } from "./osv.mjs";
 import { runTools } from "./tools.mjs";
 import { checkMcpLock } from "./mcplock.mjs";
-import { scanBinaries, surprises } from "./anomaly.mjs";
+import { scanBinaries, scanBytecode, surprises } from "./anomaly.mjs";
 import { scanAll } from "./scan-pool.mjs";
 import { forgetCapabilities } from "./capabilities.mjs";
 import { verdict } from "./verdict.mjs";
@@ -41,7 +41,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
 let PLACE_RULES = new Set();
 try { PLACE_RULES = new Set(JSON.parse(fs.readFileSync(new URL("./data/web-places.json", import.meta.url), "utf8")).places); } catch {}
 
-export const VERSION = "0.8.13";
+export const VERSION = "0.8.14";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -102,6 +102,7 @@ export async function vet(target, opts = {}) {
   log(`${files.length} files read`);
   supabaseTablesWithoutRls(files, findings);
   scanBinaries(root, listed, findings);
+  scanBytecode(root, listed, findings);
   const prof = profiles(files);
   purposeMismatches(prof, findings);
   const atInstall = scanProjectInstallEntries(root, files, findings);

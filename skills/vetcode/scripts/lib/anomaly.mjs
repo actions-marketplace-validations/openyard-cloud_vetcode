@@ -28,6 +28,7 @@ export const ANOMALY_FILE_RULES = [
   { ...rule({ id: "anom-whitespace-hidden", severity: "high", confidence: "high", title: "Code pushed far off-screen with whitespace",
       why: "Hundreds of spaces move code past the right edge of editors and review tools, so a reviewer sees a harmless line." }),
     test(text) {
+      if (!/[ \t]{150}/.test(text)) return [];
       const lines = text.split("\n");
       if (text.length / lines.length > 300) return []; // bundles: long runs of spaces come from templates
       for (let i = 0; i < lines.length; i++) {
@@ -41,6 +42,7 @@ export const ANOMALY_FILE_RULES = [
   { ...rule({ id: "anom-homoglyph-identifier", severity: "high", confidence: "high", title: "Identifier mixes Latin with look-alike Cyrillic or Greek letters",
       why: "A name with one Cyrillic or Greek letter in place of a Latin one looks identical to the real name but refers to a different function or variable." }),
     test(text) {
+      if (!LOOKALIKE.test(text)) return [];
       for (const m of codeOnly(text).matchAll(/[A-Za-z_$\u0370-\u03FF\u0400-\u04FF][\w$\u0370-\u03FF\u0400-\u04FF]*/gu)) {
         const swapped = [...m[0]].filter(c => LOOKALIKE.test(c)).length, latin = (m[0].match(/[A-Za-z]/g) || []).length;
         if (swapped >= 1 && swapped <= 2 && latin >= 2 && latin >= swapped * 2 && ![...m[0]].some(c => /[\u0400-\u04FF\u0370-\u03FF]/.test(c) && !LOOKALIKE.test(c))) {
@@ -75,7 +77,11 @@ export const ANOMALY_FILE_RULES = [
       // and i18n loader does. It takes a named target, or an action that destroys or runs something.
       const after = text.slice(where.index, where.index + 400);
       const named = /["'](?:Europe|Asia|America|Africa|Australia)\/[A-Za-z_]+["']|["'][a-z]{2}[-_][A-Z]{2}["']|country(?:_?code|Name)?\s*[!=]={1,2}\s*["'][A-Z]{2}["']|ipinfo\.io|ip-api\.com|ipapi\.co|ipgeolocation\.io|api\.ipify\.org/.test(text.slice(Math.max(0, where.index - 200), where.index + 400));
-      return (/\b(?:rmSync|rmdirSync|unlinkSync|rimraf|writeFileSync|fs\.rm\b|shutil\.rmtree|os\.remove|\bexec(?:Sync)?\s*\(|subprocess\.\w+\(|os\.system\(|process\.exit\()/.test(after) || (named && /fetch\s*\(|https?\.request\(/.test(after)))
+      // The value has to be checked before the action: saving TZ to restore it after a test, then
+      // deleting a temp folder, is not a payload that waits for a time zone.
+      const act = /\b(?:rmSync|rmdirSync|unlinkSync|rimraf|writeFileSync|fs\.rm\b|shutil\.rmtree|os\.remove|\bexec(?:Sync)?\s*\(|subprocess\.\w+\(|os\.system\(|process\.exit\()/.exec(after);
+      const checked = act && /[!=]==?|[<>]=?\s*-?\d|\.(?:includes|startsWith|endsWith|test|match|indexOf)\s*\(|\bswitch\s*\(|\bin\s*[[({]|\bin\s+\w|\bnot\s+in\b/.test(after.slice(0, act.index));
+      return (checked || (named && /fetch\s*\(|https?\.request\(/.test(after)))
         ? [{ line: lineOf(text, where.index), evidence: where[0].slice(0, 120) }] : [];
     } },
   { ...rule({ id: "anom-time-bomb", severity: "high", title: "Code that waits for a date before doing something drastic",
@@ -92,6 +98,7 @@ export const ANOMALY_FILE_RULES = [
     test(text) {
       const names = new Set((text.match(/\b(?:virtualbox|vmware|qemu|vbox|sandboxie|wireshark|procmon|processhacker|x64dbg|ollydbg|ida64|fiddler|httpdebugger|cuckoo|any\.run|joesandbox|malware|analysis)\b/gi) || []).map(s => s.toLowerCase()));
       const hw = /os\.cpus\(\)\.length\s*<\s*\d|os\.totalmem\(\)\s*<|os\.uptime\(\)\s*<|psutil\.virtual_memory\(\)\.total\s*<|multiprocessing\.cpu_count\(\)\s*<\s*\d/.exec(text);
+      if (names.size < 3 && !hw) return [];
       const caps = capabilitiesOf(text), acts = caps.includes("uses the network") || caps.includes("runs other programs");
       if (!acts) return [];
       if (names.size >= 3) return [{ line: lineOf(text, text.toLowerCase().indexOf([...names][0])), evidence: [...names].slice(0, 6).join(", ") }];
@@ -137,7 +144,56 @@ export function scanBinaries(root, listed, out) {
   }
 }
 
-const entropy = s => { if (!s.length) return 0; const n = {}; for (const c of s) n[c] = (n[c] || 0) + 1; return Object.values(n).reduce((h, k) => h - (k / s.length) * Math.log2(k / s.length), 0); };
+/** Compiled Python that runs although the source next to it says otherwise, or with no source at all.
+ *  Python imports a `__pycache__` file instead of its source only when the source matches it, unless
+ *  the file was compiled as "unchecked" (PEP 552), and imports a `x.pyc` that sits where `x.py` would be
+ *  when there is no `x.py`. Either way the code that runs is not the code a reviewer reads. */
+export function scanBytecode(root, listed, out) {
+  const pyc = [];
+  if (listed) for (const rel of listed) { if (/\.pyc$/i.test(rel)) pyc.push(rel); }
+  else (function walk(dir, depth) {
+    if (depth > 12) return;
+    let entries; try { entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const rel = dir ? `${dir}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (e.name === "__pycache__" || !SKIP_DIRS.has(e.name)) walk(rel, depth + 1); }
+      else if (e.isFile() && /\.pyc$/i.test(e.name)) pyc.push(rel);
+    }
+  })("", 0);
+  let reported = 0;
+  for (const rel of pyc.slice(0, 5000)) {
+    if (reported >= 5) break;
+    const cached = /(^|\/)__pycache__\//.test(rel);
+    let head; try { const fd = fs.openSync(path.join(root, rel), "r"); head = Buffer.alloc(8); fs.readSync(fd, head, 0, 8, 0); fs.closeSync(fd); } catch { continue; }
+    // Python 3.7+ header: magic (2 bytes, then \r\n), then flags: bit 0 hash-based, bit 1 check the source.
+    const modern = head[2] === 0x0d && head[3] === 0x0a && head.readUInt16LE(0) >= 3390;
+    const unchecked = modern && (head.readUInt32LE(4) & 3) === 1;
+    const source = cached ? rel.replace(/__pycache__\/([^/]+?)\.[^./]+(?:\.opt-\d)?\.pyc$/i, "$1.py") : rel.replace(/\.pyc$/i, ".py");
+    const hasSource = fs.existsSync(path.join(root, source));
+    let why;
+    if (cached && unchecked && hasSource) why = `compiled as "unchecked": Python runs it instead of ${source} even after that file changes`;
+    else if (!cached && !hasSource) why = "no source next to it: Python imports this compiled file as the module";
+    if (!why) continue;
+    reported++;
+    out.push(finding({ id: "py-bytecode-instead-of-source", category: "supply-chain", severity: "high", confidence: "medium",
+      title: "Compiled Python runs instead of readable source",
+      why: `Malicious packages ship .pyc files so that what runs is not what a reviewer or a scanner reads (${why}).`,
+      fix: "Do not import or run it. Delete the .pyc file and compare behaviour; if the project needs it, find out who compiled it and from which source." }, rel, 1, `${rel}: ${why}`));
+  }
+}
+
+// Per character (code point), counted by number rather than by one-letter strings.
+const entropy = s => {
+  if (!s.length) return 0;
+  const n = new Map();
+  for (let i = 0; i < s.length; i++) {
+    let c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) { const d = s.charCodeAt(i + 1); if (d >= 0xdc00 && d <= 0xdfff) { c = ((c - 0xd800) << 10) + (d - 0xdc00) + 0x10000; i++; } }
+    n.set(c, (n.get(c) || 0) + 1);
+  }
+  let h = 0; for (const k of n.values()) h -= (k / s.length) * Math.log2(k / s.length);
+  return h;
+};
 const W = { critical: 12, high: 7, medium: 3, low: 1, info: 0 };
 
 /**

@@ -10,12 +10,52 @@ const rule = r => ({ category: "agent", confidence: "medium", ...r });
 const readJson = text => { try { return JSON.parse(text.replace(/^﻿/, "").replace(/^\s*\/\/.*$/gm, "")); } catch { return null; } };
 const lineIn = (text, needle) => { const i = text.indexOf(needle); return i < 0 ? 1 : lineOf(text, i); };
 
-const SETTINGS = /(^|\/)\.claude\/settings(\.local)?\.json$|(^|\/)\.gemini\/settings\.json$|(^|\/)\.codex\/config\.toml$/;
+const SETTINGS = /(^|\/)\.claude\/settings(\.local)?\.json$|(^|\/)\.gemini\/settings\.json$|(^|\/)\.codex\/config\.toml$|(^|\/)\.cursor\/hooks\.json$/;
+// Hooks a plugin brings with it (Claude Code and Codex plugins): expected to exist, so only what they do is checked.
+const PLUGIN_HOOKS = /(^|\/)hooks\/hooks\.json$|(^|\/)\.(?:claude|codex)-plugin\/plugin\.json$/;
 export const INSTRUCTIONS = /(^|\/)(CLAUDE|AGENTS|GEMINI|CONVENTIONS)\.md$|(^|\/)\.cursorrules$|(^|\/)\.cursor\/rules\/[^/]+$|(^|\/)\.windsurfrules$|(^|\/)\.clinerules(\/[^/]+)?$|(^|\/)\.github\/copilot-instructions\.md$|(^|\/)\.github\/instructions\/[^/]+$|(^|\/)SKILL\.md$|(^|\/)\.claude\/(commands|agents|skills)\/.+\.md$|(^|\/)\.(agents|github)\/skills\/.+\.md$/i;
+
+// A hook is handed what the agent is about to do or just did: the command, the file and its new
+// text, the prompt. A hook that passes that input to curl, nc or an HTTP endpoint sends every one of
+// them to another machine, on every tool call, without the agent or the person seeing it.
+const NET_TOOL = /\b(?:curl|wget|nc|ncat|netcat|socat|telnet|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\b|\/dev\/(?:tcp|udp)\//i;
+const READS_INPUT = /@-(?=["'\s]|$)|@\/dev\/stdin|--post-file[= ]\s*\/dev\/stdin|(?:-T|--upload-file)\s+-(?=["'\s]|$)|\$\(\s*cat\s*\)|`cat`|\$input\b|\[Console\]::In|<\s*\/dev\/stdin|^\s*(?:cat|jq\b[^|]*|tee\b[^|]*)\s*\|/i;
+const LOCAL_HOST = /^(?:localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal)$/i;
+
+function hookHandlers(hooks) {
+  const found = [];
+  (function visit(v) {
+    if (Array.isArray(v)) return v.forEach(visit);
+    if (!v || typeof v !== "object") return;
+    if (typeof v.command === "string" || typeof v.url === "string") found.push(v);
+    for (const k of Object.keys(v)) if (k !== "command" && k !== "url") visit(v[k]);
+  })(hooks);
+  return found;
+}
+
+function checkHookPayload(file, text, hooks, out) {
+  for (const h of hookHandlers(hooks)) {
+    const command = [h.command, ...(Array.isArray(h.args) ? h.args : [])].filter(x => typeof x === "string").join(" ");
+    const url = h.type === "http" && typeof h.url === "string" ? h.url : (NET_TOOL.test(command) && READS_INPUT.test(command) ? (/https?:\/\/[^\s"'`)]+/.exec(command)?.[0] || "") : null);
+    if (url === null) continue;
+    let host = ""; try { host = url ? new URL(url).hostname : ""; } catch { /* a URL built at run time */ }
+    if (host && LOCAL_HOST.test(host)) continue;
+    out.push(finding(rule({ id: "agent-hook-sends-input", severity: "high", title: `Hook sends what the agent does to ${host || "another machine"}`,
+      why: "A hook is given the agent's commands, the files it writes and the prompts it gets. This one passes that input over the network on every call it is registered for, so it leaves without the agent or you seeing it.",
+      fix: "Find out who runs the receiving end. Remove the hook unless sending your agent's activity there is something you chose (an observability service you use)." }), file.rel, lineIn(text, h.url || (h.command || "").slice(0, 40)), (h.url || command).slice(0, 200)));
+    return;
+  }
+}
+
+function checkPluginHooks(file, text, out) {
+  const s = readJson(text);
+  if (s?.hooks && typeof s.hooks === "object") checkHookPayload(file, text, s.hooks, out);
+}
 
 function checkSettings(file, text, out) {
   const s = readJson(text);
   if (!s) return;
+  if (s.hooks && typeof s.hooks === "object") checkHookPayload(file, text, s.hooks, out);
   const at = key => lineIn(text, `"${key}"`);
   if (s.hooks && Object.keys(s.hooks).length) {
     const cmds = JSON.stringify(s.hooks).match(/"command"\s*:\s*"([^"]{0,200})/g) || [];
@@ -163,6 +203,7 @@ function checkMcpTools(file, text, out) {
 
 export function scanAgentFiles(file, text, out) {
   if (SETTINGS.test(file.rel)) checkSettings(file, text, out);
+  else if (PLUGIN_HOOKS.test(file.rel)) checkPluginHooks(file, text, out);
   else if (INSTRUCTIONS.test(file.rel)) checkInstructions(file, text, out);
   // The other Markdown of a skill (its README, its install notes): where it sends the reader to get software.
   else if (/\.md$/i.test(file.rel) && file.abs && inSkill(file.abs)) checkDestinations(file, text, out);

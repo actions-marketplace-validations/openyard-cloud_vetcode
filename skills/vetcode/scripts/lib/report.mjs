@@ -50,7 +50,7 @@ export function markdown(result) {
   const told = (result.profiles || []).filter(p => Object.keys(p.capabilities).length);
   if (told.length) {
     out.push(``, `## What it says vs what it does`, ``);
-    for (const p of told.slice(0, 8)) out.push(`- **${p.name}** (${p.kind}): "${(p.purpose || "no description").slice(0, 100)}" → ${Object.entries(p.capabilities).map(([c, fs]) => `${c} (${fs.length} file${fs.length > 1 ? "s" : ""})`).join("; ")}`);
+    for (const p of told.slice(0, 8)) out.push(`- ${p.kind === "project" ? "**Code outside any package**" : `**${p.name}** (${p.private ? "private " : ""}${p.kind}): "${(p.purpose || "no description").slice(0, 100)}"`} → ${Object.entries(p.capabilities).map(([c, fs]) => `${c} (${fs.length} file${fs.length > 1 ? "s" : ""})`).join("; ")}`);
   }
   if (result.surprises?.length) {
     out.push(``, `## Read these files first`, ``, `The strangest files in the project, whether or not a rule fired: check that the project's purpose explains each one.`, ``);

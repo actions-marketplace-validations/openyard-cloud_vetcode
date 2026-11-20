@@ -4,7 +4,7 @@
 // and MCP servers / browser extensions that ask for too much.
 import fs from "node:fs";
 import path from "node:path";
-import { finding, lineOf } from "./engine.mjs";
+import { finding, lineOf, options } from "./engine.mjs";
 import { POPULAR_SCOPES, KNOWN_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
 import { expanded } from "./normalize.mjs";
@@ -99,6 +99,29 @@ const TYPO = rule({ id: "dep-typosquat", severity: "medium", title: "Dependency 
 
 const LOCKS = ["package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb"];
 
+/**
+ * Names of the packages that live in this repository as npm workspaces: package-lock.json links them to a folder
+ * of the repo. `"*"` on one of them is how workspaces refer to each other, not an open door to the registry.
+ */
+const workspaceCache = new Map();
+function workspaceNames(root) {
+  if (!root) return new Set();
+  if (workspaceCache.has(root)) return workspaceCache.get(root);
+  const names = new Set();
+  try {
+    const lock = JSON.parse(fs.readFileSync(path.join(root, "package-lock.json"), "utf8"));
+    for (const [key, entry] of Object.entries(lock.packages || {})) {
+      if (entry?.link === true && typeof entry.resolved === "string" && !/^(?:\.\.|\/)/.test(entry.resolved)) {
+        names.add(key.replace(/^.*node_modules\//, ""));
+      }
+    }
+  } catch {
+    // no lockfile, or not one npm wrote: nothing is known to be a workspace
+  }
+  workspaceCache.set(root, names);
+  return names;
+}
+
 function checkPackageJson(file, text, out, { installed = false, root } = {}) {
   const pkg = readJson(text);
   if (!pkg || typeof pkg !== "object") return;
@@ -146,7 +169,7 @@ function checkPackageJson(file, text, out, { installed = false, root } = {}) {
       const at = lineIn(text, `"${name}"`);
       const like = lookalike(name, TARGET_NPM, POPULAR_SCOPES, KNOWN_NPM);
       if (like) out.push(finding(published && section !== "dependencies" && section !== "optionalDependencies" ? { ...TYPO, severity: "medium" } : TYPO, file.rel, at, `"${name}" looks like "${like}"`));
-      if (spec === "*" || spec === "latest" || spec === "x" || spec === "") {
+      if ((spec === "*" || spec === "latest" || spec === "x" || spec === "") && !(spec === "*" && workspaceNames(root).has(name))) {
         out.push(finding(rule({ id: "dep-unpinned", severity: "low", title: "Dependency accepts any version",
           why: "Any future version, including a hijacked one, installs without review.", fix: "Pin a version range and commit the lockfile." }), file.rel, at, `"${name}": "${spec}"`));
       } else if (/^(?:git\+|git:|github:|gitlab:|bitbucket:|https?:\/\/)|^[\w-]+\/[\w.-]+(?:#.*)?$/.test(spec)) {
@@ -297,7 +320,8 @@ function repoOwner(abs) {
     }
     if (path.dirname(dir) === dir) break;
   }
-  return "";
+  // No .git above the file: a downloaded archive. The owner given with --repo, if any.
+  return options.owner;
 }
 
 function checkWorkflow(file, text, out) {
@@ -379,7 +403,7 @@ function checkWorkflow(file, text, out) {
     // Once per action in a workflow: ten steps using the same action are one thing to fix.
     // Actions from the organisation that owns this repository are its own code on its own branch.
     if (uses && !/^(?:actions|github)\//.test(uses[1]) && uses[1].split("/")[0].toLowerCase() !== repoOwner(file.abs) && !/^[0-9a-f]{40}$/.test(uses[2]) && !out.some(f => f.rule === "gha-unpinned-action" && f.file === file.rel && f.evidence.includes(`${uses[1]}@${uses[2]}`))) {
-      out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: "Third-party action pinned to a tag, not a commit",
+      out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: `Third-party action pinned to a ${/^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "branch" : "tag"}, not a commit`,
         why: "Tags can be moved: a compromised action repository can change what runs in your CI (as in the tj-actions incident).", fix: `Pin to the full commit SHA: uses: ${uses[1]}@<sha> # ${uses[2]}` }), file.rel, i + 1, line.trim()));
     }
   });

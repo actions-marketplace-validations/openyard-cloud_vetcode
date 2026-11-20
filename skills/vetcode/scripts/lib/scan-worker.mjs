@@ -4,6 +4,7 @@ import { scanOne } from "./perfile.mjs";
 import { options } from "./engine.mjs";
 
 options.inline = workerData.inline;
+options.owner = workerData.owner;
 parentPort.on("message", ({ from, files }) => {
   options.suppressed = new Set();
   const results = files.map(f => scanOne(f, workerData.root));

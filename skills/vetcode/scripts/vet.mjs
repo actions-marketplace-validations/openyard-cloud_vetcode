@@ -14,6 +14,8 @@
 //     --baseline <file> hide findings already in an earlier --json report (report only new ones)
 //     --mcp-lock <file> remember MCP servers and tool descriptions; report changes (rug pulls)
 //     --no-tools        do not run external tools even if installed
+//     --repo <owner/name> the GitHub repository the code was downloaded from, when it has no
+//                       .git folder: actions from that owner count as the project's own
 //     --fail-on <sev>   exit 1 if a finding at this severity or worse exists (for CI)
 //     --quiet           no progress messages
 //
@@ -104,7 +106,7 @@ if (args.includes("--cargo-diff")) {
 }
 
 const opts = {
-  json: value("--json"), sarif: value("--sarif"), baseline: value("--baseline"), mcpLock: value("--mcp-lock"), failOn: value("--fail-on"), diff: value("--diff", true),
+  json: value("--json"), sarif: value("--sarif"), baseline: value("--baseline"), repo: value("--repo"), mcpLock: value("--mcp-lock"), failOn: value("--fail-on"), diff: value("--diff", true),
   online: flag("--online"), deps: flag("--deps"), history: flag("--history"),
   noIgnore: flag("--no-ignore"), tools: !flag("--no-tools"), quiet: flag("--quiet"),
 };

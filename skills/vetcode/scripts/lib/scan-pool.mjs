@@ -45,7 +45,7 @@ function parallel(files, root, n) {
       w.postMessage({ from, files: files.slice(from, next).map(({ abs, rel, text, partial }) => ({ abs, rel, text, partial })) });
     };
     for (let i = 0; i < n; i++) {
-      const w = new Worker(new URL("./scan-worker.mjs", import.meta.url), { workerData: { root, inline: options.inline } });
+      const w = new Worker(new URL("./scan-worker.mjs", import.meta.url), { workerData: { root, inline: options.inline, owner: options.owner } });
       workers.push(w);
       w.on("message", m => {
         if (failed) return;

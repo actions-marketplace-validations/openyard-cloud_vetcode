@@ -4,7 +4,7 @@
 // and MCP servers / browser extensions that ask for too much.
 import fs from "node:fs";
 import path from "node:path";
-import { finding, lineOf } from "./engine.mjs";
+import { finding, lineOf, options } from "./engine.mjs";
 import { POPULAR_SCOPES, KNOWN_SCOPES, KNOWN_NPM, KNOWN_PYPI, TARGET_NPM, TARGET_PYPI } from "./popular.mjs";
 import { installEntryFiles, checkInstallEntry, libraryEntryFiles, capabilitiesOf } from "./capabilities.mjs";
 import { expanded } from "./normalize.mjs";
@@ -297,7 +297,8 @@ function repoOwner(abs) {
     }
     if (path.dirname(dir) === dir) break;
   }
-  return "";
+  // No .git above the file: a downloaded archive. The owner given with --repo, if any.
+  return options.owner;
 }
 
 function checkWorkflow(file, text, out) {
@@ -379,7 +380,7 @@ function checkWorkflow(file, text, out) {
     // Once per action in a workflow: ten steps using the same action are one thing to fix.
     // Actions from the organisation that owns this repository are its own code on its own branch.
     if (uses && !/^(?:actions|github)\//.test(uses[1]) && uses[1].split("/")[0].toLowerCase() !== repoOwner(file.abs) && !/^[0-9a-f]{40}$/.test(uses[2]) && !out.some(f => f.rule === "gha-unpinned-action" && f.file === file.rel && f.evidence.includes(`${uses[1]}@${uses[2]}`))) {
-      out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: "Third-party action pinned to a tag, not a commit",
+      out.push(finding(rule({ id: "gha-unpinned-action", severity: /^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "medium" : "low", confidence: "high", title: `Third-party action pinned to a ${/^(main|master|dev|develop|latest|HEAD)$/.test(uses[2]) ? "branch" : "tag"}, not a commit`,
         why: "Tags can be moved: a compromised action repository can change what runs in your CI (as in the tj-actions incident).", fix: `Pin to the full commit SHA: uses: ${uses[1]}@<sha> # ${uses[2]}` }), file.rel, i + 1, line.trim()));
     }
   });

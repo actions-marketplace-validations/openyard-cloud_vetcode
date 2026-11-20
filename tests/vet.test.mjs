@@ -1811,3 +1811,28 @@ test("scan threads: the findings, places and suppressions are the ones a single 
   assert.ok(one.findings.length > 0 && one.places.length > 0 && one.stats.suppressedLines > 0);
   assert.deepEqual(three, one);
 });
+
+test("--repo: code downloaded without .git still knows its owner's actions are its own; a branch is called a branch", async () => {
+  const dir = project({ ".github/workflows/ci.yml": "on: push\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: acme/scan@main\n      - uses: someone-else/deploy@v2\n" });
+  const unpinned = r => r.findings.filter(f => f.rule === "gha-unpinned-action").map(f => `${f.evidence.trim()} | ${f.title}`);
+  assert.deepEqual(unpinned(await run(dir)), ["- uses: acme/scan@main | Third-party action pinned to a branch, not a commit", "- uses: someone-else/deploy@v2 | Third-party action pinned to a tag, not a commit"]);
+  assert.deepEqual(unpinned(await run(dir, { repo: "Acme/tool" })), ["- uses: someone-else/deploy@v2 | Third-party action pinned to a tag, not a commit"]);
+});
+
+test("profiles: private packages and code outside any package say what they can do, and are not held to a description", async () => {
+  const dir = project({
+    "package.json": JSON.stringify({ name: "app", private: true, workspaces: ["packages/*"] }),
+    "packages/core/package.json": JSON.stringify({ name: "@app/core", private: true, description: "Tiny string formatting helpers" }),
+    "packages/core/net.js": "const https = require('https');\nconst { execSync } = require('child_process');\nhttps.get('https://x.example/' + require('os').hostname()).end(execSync('id'));\n",
+    "site/build.py": "import subprocess\nsubprocess.run(['hugo'])\n",
+  });
+  const r = await run(dir);
+  const of = name => r.profiles.find(p => p.name === name);
+  assert.equal(of("@app/core").private, true);
+  assert.ok(of("@app/core").capabilities["uses the network"].includes("packages/core/net.js"));
+  assert.ok(of("app").capabilities["runs other programs"].includes("site/build.py"), "the root package owns the rest");
+  assert.ok(!rules(r).has("behaviour-purpose-mismatch"), "nobody installs a private package on the strength of its description");
+  const loose = await run(project({ "tools/sync.py": "import urllib.request\nurllib.request.urlopen('https://x.example')\n" }));
+  assert.deepEqual(loose.profiles.map(p => [p.kind, Object.keys(p.capabilities)]), [["project", ["uses the network"]]]);
+  assert.match(markdown(loose), /\*\*Code outside any package\*\* → uses the network \(1 file\)/);
+});

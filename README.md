@@ -19,7 +19,7 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.12 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.13 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
@@ -43,7 +43,7 @@ Every number here is measured, on samples the rules were not tuned on unless it 
 | Malicious **npm** packages caught, of 1,000 (false alarms on 1,000 clean ones) | **947** (26); verdicts 907 (**5**) | [GuardDog](https://github.com/DataDog/guarddog): 903 (43) |
 | Malicious **PyPI** packages caught, of 300 (false alarms on 210 clean ones) | **262** (16); verdicts 234 (**1**) | GuardDog: 241 (48) |
 | The same malware after 8 kinds of disguise | still catches 99–100% of what it caught | GuardDog: 90–92% on several |
-| Malicious **agent skills** it had never seen, of 157 (false alarms on 1,029 clean ones) | 91 (**1**) | [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner): 101 (56) |
+| Malicious **agent skills** it had never seen, of 157 (false alarms on 1,029 clean ones) | 91 (**1**) | [Cisco skill-scanner](https://github.com/cisco-ai-defense/skill-scanner): 101 (56); [NVIDIA SkillSpector](https://github.com/NVIDIA/SkillSpector): 102 (105) |
 | The guard, shown malware as if nobody had reported it yet | blocks or questions 95% of npm, 88% of PyPI, and 3% of clean npm packages | |
 | A package whose newest release is hours old, asked for 3 times | the agent installs the previous, settled version 3 times | the agent alone installs the new release 3 times |
 | Wrong "this is malicious" verdicts on 72 real applications (228,000 files) | **1** | |
@@ -58,7 +58,7 @@ Every number here is measured, on samples the rules were not tuned on unless it 
 
 **What it is not.** It does not find web bugs by itself: it lists the dangerous calls as places to read, and those stand at about one real injection bug in ten, so they are where to start, not coverage. It does not make your agent better at logic bugs such as missing authorization; that is the agent's own ability. And a clean report means "nothing obvious found", not "safe".
 
-**Read the numbers with care.** Samples are 157 to 1,000 items, so they move by a point or two between samples. Most malicious packages in the public datasets were found by GuardDog itself, which favours it. Cisco's scanner catches ten more skills by flagging 56 clean ones, a trade vetcode does not make. All numbers are the scanner alone; in normal use your agent reads every finding again.
+**Read the numbers with care.** Samples are 157 to 1,000 items, so they move by a point or two between samples. Most malicious packages in the public datasets were found by GuardDog itself, which favours it. Cisco's scanner catches ten more skills by flagging 56 clean ones, and NVIDIA's SkillSpector eleven more by flagging 105 (one clean skill in ten), a trade vetcode does not make. All numbers are the scanner alone; in normal use your agent reads every finding again.
 
 ## Install
 
@@ -134,7 +134,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.12", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.13", "vetcode-mcp"] }
   }
 }
 ```
@@ -147,7 +147,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.12", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.13", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -155,7 +155,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.12", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.13", "vetcode-mcp"]
 ```
 
 </details>
@@ -249,7 +249,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.12 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.13 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -288,7 +288,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.12   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.13   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```
@@ -335,9 +335,9 @@ Name the rule. Folders can go in `.vetcodeignore` (gitignore syntax). Every repo
 | Area | Examples |
 |---|---|
 | **Malware** | decode-then-`eval`, download-and-run, reverse shells, credential and wallet theft (`~/.ssh`, `~/.aws`, browser profiles), a file that gathers the keys of several unrelated services, env-var exfiltration to webhooks, `_0x` obfuscation, hidden Unicode payloads (GlassWorm), Trojan Source bidi characters, AI CLIs started with permission prompts off, self-spreading `npm publish` worms, `.pth` autoruns, miners, beacons that report host, user and IP, `.exe` droppers |
-| **Supply chain** | install-time code that combines network access with secrets, programs or hidden code; dependency-confusion probes; suspicious `preinstall`/`postinstall`; typosquats (`expresss`, `@angullar/core`, `reqeusts`); git and URL dependencies; lockfile packages from foreign hosts; `setup.py` that runs code; VS Code tasks that run on folder open; git hooks; known vulnerable and **known malicious** packages via [OSV.dev](https://osv.dev) |
+| **Supply chain** | install-time code that combines network access with secrets, programs or hidden code; dependency-confusion probes; suspicious `preinstall`/`postinstall`; typosquats (`expresss`, `@angullar/core`, `reqeusts`); git and URL dependencies; lockfile packages from foreign hosts; `setup.py` that runs code; compiled Python (`.pyc`) that runs instead of its source; VS Code tasks that run on folder open; git hooks; known vulnerable and **known malicious** packages via [OSV.dev](https://osv.dev) |
 | **Build and install time, beyond npm and PyPI** | Rust build scripts and proc macros, with a label of what each crate's build-time code can do (network access together with secrets, a shell, a downloaded program, decoding, host details or git history is a verdict; a download alone is worth a look), `go:generate` lines and Go `init()`, `go.mod` replace directives, Ruby gem extensions, Composer scripts, MSBuild `Exec` tasks and build events, NuGet `install.ps1`, Gradle builds and wrappers, Maven exec plugins, package repositories over plain HTTP |
-| **AI agents** | project `.claude/settings.json` with hooks, API base-URL redirects or auto-approved MCP servers; prompt injection and hidden comments in `CLAUDE.md`, `AGENTS.md`, `.cursorrules` and skills; poisoned MCP tool descriptions; unpinned or plain-HTTP MCP servers |
+| **AI agents** | project `.claude/settings.json` and `.cursor/hooks.json` with hooks, API base-URL redirects or auto-approved MCP servers; hooks (also a plugin's own) that send what the agent does to another machine; prompt injection and hidden comments in `CLAUDE.md`, `AGENTS.md`, `.cursorrules` and skills; poisoned MCP tool descriptions; unpinned or plain-HTTP MCP servers |
 | **Secrets** | 40+ providers (cloud, AI, payment, SaaS, registries), private keys, database URLs, Supabase `service_role` keys, committed `.env`, secrets in git history, secrets behind `NEXT_PUBLIC_`/`VITE_` prefixes |
 | **Web and API**, as places to read (JavaScript/TypeScript, Python, PHP, Java/Kotlin, C#, Go, Ruby, Rust) | SQL, NoSQL and command injection, XSS, SSTI, path traversal, SSRF, open redirects, unsafe deserialisation, weak JWT handling, TLS checks off, permissive CORS, mass assignment, weak password hashing, zip slip, XXE, prototype pollution, model output passed to `eval` |
 | **Server and cloud** | root containers, secrets in image layers, privileged or socket-mounted containers, databases published on all interfaces, nginx alias traversal, public buckets, open SSH/RDP, Supabase tables without RLS, Firebase rules open to everyone |

@@ -77,7 +77,11 @@ export const ANOMALY_FILE_RULES = [
       // and i18n loader does. It takes a named target, or an action that destroys or runs something.
       const after = text.slice(where.index, where.index + 400);
       const named = /["'](?:Europe|Asia|America|Africa|Australia)\/[A-Za-z_]+["']|["'][a-z]{2}[-_][A-Z]{2}["']|country(?:_?code|Name)?\s*[!=]={1,2}\s*["'][A-Z]{2}["']|ipinfo\.io|ip-api\.com|ipapi\.co|ipgeolocation\.io|api\.ipify\.org/.test(text.slice(Math.max(0, where.index - 200), where.index + 400));
-      return (/\b(?:rmSync|rmdirSync|unlinkSync|rimraf|writeFileSync|fs\.rm\b|shutil\.rmtree|os\.remove|\bexec(?:Sync)?\s*\(|subprocess\.\w+\(|os\.system\(|process\.exit\()/.test(after) || (named && /fetch\s*\(|https?\.request\(/.test(after)))
+      // The value has to be checked before the action: saving TZ to restore it after a test, then
+      // deleting a temp folder, is not a payload that waits for a time zone.
+      const act = /\b(?:rmSync|rmdirSync|unlinkSync|rimraf|writeFileSync|fs\.rm\b|shutil\.rmtree|os\.remove|\bexec(?:Sync)?\s*\(|subprocess\.\w+\(|os\.system\(|process\.exit\()/.exec(after);
+      const checked = act && /[!=]==?|[<>]=?\s*-?\d|\.(?:includes|startsWith|endsWith|test|match|indexOf)\s*\(|\bswitch\s*\(|\bin\s*[[({]|\bin\s+\w|\bnot\s+in\b/.test(after.slice(0, act.index));
+      return (checked || (named && /fetch\s*\(|https?\.request\(/.test(after)))
         ? [{ line: lineOf(text, where.index), evidence: where[0].slice(0, 120) }] : [];
     } },
   { ...rule({ id: "anom-time-bomb", severity: "high", title: "Code that waits for a date before doing something drastic",

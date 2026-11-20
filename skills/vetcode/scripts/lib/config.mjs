@@ -57,12 +57,38 @@ export const CONFIG_RULES = [
     re: /\b(?:encrypted|storage_encrypted|encryption)\s*=\s*false/, why: "Snapshots and disks are stored in clear.", fix: "Turn encryption on." }),
   rule({ id: "django-allowed-hosts", severity: "medium", title: "Django accepts any Host header", files: /settings[\w/]*\.py$/i,
     re: /^\s*ALLOWED_HOSTS\s*=\s*\[\s*["']\*["']\s*\]/, why: "Enables host-header attacks such as poisoned password-reset links.", fix: "List your real domains." }),
-  rule({ id: "csp-unsafe", severity: "low", title: "Content Security Policy allows inline or eval'd scripts", files: /\.(html?|conf|json|toml|ya?ml|js|ts|mjs|py)$|_headers$/i,
-    re: /(?:Content-Security-Policy|contentSecurityPolicy|script-src)[^\n]*'unsafe-(?:inline|eval)'/i, why: "These keywords cancel most of the XSS protection a CSP gives.", fix: "Use nonces or hashes for inline scripts and remove unsafe-eval." }),
 ];
+
+/**
+ * The script part of a CSP on one line: script-src (or script-src-elem), else default-src. 'unsafe-inline' only in
+ * style-src is a much smaller risk and is not what this rule is about; next to a nonce or hash, browsers ignore it.
+ */
+export function cspScriptsUnsafe(line) {
+  const dirs = new Map();
+  for (const part of line.split(";")) {
+    const m = /\b(default-src|script-src-elem|script-src)\b([^;"`]*)/i.exec(part);
+    if (m && !dirs.has(m[1].toLowerCase())) dirs.set(m[1].toLowerCase(), m[2]);
+  }
+  const src = dirs.get("script-src") ?? dirs.get("script-src-elem") ?? dirs.get("default-src");
+  if (src === undefined) return false;
+  if (/'unsafe-eval'/i.test(src)) return true;
+  return /'unsafe-inline'/i.test(src) && !/'(?:nonce-|sha(?:256|384|512)-)/i.test(src);
+}
 
 // Whole-file checks.
 export const CONFIG_FILE_RULES = [
+  { ...rule({ id: "csp-unsafe", severity: "low", title: "Content Security Policy allows inline or eval'd scripts",
+      why: "These keywords cancel most of the XSS protection a CSP gives.", fix: "Use nonces or hashes for inline scripts and remove unsafe-eval." }),
+    files: /\.(html?|conf|json|toml|ya?ml|js|ts|mjs|py)$|_headers$/i,
+    test(text) {
+      const lines = text.split("\n"), out = [];
+      lines.forEach((line, i) => {
+        if (/Content-Security-Policy|contentSecurityPolicy|script-src/i.test(line) && /'unsafe-(?:inline|eval)'/i.test(line) && cspScriptsUnsafe(line)) {
+          out.push({ line: i + 1, evidence: line.trim().slice(0, 140) });
+        }
+      });
+      return out;
+    } },
   { ...rule({ id: "docker-latest", severity: "low", title: "Base image without a fixed version",
       why: "`latest` changes under you: builds stop being reproducible and can pull in a compromised image.",
       fix: "Pin a version tag, ideally with its digest (`image:1.2@sha256:...`)." }), files: DOCKER,

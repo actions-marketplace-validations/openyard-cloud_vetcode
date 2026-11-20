@@ -11,7 +11,8 @@
 // `vetcode-ignore[rule-a,rule-b] reason` limits it to those rules (preferred).
 const SUPPRESS = /(?:\/\/|#|\/\*|<!--|--)\s*vetcode-ignore(?!-next-line)(?:\[([\w,\s-]+)\])?/;
 const NEXT = /(?:\/\/|#|\/\*|<!--|--)\s*vetcode-ignore-next-line(?:\[([\w,\s-]+)\])?/;
-export const options = { inline: true, suppressed: new Set() };
+// owner: who owns the repository, for code without a .git folder (a downloaded archive, --repo).
+export const options = { inline: true, suppressed: new Set(), owner: "" };
 export const suppressedHere = (lines, i, rel, ruleId) => {
   if (!options.inline) return false;
   const m = SUPPRESS.exec(lines[i]) || (i > 0 ? NEXT.exec(lines[i - 1]) : null);

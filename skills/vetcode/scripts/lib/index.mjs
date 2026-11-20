@@ -41,7 +41,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
 let PLACE_RULES = new Set();
 try { PLACE_RULES = new Set(JSON.parse(fs.readFileSync(new URL("./data/web-places.json", import.meta.url), "utf8")).places); } catch {}
 
-export const VERSION = "0.8.11";
+export const VERSION = "0.8.12";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -76,6 +76,7 @@ export async function vet(target, opts = {}) {
   const started = Date.now();
   options.inline = !opts.noIgnore;
   options.suppressed = new Set();
+  options.owner = (opts.repo || "").split("/")[0].toLowerCase();
   forgetCapabilities();
   const ignore = opts.noIgnore ? [] : loadIgnore(root);
   const only = opts.diff !== undefined ? changedFiles(root, opts.diff || null) : null;
@@ -183,7 +184,7 @@ export async function vet(target, opts = {}) {
     stats: { files: files.length, packages, ms: Date.now() - started, counts, tools, osv, history: !!opts.history,
       ignoreFile: ignore.length ? ".vetcodeignore" : null, ignorePatterns: ignore.length, suppressedLines: options.suppressed.size, partial, baselined, mcpLock },
     surprises: surprising,
-    profiles: [...prof.map(({ kind, name, file, purpose, capabilities }) => ({ kind, name, file, purpose, capabilities })),
+    profiles: [...prof.map(({ kind, name, file, purpose, capabilities, private: priv }) => ({ kind, name, file, purpose, capabilities, ...(priv ? { private: true } : {}) })),
       // Each crate, with what its build-time code (build script, proc macro) can do kept apart.
       ...crates.filter(c => Object.keys(c.capabilities).length || c.buildFiles.length).map(c => ({ kind: "crate", name: c.name, file: c.file, purpose: c.description, capabilities: c.capabilities,
         buildTime: { capabilities: c.buildTime, buildScript: c.buildScript, procMacro: c.procMacro, buildDependencies: c.buildDependencies } }))],

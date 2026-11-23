@@ -19,14 +19,14 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.15 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.16 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
 
 | | What it does | Where it runs |
 |---|---|---|
-| **The guard** | Answers allow, ask or deny before a package is installed or an MCP server is added, and reads a repository right after it is cloned | Claude Code, on its own; other agents call it as a tool |
+| **The guard** | Answers allow, ask or deny before a package is installed or an MCP server is added, and reads a repository right after it is cloned | Claude Code, Codex CLI and Gemini CLI, on their own; other agents call it as a tool |
 | **The scanner** | Reads a folder for malware, supply-chain attacks, attacks on agents, leaked secrets, and server and CI problems, and lists the places in web code worth reading | Skill, MCP server, command line, GitHub Action |
 | **The review procedure** | Tells your agent how to confirm each finding by reading the code, and what to report | Skill, MCP server |
 
@@ -68,7 +68,8 @@ All forms need Node.js 18+. **vetcode is not on npm**: every command here runs i
 |---|---|
 | Claude Code | the [plugin](#claude-code-plugin) (skill and guard), or the [skill](#skill) alone |
 | Gemini CLI | the [extension](#gemini-cli-extension) (skill, guard and MCP server) |
-| Codex, GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… | the [skill](#skill) |
+| Codex CLI | the [plugin](#codex-cli-plugin) (skill and guard) |
+| GitHub Copilot, Cursor, Amp, Goose, opencode, Windsurf, Cline, Roo… | the [skill](#skill) |
 | Anything that speaks MCP (Cursor, VS Code, Codex, Gemini CLI, Windsurf, Zed, Claude Desktop, ChatGPT…) | the [MCP server](#mcp-server) |
 | claude.ai | the [skill zip](#claudeai) |
 | CI, scripts, or no agent at all | the [command line](#the-scanner-on-its-own) or the [GitHub Action](#pull-request-review-on-github) |
@@ -112,6 +113,16 @@ gemini extensions install https://github.com/openyard-cloud/vetcode
 
 Gemini CLI downloads the extension from the latest release. Its guard runs before every shell command and file write, like the Claude Code one, with one difference: Gemini CLI has no "ask" answer for a hook, so where Claude Code would ask, you see vetcode's warning and then Gemini CLI's own confirmation of the command. With auto-approval on (`--yolo`), set `VETCODE_GUARD=strict` to turn those warnings into a refusal.
 
+### Codex CLI plugin
+
+The same plugin, skill and guard, from the same marketplace:
+
+```bash
+codex plugin marketplace add openyard-cloud/vetcode && codex plugin install vetcode@openyard
+```
+
+Codex runs a plugin's hooks only after you have reviewed them: open `/hooks` in a session and trust vetcode's (again after each update that changes them). Codex has no "ask" answer for a hook either, so where Claude Code would ask, vetcode stops the command once and tells the agent to put the question to you; if you agree, the agent runs the same command again and it goes through. `VETCODE_GUARD=strict` makes every such stop final.
+
 ### Skill
 
 For any agent that loads [Agent Skills](https://agentskills.io). The [skills CLI](https://vercel.com/docs/agent-resources/skills) knows where each agent keeps them ([vetcode on skills.sh](https://skills.sh/openyard-cloud/vetcode/vetcode)):
@@ -134,7 +145,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.15", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.16", "vetcode-mcp"] }
   }
 }
 ```
@@ -147,7 +158,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.15", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.16", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -155,7 +166,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.15", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.16", "vetcode-mcp"]
 ```
 
 </details>
@@ -178,7 +189,7 @@ and run its scanner: `node ../vetcode/skills/vetcode/scripts/vet.mjs <folder>`.
 
 ## The guard
 
-An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code plugin or the Gemini CLI extension, vetcode looks at every install command **before** it runs, and at every MCP server before it is registered, and answers allow, ask or deny:
+An agent decides to install a package in a second: a name it remembered wrong, a name a web page suggested, a release published an hour ago. Installing runs that package's code with your rights. With the Claude Code or Codex CLI plugin, or the Gemini CLI extension, vetcode looks at every install command **before** it runs, and at every MCP server before it is registered, and answers allow, ask or deny:
 
 | The command would… | Answer |
 |---|---|
@@ -249,7 +260,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.15 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.16 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -288,7 +299,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.15   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.16   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```

@@ -1620,6 +1620,16 @@ test("Codex CLI: the plugin's hooks in Codex's format, apply_patch edits, and as
   assert.equal(hook({ hook_event_name: "PreToolUse", cwd: tmp, tool_name: "Bash", tool_input: { command: pipe } }, env).hookSpecificOutput.permissionDecision, "ask");
 });
 
+test("abilities: base64 decoded into bytes (an image, a hash, a key) is not code; decoded into text it is", async () => {
+  const { capabilitiesOf } = await import("../skills/vetcode/scripts/lib/capabilities.mjs");
+  const decodes = t => capabilitiesOf(t).includes("decodes or builds code at runtime");
+  assert.equal(decodes("const GIF = Buffer.from('R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==', 'base64');"), false);
+  assert.equal(decodes("const iv = Buffer.from(ivB64, 'base64');"), false);
+  assert.equal(decodes("const s = Buffer.from(payload, 'base64').toString();"), true);
+  assert.equal(decodes("const s = Buffer.from(payload, \"base64\" ).toString('utf8');"), true);
+  assert.equal(decodes("eval(atob(p))"), true);
+});
+
 test("the MCP bundle: a manifest that matches the server, a server that runs from the bundle, a registry entry within the limits", () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), "vetcode-mcpb-"));
   const built = spawnSync("node", [new URL("../.github/mcp/bundle.mjs", import.meta.url).pathname, out], { encoding: "utf8" });

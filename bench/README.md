@@ -281,6 +281,20 @@ What changed, in three passes:
 
 Each change has a test in both directions: the ordinary shape is quiet, the same shape with a real target is still reported. The 101 left are what a reviewer should look at: `innerHTML = data`, `v-html`, `|safe`, certificate checks an option turns off, a password hashed with SHA-256.
 
+### What the code can do (0.8.17)
+
+The abilities listed for each package ("uses the network", "decodes or builds code at runtime"…) count `Buffer.from(x, "base64")` as decoding code only when the bytes are turned into text (`.toString(`). Before, a 1×1 GIF in a test, an image, a hash, an IV or a certificate made an app "decode code at runtime". Two changes were registered before measuring, each to be kept or dropped whole: this one, and not counting a method named `fetch` (`async fetch() {`) as network use.
+
+| Check | Before | After |
+|---|---|---|
+| 72 apps: packages that lose a wrong "decodes code" | | 15 packages in 10 apps; every dropped line read (images, hashes, keys, certificates) |
+| 72 apps: findings and verdicts | | unchanged |
+| npm seed 7 / seed 31, 1,000 + 1,000: caught (signs), verdicts, clean flagged | 925, 878, 31 / 947, 907, 26 | the same |
+| npm, severity critical | 593 / 588 | 591 / 587 |
+| PyPI seed 7 / 31, skills, held-out skills | | unchanged |
+
+The `fetch` change was dropped: it changed no package's abilities on the 72 apps (the same packages use the network elsewhere), short of the five agreed beforehand.
+
 ## The scanner on real injection bugs
 
 ```bash

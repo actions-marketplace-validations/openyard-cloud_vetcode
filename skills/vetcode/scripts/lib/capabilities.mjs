@@ -12,7 +12,7 @@ const CAPS = {
   "collects user and host details": /os\.(?:hostname|userInfo|networkInterfaces)\(|getpass\.getuser|socket\.gethostname|platform\.node\(|\bwhoami\b|(?:require\(|from\s+)["'](?:systeminformation|public-ip|internal-ip|node-machine-id|getmac|macaddress|username|os-name)["']/,
   "writes into home or startup folders": /(?:writeFile|writeFileSync|createWriteStream|copyFile|open)\s*\([^)\n]*(?:homedir\(\)|\.vscode|\.ssh|LaunchAgents|AppData|Startup|\.bashrc|\.zshrc|expanduser)/,
   "runs other programs": /child_process|\bexecSync\b|\bspawnSync?\b|subprocess\.|os\.system|os\.popen/,
-  "decodes or builds code at runtime": /\batob\s*\(|Buffer\.from\([^)]*["']base64["']|base64\.b64decode|String\.fromCharCode|\beval\s*\(|new\s+Function\s*\(|\bexec\s*\(\s*(?:compile|base64|zlib|marshal)/,
+  "decodes or builds code at runtime": /\batob\s*\(|Buffer\.from\([^)]*["']base64["']\s*\)\s*\.toString\s*\(|base64\.b64decode|String\.fromCharCode|\beval\s*\(|new\s+Function\s*\(|\bexec\s*\(\s*(?:compile|base64|zlib|marshal)/,
 };
 
 // The same file is asked about by several checks (profiles, surprises, sandbox evasion): answered once.

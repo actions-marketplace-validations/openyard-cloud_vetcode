@@ -6,10 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs"
-            ],
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs\"",
             "timeout": 45
           }
         ]
@@ -19,10 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs"
-            ],
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs\"",
             "timeout": 45
           }
         ]
@@ -34,10 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs"
-            ],
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs\"",
             "timeout": 90
           }
         ]
@@ -47,10 +38,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs"
-            ],
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs\"",
             "timeout": 20
           }
         ]
@@ -61,10 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs"
-            ],
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/skills/vetcode/scripts/guard.mjs\"",
             "timeout": 20
           }
         ]

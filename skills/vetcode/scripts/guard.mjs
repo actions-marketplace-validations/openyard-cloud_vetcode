@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // vetcode guard: checks what a shell command would install before it runs.
 //
-// As a Claude Code hook (see hooks/hooks.json) or a Gemini CLI hook (.github/gemini/hooks.json,
+// As a Claude Code or Codex CLI plugin hook (see hooks/hooks.json) or a Gemini CLI hook (.github/gemini/hooks.json,
 // shipped in the Gemini extension) it reads the hook's JSON on stdin. Before a Bash
 // command runs it answers allow, ask or deny for the packages the command would install: the
 // ones it names, the ones a bare `npm install` or `pip install -r` would add, and the ones an
@@ -38,7 +38,9 @@
 // PIP_INDEX_URL and the like) are not looked up anywhere.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const MODE = (process.env.VETCODE_GUARD || "on").toLowerCase();
 // Tracing memory writes (Part A) is off unless asked for: on 125 real memory writes it would have
@@ -49,8 +51,33 @@ const TRACE = MEMORY === "ask" || MEMORY === "note";
 const GEMINI_TOOLS = { run_shell_command: "Bash", write_file: "Write", replace: "Edit" };
 const GEMINI_EVENTS = { BeforeTool: "PreToolUse", AfterTool: "PostToolUse" };
 let gemini = false;
+// Codex CLI sends Claude Code's names and reads Claude Code's answers, with two differences: a file
+// edit arrives as one apply_patch call, and a hook cannot answer "ask" (Codex marks the hook failed
+// and runs the command). There, "ask" stops the call once and tells the agent to ask the person; the
+// same call made again in the same session goes through.
+let codex = null;
+const ASKED_FOR = 60 * 60 * 1000;
+function askedBefore(key) {
+  const file = path.join(os.tmpdir(), "vetcode-codex-asked.json");
+  let seen = {};
+  try { seen = JSON.parse(fs.readFileSync(file, "utf8")) || {}; } catch {}
+  const now = Date.now();
+  for (const k of Object.keys(seen)) if (!(now - seen[k] < ASKED_FOR)) delete seen[k];
+  const again = key in seen;
+  if (again) delete seen[key]; else seen[key] = now;
+  try { fs.writeFileSync(file, JSON.stringify(seen)); } catch {}
+  return again;
+}
 // One answer, in the format of the agent that asked. kind: deny, ask, note (before a call), found (after a clone).
 function answer(kind, text) {
+  if (codex && kind === "ask") {
+    if (askedBefore(codex)) {
+      const said = `vetcode stopped this once and the agent ran it again, which it was told to do only if you agreed. ${text}`;
+      return console.log(JSON.stringify({ systemMessage: said, hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: said } }));
+    }
+    kind = "deny";
+    text = `${text} Codex cannot ask the user from a hook, so vetcode stopped this call once. Show the user the reason above and ask whether to go ahead; only if they agree, make exactly the same call again and vetcode will let it through.`;
+  }
   if (gemini) {
     // Gemini has no "ask" for a hook: the person sees the warning, then Gemini's own confirmation of the command.
     if (kind === "deny") console.log(JSON.stringify({ decision: "deny", reason: text }));
@@ -91,6 +118,23 @@ async function main() {
       j.hook_event_name = GEMINI_EVENTS[j.hook_event_name];
       j.tool_name = GEMINI_TOOLS[j.tool_name] || j.tool_name;
       if (typeof j.tool_input?.dir_path === "string") cwd = path.resolve(cwd, j.tool_input.dir_path);
+    } else if (typeof j.turn_id === "string") {
+      // Codex: turn_id is its own field. The key names this exact call in this session.
+      codex = crypto.createHash("sha256").update(`${j.session_id}\0${j.tool_name}\0${JSON.stringify(j.tool_input ?? null)}`).digest("hex");
+      if (j.tool_name === "apply_patch") {
+        const { patchFiles } = await import("./lib/guard.mjs");
+        const mem = await import("./lib/memory.mjs");
+        const files = patchFiles(j.tool_input?.command).map(f => ({ ...f, file: path.resolve(cwd, f.file) }));
+        if (j.hook_event_name === "PostToolUse") {
+          if (MODE !== "off" && MEMORY !== "off") for (const f of files) if (mem.isMemoryFile(f.file)) mem.recordWrite(f.file);
+          return;
+        }
+        // One file is checked per patch: a memory file first, then an agent configuration file.
+        const f = files.find(x => mem.isMemoryFile(x.file)) || files.find(x => AGENT_CONFIG.test(x.file));
+        if (!f) return;
+        j.tool_name = "Write";
+        j.tool_input = { file_path: f.file, content: f.added };
+      }
     }
     // A new session: memory and hooks that changed since an agent last wrote them.
     if (j.hook_event_name === "SessionStart") {

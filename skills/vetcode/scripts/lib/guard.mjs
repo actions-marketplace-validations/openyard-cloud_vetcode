@@ -214,6 +214,24 @@ function remoteServer(url) {
  * The servers an MCP configuration starts, as shell lines the guard can read. Takes a whole
  * file (.mcp.json, claude_desktop_config.json, Codex config.toml…) or a fragment of one.
  */
+/**
+ * The files a Codex `apply_patch` call writes, each with the lines it adds. Codex sends file edits to
+ * a hook as one patch (`*** Add File: x`, `*** Update File: x`, `*** Move to: y`, `+line`); deleted
+ * files add nothing and are left out.
+ */
+export function patchFiles(patch) {
+  const files = [];
+  let cur = null;
+  for (const line of String(patch || "").split("\n")) {
+    const m = /^\*\*\* (Add|Update|Delete) File: (.+)$/.exec(line);
+    if (m) { cur = m[1] === "Delete" ? null : { file: m[2].trim(), added: [] }; if (cur) files.push(cur); continue; }
+    const mv = /^\*\*\* Move to: (.+)$/.exec(line);
+    if (mv && cur) { cur.file = mv[1].trim(); continue; }
+    if (cur && line.startsWith("+")) cur.added.push(line.slice(1));
+  }
+  return files.map(f => ({ file: f.file, added: f.added.join("\n") }));
+}
+
 export function mcpCommands(text) {
   const lines = [];
   const add = (command, args, url) => {

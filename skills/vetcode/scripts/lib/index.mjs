@@ -107,7 +107,17 @@ export async function vet(target, opts = {}) {
   const partial = [];
   const yarnCopies = [];
   // Each file is scanned on its own (perfile.mjs), on several threads for a big project.
-  const walked = [...walk(root, { ignore, only: listed, ...(listed ? {} : { skipDirs: SKIP_DIRS_NO_GIT }) })];
+  const links = [];
+  const walked = [...walk(root, { ignore, only: listed, links, ...(listed ? {} : { skipDirs: SKIP_DIRS_NO_GIT }) })];
+  // Symlinks are not followed; one that leaves the project is a way to make a reader open the user's own files.
+  for (const rel of links) {
+    let to = null; try { to = fs.readlinkSync(path.join(root, rel)); } catch { continue; }
+    const at = path.resolve(path.dirname(path.join(root, rel)), to);
+    if (at === root || at.startsWith(root + path.sep)) continue;
+    findings.push(finding({ id: "symlink-outside", category: "supply-chain", severity: "medium", confidence: "medium", title: "A file in the project is a link to a place outside it",
+      why: "Whoever opens this file (an editor, a build, an agent asked to read the project) reads the target instead, which can be your own credentials or settings. vetcode did not follow it.",
+      fix: "Check where it points. A link to a home folder, credentials or system files has no reason to be in a project: remove it before working in this folder." }, rel, 1, `→ ${to}`));
+  }
   const scanned = await scanAll(walked, root);
   walked.forEach((file, i) => {
     const r = scanned[i];

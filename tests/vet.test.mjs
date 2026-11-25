@@ -1569,6 +1569,21 @@ test("diff mode: the base decides what .vetcodeignore skips, and a change to it 
   assert.ok(!later.findings.some(f => f.file === "fixtures/a.js"));
 });
 
+test("committed symlinks are not followed; one that leaves the project is reported", async () => {
+  const outside = project({ "creds": j("//registry.npmjs.org/:_auth", "Token=npm_", fake("", 36), "\n") });
+  const dir = project({ "index.js": "module.exports = 1;\n", "lib/a.js": "module.exports = 2;\n" });
+  fs.symlinkSync(path.join(outside, "creds"), path.join(dir, "notes.txt"));
+  fs.symlinkSync("a.js", path.join(dir, "lib/b.js"));
+  const check = r => {
+    assert.ok(!r.findings.some(f => f.category === "secrets"), "the reader's own token is not read as the project's");
+    assert.deepEqual(r.findings.filter(f => f.rule === "symlink-outside").map(f => f.file), ["notes.txt"]);
+  };
+  check(await run(dir));
+  const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  git("init", "-q"); git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init");
+  check(await run(dir));
+});
+
 test("the plugin folder: the directory edition is Markdown alone, the full edition runs from its folder", () => {
   const script = new URL("../.github/plugin/build.sh", import.meta.url).pathname;
   const build = env => {

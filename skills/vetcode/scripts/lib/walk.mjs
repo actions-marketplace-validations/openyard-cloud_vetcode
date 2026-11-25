@@ -86,10 +86,14 @@ export function readText(abs) {
  * Every readable file under `root`, as { abs, rel, text }.
  * `only` limits the walk to a list of relative paths (diff mode).
  */
-export function* walk(root, { ignore = [], only = null, skipDirs = SKIP_DIRS } = {}) {
+export function* walk(root, { ignore = [], only = null, skipDirs = SKIP_DIRS, links = null } = {}) {
   if (only) {
     for (const rel of only) {
       if (ignored(rel, ignore) || BINARY.test(rel)) continue;
+      // A committed symlink is not followed: it can point at the reader's own files (~/.aws/credentials),
+      // which would then be read, and reported, as if they were the project's. The caller is told about it.
+      let link = false; try { link = fs.lstatSync(path.join(root, rel)).isSymbolicLink(); } catch {}
+      if (link) { links?.push(rel); continue; }
       yield* read(path.join(root, rel), rel);
     }
     return;
@@ -103,6 +107,7 @@ export function* walk(root, { ignore = [], only = null, skipDirs = SKIP_DIRS } =
       const rel = dir ? `${dir}/${e.name}` : e.name;
       if (ignored(rel, ignore)) continue;
       if (e.isDirectory()) { if (!skipDirs.has(e.name)) stack.push(rel); continue; }
+      if (e.isSymbolicLink()) { links?.push(rel); continue; }
       if (!e.isFile() || BINARY.test(e.name)) continue;
       yield* read(path.join(root, rel), rel);
     }

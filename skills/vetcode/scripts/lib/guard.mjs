@@ -339,17 +339,24 @@ export function mcpCommands(text) {
 /** Folders a shell line just cloned a repository into: `git clone`, `gh repo clone`, `npx degit`. */
 export function parseClones(line, { cwd = process.cwd() } = {}) {
   const out = [];
+  // Where the clone lands: after `cd x`, under `git -C x`, and with ~ as the home folder.
+  const home = p => p.replace(/^~(?=\/|$)/, os.homedir());
+  let dir = cwd;
   for (const raw of splitCommands(line)) {
     const w = strip(raw), bin = base(w[0]);
-    let rest = null;
-    if (bin === "git" && w.includes("clone")) rest = w.slice(w.indexOf("clone") + 1);
+    let rest = null, at = dir;
+    if (bin === "cd" && w[1]) { dir = path.resolve(dir, home(w[1])); continue; }
+    if (bin === "git" && w.includes("clone")) {
+      for (let i = 1; i < w.indexOf("clone"); i++) if (w[i] === "-C" && w[i + 1]) at = path.resolve(at, home(w[++i]));
+      rest = w.slice(w.indexOf("clone") + 1);
+    }
     else if (bin === "gh" && w[1] === "repo" && w[2] === "clone") rest = w.slice(3);
     else if (/^(npx|bunx|pnpx)$/.test(bin) && w.some(x => /^(degit|tiged|giget)(@|$)/.test(x))) rest = w.slice(w.findIndex(x => /^(degit|tiged|giget)(@|$)/.test(x)) + 1);
     if (!rest) continue;
     const plain = []; for (let i = 0; i < rest.length; i++) { if (/^(-b|--branch|--depth|-o|--origin|-c|--config|--reference|--separate-git-dir|-j|--jobs|--filter|--shallow-since|--template|-u|--upload-pack)$/.test(rest[i])) { i++; continue; } if (rest[i] === "--") continue; if (!rest[i].startsWith("-")) plain.push(rest[i]); }
     if (!plain[0]) continue;
     const name = plain[1] || plain[0].replace(/\/+$/, "").replace(/\.git$/, "").split(/[/:]/).pop().split("#")[0];
-    if (name) out.push({ source: plain[0], dir: path.resolve(cwd, name) });
+    if (name) out.push({ source: plain[0], dir: path.resolve(at, home(name)) });
   }
   return out;
 }

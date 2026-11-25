@@ -1526,6 +1526,15 @@ test("guard: a repository is read right after it is cloned", async () => {
   assert.equal(await checkClone("/no/such/folder", { vet }), null);
 });
 
+test("guard: the clone is looked for where it lands: after cd, under git -C, and under ~", () => {
+  const at = c => parseClones(c, { cwd: "/w" }).map(x => x.dir);
+  assert.deepEqual(at("cd /tmp && git clone https://github.com/a/evil"), ["/tmp/evil"]);
+  assert.deepEqual(at("cd sub; git clone https://github.com/a/evil x"), ["/w/sub/x"]);
+  assert.deepEqual(at("git -C /tmp clone https://github.com/a/evil"), ["/tmp/evil"]);
+  assert.deepEqual(at("git clone https://github.com/a/evil ~/code/evil"), [path.join(os.homedir(), "code/evil")]);
+  assert.deepEqual(at("git clone https://github.com/a/evil.git && cd evil && npm test"), ["/w/evil"]);
+});
+
 test("a folder the surrounding repository ignores is read, not skipped", async () => {
   const pkg = { "package.json": JSON.stringify({ name: "x", version: "1.0.0", scripts: { postinstall: "node setup.js" } }), "setup.js": j("eval(at", "ob('Y29uc29sZS5sb2coMSk='));\n") };
   const dir = project({ ".gitignore": "tmp/\nnode_modules/\n", "index.js": "module.exports = 1;\n", ...Object.fromEntries(Object.entries(pkg).flatMap(([f, t]) => [[`tmp/pkg/${f}`, t], [`node_modules/x/${f}`, t]])) });

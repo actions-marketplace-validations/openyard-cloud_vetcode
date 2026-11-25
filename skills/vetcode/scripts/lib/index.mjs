@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
+import { walk, loadIgnore, ignoreFrom, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
 import { profiles, purposeMismatches } from "./profile.mjs";
 import { crateProfiles, scanBuildTime } from "./rust.mjs";
 import { npmHistory } from "./npmhistory.mjs";
@@ -84,12 +84,24 @@ export async function vet(target, opts = {}) {
   options.suppressed = new Set();
   options.owner = (opts.repo || "").split("/")[0].toLowerCase();
   forgetCapabilities();
-  const ignore = opts.noIgnore ? [] : loadIgnore(root);
+  let ignore = opts.noIgnore ? [] : loadIgnore(root);
+  const findings = [];
+  // Against a base (a pull request), the change itself must not decide what is skipped: the
+  // .vetcodeignore of the base applies, and a change to it is reported for a person to look at.
+  if (!opts.noIgnore && opts.diff) {
+    const before = spawnSync("git", ["show", `${opts.diff}:./.vetcodeignore`], { cwd: root, encoding: "utf8" });
+    const was = before.status === 0 ? before.stdout : "", now = readText(path.join(root, ".vetcodeignore")) ?? "";
+    if (was !== now) {
+      ignore = ignoreFrom(was);
+      findings.push(finding({ id: "vetcodeignore-changed", category: "supply-chain", severity: "medium", confidence: "high", title: "This change edits what vetcode skips",
+        why: "A change that adds a path to .vetcodeignore can hide its own code from the scan. The scan of this change used the .vetcodeignore of the base instead.",
+        fix: "Check that every new pattern covers only generated or third-party files, and merge the .vetcodeignore change on its own." }, ".vetcodeignore", 1, `${ignoreFrom(was).length} pattern(s) at ${opts.diff}, ${ignoreFrom(now).length} now`));
+    }
+  }
   const only = opts.diff !== undefined ? changedFiles(root, opts.diff || null) : null;
   // In a git repository, read what git sees (tracked + untracked, minus .gitignore'd
   // build output); outside one, read everything.
   const listed = only || gitFiles(root);
-  const findings = [];
   const sinks = [];
   const files = [];
   const partial = [];

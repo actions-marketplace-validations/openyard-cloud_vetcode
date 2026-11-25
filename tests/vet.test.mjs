@@ -1492,6 +1492,28 @@ test("a folder the surrounding repository ignores is read, not skipped", async (
   assert.equal((await run(dir)).stats.files, 2, "the repository itself still reads what git sees");
 });
 
+test("diff mode: the base decides what .vetcodeignore skips, and a change to it is reported", async () => {
+  const dir = project({ "index.js": "module.exports = 1;\n", ".vetcodeignore": "fixtures/\n" });
+  const git = (...a) => spawnSync("git", a, { cwd: dir, encoding: "utf8" });
+  git("init", "-q"); git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base");
+  const base = git("rev-parse", "HEAD").stdout.trim();
+  fs.writeFileSync(path.join(dir, "evil.js"), j("eval(at", "ob('Y29uc29sZS5sb2coMSk='));\n"));
+  fs.writeFileSync(path.join(dir, ".vetcodeignore"), "fixtures/\nevil.js\n");
+  git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "change");
+  const r = await run(dir, { diff: base });
+  assert.ok(r.findings.some(f => f.file === "evil.js" && f.rule === "mal-eval-decoded"), "the change cannot hide its own file");
+  const changed = r.findings.find(f => f.rule === "vetcodeignore-changed");
+  assert.equal(changed?.file, ".vetcodeignore");
+  assert.match(changed.evidence, /1 pattern\(s\) at [0-9a-f]+, 2 now/);
+  // Without a change to it, the file applies as before.
+  fs.writeFileSync(path.join(dir, "fixtures.js"), "x\n");
+  const head = git("rev-parse", "HEAD").stdout.trim();
+  fs.mkdirSync(path.join(dir, "fixtures")); fs.writeFileSync(path.join(dir, "fixtures/a.js"), j("eval(at", "ob(x));\n"));
+  const later = await run(dir, { diff: head });
+  assert.ok(!later.findings.some(f => f.rule === "vetcodeignore-changed"));
+  assert.ok(!later.findings.some(f => f.file === "fixtures/a.js"));
+});
+
 test("the plugin folder: the directory edition is Markdown alone, the full edition runs from its folder", () => {
   const script = new URL("../.github/plugin/build.sh", import.meta.url).pathname;
   const build = env => {

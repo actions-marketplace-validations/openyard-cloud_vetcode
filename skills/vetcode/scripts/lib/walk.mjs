@@ -37,10 +37,13 @@ export function globToRegExp(pattern) {
   return new RegExp(`${start}${re}${dirOnly ? "(/|$)" : "($|/)"}`);
 }
 
+/** The patterns of a .vetcodeignore, from its text. */
+export const ignoreFrom = text => String(text || "").split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#")).map(globToRegExp);
+
 export function loadIgnore(root) {
   const file = path.join(root, ".vetcodeignore");
   if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, "utf8").split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#")).map(globToRegExp);
+  return ignoreFrom(fs.readFileSync(file, "utf8"));
 }
 
 export const ignored = (rel, matchers) => matchers.some(m => m.test(rel));

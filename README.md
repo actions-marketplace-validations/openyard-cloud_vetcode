@@ -305,7 +305,7 @@ jobs:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```
 
-Comments are not repeated on later pushes. Once a finding is gone, its thread gets a reply saying so; GitHub lets the workflow token resolve the thread only with `contents: write`, so add that permission if you want those threads closed as well. Pull requests from forks get a read-only token, so their results go to the job summary, and their `vetcode-ignore` comments are not honoured. Inputs: `path`, `fail-on`, `comment`, `sarif`, `online`, `github-token`.
+Comments are not repeated on later pushes. Once a finding is gone, its thread gets a reply saying so; GitHub lets the workflow token resolve the thread only with `contents: write`, so add that permission if you want those threads closed as well. Pull requests from forks get a read-only token, so their results go to the job summary, and their `vetcode-ignore` comments are not honoured. In every pull request the `.vetcodeignore` of the base branch applies, and a change to it is reported, so a change cannot hide its own files. Inputs: `path`, `fail-on`, `comment`, `sarif`, `online`, `github-token`.
 
 <details>
 <summary>With an AI agent, the Security tab, and other CI</summary>

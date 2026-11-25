@@ -528,8 +528,21 @@ export async function guard(line, deps = {}) {
   // An install that names no package takes its list from the project: look at what was added
   // since the lockfile was written (names with no reputation first), and ask once whether
   // anything the lockfile pins is reported as malware.
-  const locked = [];
-  for (const m of parseManifests(line, deps)) {
+  const locked = [], manifests = parseManifests(line, deps);
+  // A registry the project's own files name (and the user never set up) decides what this install
+  // fetches: a cloned repository can point every install at a registry its author runs.
+  if (deps.redirects) {
+    const ecos = new Set([...items, ...manifests].map(it => it.eco).filter(Boolean)), said = new Set();
+    for (const dir of new Set([deps.cwd || process.cwd(), ...manifests.map(m => m.dir).filter(Boolean)]))
+      for (const r of deps.redirects(dir) || []) {
+        const key = `${r.file}|${r.scope}|${r.url}`;
+        if (!ecos.has(r.eco) || said.has(key)) continue;
+        said.add(key);
+        results.push({ decision: "ask", reasons: [`${r.file} in ${path.basename(dir)} sends ${r.scope ? `${r.scope} packages` : `every ${r.eco === "npm" ? "npm" : "Python"} install`} to ${r.url}, not the public registry, and you have not set that registry up yourself. If this project is not yours, whoever runs that registry chooses the code this installs, and the guard cannot check it.`] });
+        raise("ask");
+      }
+  }
+  for (const m of manifests) {
     const f = fromManifest(m), rep = it => (it.eco === "npm" ? KNOWN_NPM : KNOWN_PYPI).has(it.name) ? 1 : 0;
     items.push(...f.items.sort((a, b) => rep(a) - rep(b)));
     locked.push(...f.locked.filter(p => !deps.isPrivate?.(p)));
@@ -583,5 +596,5 @@ export async function scanArchive(eco, url, _size, { fetch: fetchFn = fetch, vet
   finally { spawnSync("chmod", ["-R", "u+rwX", dir]); fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
-export { privateRegistries } from "./private.mjs";
+export { privateRegistries, projectRegistries } from "./private.mjs";
 

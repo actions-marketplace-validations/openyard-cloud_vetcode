@@ -200,6 +200,7 @@ An agent decides to install a package in a second: a name it remembered wrong, a
 | install a name one letter from a popular package (`expres`, `reqeusts`) that few people install | ask |
 | install a release less than 72 hours old, or one that lost its provenance or gained an install script | ask |
 | pipe a download into a shell, or install from another index, a repository or a URL | ask |
+| install in a project whose own `.npmrc`, `.yarnrc.yml` or `pip.conf` sends installs to a registry you have not set up yourself | ask |
 | add an MCP server at a tunnel address (ngrok, trycloudflare…) or over plain HTTP to another machine | ask |
 | install well-known packages at settled versions | allow, silently |
 

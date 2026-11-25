@@ -457,6 +457,18 @@ function checkExtensionManifest(file, text, out) {
     why: "Pages can send it commands.", fix: "List the exact origins." }), file.rel, lineIn(text, "externally_connectable"), JSON.stringify(m.externally_connectable)));
 }
 
+// A registry the project itself names: every install in the folder fetches from it, and whoever runs it chooses the code.
+const REGISTRY_LINE = /^\s*(?:(?:@[\w.-]+:)?registry\s*=\s*|npmRegistryServer:\s*|registry\s+|(?:extra-)?index-url\s*=\s*)["']?(https?:\/\/[^"'\s#]+)/gm;
+const PUBLIC_REGISTRY = /^https:\/\/(?:registry\.(?:npmjs\.org|yarnpkg\.com)\/?$|(?:pypi\.org|files\.pythonhosted\.org)\/)/i;
+function checkRegistryConfig(file, text, out) {
+  for (const m of text.matchAll(REGISTRY_LINE)) {
+    if (PUBLIC_REGISTRY.test(m[1])) continue;
+    out.push(finding(rule({ id: "registry-redirect", severity: m[1].startsWith("http:") ? "high" : "medium", title: "The project sends installs to a registry other than the public one",
+      why: "Every install in this folder fetches from this address, so whoever runs it chooses the code that installs, under the names you asked for. A company mirror is normal in its own repositories; in code you did not write, it is how an author serves their own versions of popular packages.",
+      fix: "If this is not your organisation's registry, remove the line before installing anything, and check the lockfile's resolved addresses." }), file.rel, lineOf(text, m.index), m[1]));
+  }
+}
+
 const HOOKS = /(^|\/)(\.husky\/[^/_][^/]*|\.githooks\/[^/]+)$/;
 
 export function scanSupplyChain(file, text, out, root) {
@@ -471,6 +483,7 @@ export function scanSupplyChain(file, text, out, root) {
   else if (/\.vscode\/tasks\.json$/.test(file.rel)) checkVscode(file, text, out);
   else if (/(^|\/)(\.mcp\.json|mcp\.json|claude_desktop_config\.json|mcp_config\.json|\.cursor\/mcp\.json)$/.test(file.rel)) checkMcp(file, text, out);
   else if (base === "manifest.json") checkExtensionManifest(file, text, out);
+  else if (/^(?:\.npmrc|\.yarnrc|\.yarnrc\.yml|pip\.conf)$/.test(base)) checkRegistryConfig(file, text, out);
   if (HOOKS.test(file.rel) && SUSPICIOUS_SCRIPT.test(text) && /curl|wget|\|\s*sh|base64|eval|powershell/i.test(text)) {
     out.push(finding(rule({ id: "git-hook-suspicious", severity: "high", title: "Git hook downloads or decodes something",
       why: "Hooks run on commit/checkout without asking.", fix: "Read the hook before installing hooks from this repository." }), file.rel, 1, text.split("\n").find(l => SUSPICIOUS_SCRIPT.test(l)) || ""));

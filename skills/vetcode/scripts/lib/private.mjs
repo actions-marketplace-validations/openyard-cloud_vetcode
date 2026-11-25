@@ -28,6 +28,29 @@ function settings() {
   };
 }
 
+const hostOf = text => parse(text)?.hostname?.toLowerCase() || null;
+
+/**
+ * Registries a project's own files send installs to, when the user has not set up the same host
+ * themselves (their ~/.npmrc, pip.conf or environment). A cloned repository can commit an .npmrc
+ * that points every install at a registry its author runs: the guard then asks instead of staying
+ * silent. Returns [{ eco, file, scope, url }].
+ */
+export function projectRegistries({ cwd = process.cwd(), home = os.homedir(), env = settings(), read = f => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } } } = {}) {
+  if (path.resolve(cwd) === path.resolve(home)) return [];
+  const own = new Set();
+  for (const line of read(path.join(home, ".npmrc")).split(/\r?\n/)) { const m = /^\s*(?:@[\w.-]+:)?registry\s*=\s*(\S+)/.exec(line); if (m && hostOf(m[1])) own.add(hostOf(m[1])); }
+  for (const f of [path.join(home, ".pip", "pip.conf"), path.join(home, ".config", "pip", "pip.conf")]) for (const m of read(f).matchAll(/^\s*(?:extra-)?index-url\s*=\s*(\S+)/gm)) if (hostOf(m[1])) own.add(hostOf(m[1]));
+  for (const v of Object.values(env)) if (v && hostOf(v)) own.add(hostOf(v));
+  const out = [];
+  const take = (eco, file, scope, url) => { if (!(eco === "npm" ? publicNpm(url) : publicPy(url)) && !own.has(hostOf(url))) out.push({ eco, file, scope, url }); };
+  for (const line of read(path.join(cwd, ".npmrc")).split(/\r?\n/)) { const m = /^\s*(?:(@[\w.-]+):)?registry\s*=\s*(\S+)/.exec(line); if (m) take("npm", ".npmrc", m[1] || null, m[2]); }
+  for (const m of read(path.join(cwd, ".yarnrc.yml")).matchAll(/^\s*npmRegistryServer:\s*["']?([^"'\s#]+)/gm)) take("npm", ".yarnrc.yml", null, m[1]);
+  for (const m of read(path.join(cwd, ".yarnrc")).matchAll(/^\s*registry\s+["']?([^"'\s#]+)/gm)) take("npm", ".yarnrc", null, m[1]);
+  for (const m of read(path.join(cwd, "pip.conf")).matchAll(/^\s*(?:extra-)?index-url\s*=\s*(\S+)/gm)) take("pypi", "pip.conf", null, m[1]);
+  return out;
+}
+
 /** Returns a function that says whether a package ({ eco, name }) comes from a private registry. */
 export function privateRegistries({ cwd = process.cwd(), home = os.homedir(), env = settings(), read = f => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } } } = {}) {
   const scopes = new Set(); let allNpm = false, allPy = false;

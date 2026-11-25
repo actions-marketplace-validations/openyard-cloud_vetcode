@@ -200,8 +200,8 @@ async function main() {
   }
   if (MODE === "off" || !command || !MAYBE.test(command)) return;
   // The scanner is loaded only now: every other shell command pays for a regex, nothing more.
-  const [{ guard, scanArchive, privateRegistries }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
-  const res = await guard(command, { cwd, config, mode: MODE, minAgeHours: +(process.env.VETCODE_GUARD_MIN_AGE_HOURS || 72), isPrivate: privateRegistries({ cwd }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
+  const [{ guard, scanArchive, privateRegistries, projectRegistries }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
+  const res = await guard(command, { cwd, config, mode: MODE, minAgeHours: +(process.env.VETCODE_GUARD_MIN_AGE_HOURS || 72), isPrivate: privateRegistries({ cwd }), redirects: dir => projectRegistries({ cwd: dir }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
   if (!hook) {
     console.log(`${res.decision}${res.checked ? ` (${res.checked} package${res.checked === 1 ? "" : "s"} checked)` : ""}`);
     if (res.message) console.log(res.message);

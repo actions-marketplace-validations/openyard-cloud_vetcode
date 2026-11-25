@@ -1050,6 +1050,31 @@ test("guard: reads what a shell line would install", () => {
   assert.deepEqual(p("git status && echo npm install foo > notes.txt && ls"), []);
 });
 
+test("guard: a project's own .npmrc that points installs at another registry is a question", async () => {
+  const { privateRegistries, projectRegistries } = await import("../skills/vetcode/scripts/lib/guard.mjs");
+  const files = { "/p/.npmrc": "registry=https://npm.attacker.example/\n", "/corp/.npmrc": "@acme:registry=https://npm.acme.example/\n", "/h/.npmrc": "@acme:registry=https://npm.acme.example/\n", "/q/.yarnrc.yml": "npmRegistryServer: \"https://yarn.attacker.example\"\n", "/pub/.npmrc": "registry=https://registry.npmjs.org/\n" };
+  const read = f => files[f] || "";
+  const regs = dir => projectRegistries({ cwd: dir, home: "/h", env: {}, read });
+  assert.deepEqual(regs("/p"), [{ eco: "npm", file: ".npmrc", scope: null, url: "https://npm.attacker.example/" }]);
+  assert.deepEqual(regs("/corp"), [], "a registry the user set up themselves is theirs");
+  assert.deepEqual(regs("/pub"), []);
+  assert.equal(regs("/q")[0].url, "https://yarn.attacker.example");
+  const w = world({ npm: { lodash: npmDoc("lodash", { "4.17.21": { age: 800 } }) } });
+  const opts = cwd => ({ ...w, cwd, exists: () => false, isPrivate: privateRegistries({ cwd, home: "/h", env: {}, read }), redirects: regs });
+  for (const c of ["npm install", "npm install lodash"]) {
+    const r = await guard(c, opts("/p"));
+    assert.equal(r.decision, "ask", c);
+    assert.match(r.message, /\.npmrc in p sends every npm install to https:\/\/npm\.attacker\.example\/, not the public registry/);
+  }
+  assert.equal((await guard("cd /p && npm install", opts("/w"))).decision, "ask", "the folder the install runs in");
+  assert.equal((await guard("npm install lodash", opts("/corp"))).decision, "allow");
+  assert.equal((await guard("ls", opts("/p"))).decision, "allow", "only installs are asked about");
+  // The scanner says the same about a repository it reads.
+  const dir = project({ ".npmrc": "registry=https://npm.attacker.example/\n", "pip.conf": "[global]\nindex-url = https://pypi.org/simple\n", "web/.yarnrc.yml": "npmRegistryServer: \"https://registry.yarnpkg.com\"\n" });
+  const found = (await run(dir)).findings.filter(f => f.rule === "registry-redirect");
+  assert.deepEqual(found.map(f => [f.file, f.evidence]), [[".npmrc", "https://npm.attacker.example/"]]);
+});
+
 test("guard: a package that does not exist, is reported as malware, or is hours old is stopped", async () => {
   const w = world({ npm: { lodash: npmDoc("lodash", { "4.17.20": { age: 900 }, "4.17.21": { age: 800 } }), "left-pad": npmDoc("left-pad", { "1.0.0": { age: 400 }, "1.0.1": { age: 1 } }), "evil-kit": npmDoc("evil-kit", { "1.0.0": { age: 50 } }) }, malware: ["evil-kit"] });
   const d = async (name, want) => (await checkPackage({ eco: "npm", name, want }, w));

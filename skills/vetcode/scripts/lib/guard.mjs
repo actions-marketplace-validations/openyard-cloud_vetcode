@@ -75,13 +75,17 @@ function npmSpec(spec) {
   const alias = /^[^@]+@npm:(.+)$/.exec(spec) || /^@[^@]+@npm:(.+)$/.exec(spec);
   if (alias) spec = alias[1];
   const m = /^(@[\w.~-]+\/[\w.~-]+|[\w.~-]+)(?:@(.+))?$/.exec(spec);
-  return m ? { eco: "npm", name: m[1].toLowerCase(), want: m[2] || null } : null;
+  // An exact version or a tag is looked up as asked; a range (^4, >=1 <2) is checked by name alone.
+  return m ? { eco: "npm", name: m[1].toLowerCase(), want: m[2] && /^[\w.+-]+$/.test(m[2]) ? m[2] : null } : null;
 }
+// A crate version as cargo would match it exactly: 1.2.3, =1.2.3, or a prefix (1, 1.2). Ranges are checked by name alone.
+const crateVersion = v => { const s = String(v ?? "").replace(/^=\s*/, ""); return /^\d+(?:\.\d+){0,2}(?:[-+][\w.+-]*)?$/.test(s) ? s : null; };
 function pipSpec(spec) {
   if (/^(?:\.{0,2}\/|~\/|\.$)|\.(?:whl|tar\.gz|zip)$/.test(spec) && !/^https?:/.test(spec)) return null;
   if (/^(?:https?:|git\+|hg\+|svn\+|bzr\+)|@\s*(?:https?:|git\+)/.test(spec)) return { eco: "pypi", remote: spec };
   const m = /^([A-Za-z0-9][\w.-]*)(?:\[[^\]]*\])?\s*(?:(==|===)\s*([\w.!+*-]+))?/.exec(spec);
-  return m ? { eco: "pypi", name: m[1].toLowerCase().replace(/[-_.]+/g, "-"), want: m[3] || null } : null;
+  // ==2.* is a range, not a release PyPI can be asked about: checked by name alone.
+  return m ? { eco: "pypi", name: m[1].toLowerCase().replace(/[-_.]+/g, "-"), want: m[3] && !m[3].includes("*") ? m[3] : null } : null;
 }
 
 /** What a shell line would fetch and run: registry packages, other sources, and downloads piped to a shell. */
@@ -180,7 +184,7 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
       if (!a.startsWith("-")) names.push(a);
     }
     if (local) return; // the source is a repository or a folder: said above, or nothing to fetch
-    for (const n of names) { const m = /^([A-Za-z0-9][\w-]*)(?:@(.+))?$/.exec(n); if (m) out.push({ eco: "cargo", name: m[1].toLowerCase(), want: m[2] || (names.length === 1 ? version : null), via }); }
+    for (const n of names) { const m = /^([A-Za-z0-9][\w-]*)(?:@(.+))?$/.exec(n); if (m) out.push({ eco: "cargo", name: m[1].toLowerCase(), want: crateVersion(m[2] || (names.length === 1 ? version : null)), via }); }
   }
   // go get github.com/a/b@v1.2.3 · go install example.com/tool/cmd/x@latest · go run host/mod@v1 (a local file or ./pkg fetches nothing)
   function goModules(list, via, run) {
@@ -361,8 +365,11 @@ export async function checkPackage(pkg, deps = {}) {
     version = info.Version; published = Date.parse(info.Time || ""); archive = `https://proxy.golang.org/${esc}/@v/${version}.zip`;
   } catch { /* proxy unreachable */ }
   else try {
-    const r = npm ? await json(fetchFn, `https://registry.npmjs.org/${pkg.name.replace("/", "%2F")}`)
+    let r = npm ? await json(fetchFn, `https://registry.npmjs.org/${pkg.name.replace("/", "%2F")}`)
       : await json(fetchFn, `https://pypi.org/pypi/${pkg.name}${pkg.want ? "/" + pkg.want : ""}/json`);
+    // PyPI knows a release only by its own spelling (2.32.0, not 2.32): a version it does not know is
+    // pip's to report. Whether the name exists is what matters here.
+    if (!npm && pkg.want && r.status === 404) { r = await json(fetchFn, `https://pypi.org/pypi/${pkg.name}/json`); if (r.status !== 404) notes.push(`PyPI has no release spelled ${pkg.want}; the newest release was checked`); pkg = { ...pkg, want: null }; }
     if (r.status === 404) { raise("deny", `${pkg.name} does not exist on ${npm ? "npm" : "PyPI"}${pkg.want ? " at that version" : ""}. Check the name: a made-up name is one an attacker can register.`); return done(); }
     doc = r.body;
   } catch { /* registry unreachable: decide on what we have */ }

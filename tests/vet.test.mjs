@@ -1050,6 +1050,23 @@ test("guard: reads what a shell line would install", () => {
   assert.deepEqual(p("git status && echo npm install foo > notes.txt && ls"), []);
 });
 
+test("guard: a version range is checked by name, not looked up as a release", async () => {
+  const p = c => parseInstalls(c, { exists: () => false }).map(x => `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}`);
+  assert.deepEqual(p("pip install 'requests==2.*' requests==2.31.0"), ["pypi:requests", "pypi:requests@2.31.0"]);
+  assert.deepEqual(p("cargo add serde@^1.0 tokio@=1.38.0 rand@0.8; cargo install ripgrep --version '~14.1'"), ["cargo:serde", "cargo:tokio@1.38.0", "cargo:rand@0.8", "cargo:ripgrep"]);
+  assert.deepEqual(p("npm i express@^4 react@18.3.1 next@canary"), ["npm:express", "npm:react@18.3.1", "npm:next@canary"]);
+  const crate = (name, versions) => ({ crate: { name, max_stable_version: Object.keys(versions).at(-1), downloads: 500_000_000 }, versions: Object.entries(versions).reverse().map(([num, x]) => ({ num, created_at: DAYS(x.age), dl_path: `/api/v1/crates/${name}/${num}/download`, crate_size: 1000 })) });
+  const w = world({ pypi: { requests: { info: { version: "2.32.0" }, urls: [{ packagetype: "sdist", url: "https://files.pythonhosted.org/r.tar.gz", size: 10, upload_time_iso_8601: DAYS(500) }] } }, crates: { serde: crate("serde", { "1.0.200": { age: 300 }, "1.0.210": { age: 100 } }), ripgrep: crate("ripgrep", { "14.1.0": { age: 300 } }) } });
+  // PyPI answers a release only by its own spelling: /pypi/requests/2.32/json is a 404, /pypi/requests/2.*/json too.
+  const strict = async (url, init) => /pypi\.org\/pypi\/[^/]+\/[^/]+\/json$/.test(url) && !/\/2\.32\.0\/json$/.test(url) ? { status: 404, ok: false, json: async () => null } : w.fetch(url, init);
+  const opts = { ...w, fetch: strict, exists: () => false };
+  for (const c of ["pip install 'requests==2.*'", "pip install requests==2.32", "cargo add serde@^1.0", "cargo add serde@=1.0.210", "cargo install ripgrep --version '~14.1'"])
+    assert.equal((await guard(c, opts)).decision, "allow", c);
+  assert.match((await guard("pip install requests==2.32", opts)).notes.join(" "), /no release spelled 2\.32/);
+  assert.equal((await guard("pip install requessts==2.32", opts)).decision, "deny", "a name that does not exist is still stopped");
+  assert.match((await guard("pip install requessts==2.32", opts)).message, /requessts does not exist on PyPI\./);
+});
+
 test("guard: a project's own .npmrc that points installs at another registry is a question", async () => {
   const { privateRegistries, projectRegistries } = await import("../skills/vetcode/scripts/lib/guard.mjs");
   const files = { "/p/.npmrc": "registry=https://npm.attacker.example/\n", "/corp/.npmrc": "@acme:registry=https://npm.acme.example/\n", "/h/.npmrc": "@acme:registry=https://npm.acme.example/\n", "/q/.yarnrc.yml": "npmRegistryServer: \"https://yarn.attacker.example\"\n", "/pub/.npmrc": "registry=https://registry.npmjs.org/\n" };

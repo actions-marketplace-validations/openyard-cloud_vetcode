@@ -1455,6 +1455,18 @@ test("guard: a repository is read right after it is cloned", async () => {
   assert.equal(await checkClone("/no/such/folder", { vet }), null);
 });
 
+test("a folder the surrounding repository ignores is read, not skipped", async () => {
+  const pkg = { "package.json": JSON.stringify({ name: "x", version: "1.0.0", scripts: { postinstall: "node setup.js" } }), "setup.js": j("eval(at", "ob('Y29uc29sZS5sb2coMSk='));\n") };
+  const dir = project({ ".gitignore": "tmp/\nnode_modules/\n", "index.js": "module.exports = 1;\n", ...Object.fromEntries(Object.entries(pkg).flatMap(([f, t]) => [[`tmp/pkg/${f}`, t], [`node_modules/x/${f}`, t]])) });
+  spawnSync("git", ["init", "-q"], { cwd: dir });
+  for (const sub of ["tmp/pkg", "node_modules/x"]) {
+    const r = await run(path.join(dir, sub));
+    assert.equal(r.stats.files, 2, sub);
+    assert.ok(r.verdict.level, sub);
+  }
+  assert.equal((await run(dir)).stats.files, 2, "the repository itself still reads what git sees");
+});
+
 test("the plugin folder: the directory edition is Markdown alone, the full edition runs from its folder", () => {
   const script = new URL("../.github/plugin/build.sh", import.meta.url).pathname;
   const build = env => {

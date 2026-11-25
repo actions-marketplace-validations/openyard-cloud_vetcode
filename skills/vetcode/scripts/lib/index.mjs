@@ -65,6 +65,12 @@ export function changedFiles(root, base) {
 }
 
 function gitFiles(root) {
+  // A folder the surrounding repository ignores (node_modules/x, a download in tmp/) is not that
+  // repository's code: git would list nothing in it, so it is read like a folder outside git.
+  const top = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: root, encoding: "utf8" });
+  if (top.status !== 0) return null;
+  const inside = path.relative(fs.realpathSync(top.stdout.trim()), root).split(path.sep).join("/");
+  if (inside && (/(^|\/)node_modules(\/|$)/.test(inside) || spawnSync("git", ["check-ignore", "-q", "--", root], { cwd: root }).status === 0)) return null;
   const r = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8", maxBuffer: 256 << 20 });
   if (r.status !== 0) return null;
   return r.stdout.split("\0").filter(Boolean).filter(f => !/(^|\/)node_modules\//.test(f));

@@ -92,7 +92,7 @@ function answer(kind, text) {
   else console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: kind, permissionDecisionReason: text } }));
 }
 // Most shell commands install nothing: decide that before doing any work.
-const MAYBE = /\b(?:npm|pnpm|yarn|bun|npx|bunx|pnpx|pip[\d.]*|uv|uvx|pipx|poetry)\b|\b(?:curl|wget)\b[^|]*\||\bmcp\s+add|\bcargo\s+(?:add|install)\b|\bgo\s+(?:get|install|run)\b/;
+const MAYBE = /\b(?:npm|pnpm|yarn|bun|npx|bunx|pnpx|pip[\d.]*|uv|uvx|pipx|poetry)\b|\b(?:curl|wget)\b[^|]*\||[$<]\(\s*(?:curl|wget)\b|`\s*(?:curl|wget)\b|\bmcp\s+add|\bcargo\s+(?:add|install)\b|\bgo\s+(?:get|install|run)\b/;
 // Files that tell an agent which programs to start: MCP servers, and hooks in agent settings.
 const AGENT_CONFIG = /(?:^|[\\/])(?:\.?mcp(?:[._-]config)?\.json|claude_desktop_config\.json|\.claude\.json|settings(?:\.local)?\.json|config\.toml)$/i;
 
@@ -200,8 +200,8 @@ async function main() {
   }
   if (MODE === "off" || !command || !MAYBE.test(command)) return;
   // The scanner is loaded only now: every other shell command pays for a regex, nothing more.
-  const [{ guard, scanArchive, privateRegistries }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
-  const res = await guard(command, { cwd, config, mode: MODE, minAgeHours: +(process.env.VETCODE_GUARD_MIN_AGE_HOURS || 72), isPrivate: privateRegistries({ cwd }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
+  const [{ guard, scanArchive, privateRegistries, projectRegistries }, { vet }] = await Promise.all([import("./lib/guard.mjs"), import("./lib/index.mjs")]);
+  const res = await guard(command, { cwd, config, mode: MODE, minAgeHours: +(process.env.VETCODE_GUARD_MIN_AGE_HOURS || 72), isPrivate: privateRegistries({ cwd }), redirects: dir => projectRegistries({ cwd: dir }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
   if (!hook) {
     console.log(`${res.decision}${res.checked ? ` (${res.checked} package${res.checked === 1 ? "" : "s"} checked)` : ""}`);
     if (res.message) console.log(res.message);

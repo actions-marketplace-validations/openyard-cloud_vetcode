@@ -44,6 +44,8 @@ export function splitCommands(line) {
     if (c === "'" || c === '"') { quote = c; has = true; }
     else if (c === "\\" && i + 1 < line.length) { word += line[++i]; has = true; }
     else if (c === "\n" || c === ";") next(";");
+    // A subshell or group: `(cd app && npm i x)`. A parenthesis inside a word ($(…), <(…)) stays in the word.
+    else if ((c === "(" && !has) || c === ")") next(";");
     else if (c === "&" && line[i + 1] === "&") { next("&&"); i++; }
     else if (c === "|" && line[i + 1] === "|") { next("||"); i++; }
     else if (c === "|") next("|");
@@ -55,17 +57,54 @@ export function splitCommands(line) {
   return cmds.filter(c => c.length);
 }
 
-const WRAPPERS = new Set(["sudo", "time", "command", "exec", "nohup", "env", "doas"]);
+const base = w => (w || "").replace(/^.*\//, "");
+const WRAPPERS = new Set(["sudo", "time", "command", "exec", "nohup", "env", "doas", "nice", "timeout"]);
+// Options of a wrapper that take a value (`sudo -u me`, `timeout -s KILL 60`), so the value is not read as the program.
+const WRAPPER_VALUES = { sudo: /^-[ugCDhprtUT]$|^--(?:user|group|chdir|host|prompt|role|type|other-user)$/, doas: /^-[uC]$/, env: /^-[uCS]$|^--(?:unset|chdir|split-string)$/, nice: /^-n$|^--adjustment$/, timeout: /^-[sk]$|^--(?:signal|kill-after)$/ };
+// Shell words that start a command without being one: `if npm i x; then …`, `{ npm i x; }`.
+const SHELL_WORDS = new Set(["{", "!", "if", "then", "do", "else", "elif", "while", "until"]);
+/** The program a simple command runs, with assignments, wrappers and their options taken off the front. */
 function strip(words) {
   let w = words.slice();
-  while (w.length && (/^[A-Za-z_]\w*=/.test(w[0]) || WRAPPERS.has(w[0]) || (w[0].startsWith("-") && w.length > 1 && WRAPPERS.has(words[0])))) w = w.slice(1);
-  return w;
+  for (;;) {
+    if (!w.length) return w;
+    if (/^[A-Za-z_]\w*=/.test(w[0]) || SHELL_WORDS.has(w[0])) { w = w.slice(1); continue; }
+    const name = base(w[0]);
+    if (!WRAPPERS.has(name)) return w;
+    let i = 1;
+    while (i < w.length && w[i].startsWith("-")) {
+      if (w[i] === "--") { i++; break; }
+      i += WRAPPER_VALUES[name]?.test(w[i]) ? 2 : 1;
+    }
+    if (name === "timeout" && i < w.length) i++; // the duration
+    w = w.slice(i);
+  }
 }
-const base = w => (w || "").replace(/^.*\//, "");
+// Index settings given on the command line itself: `npm_config_registry=… npm i x`, `PIP_INDEX_URL=… pip install x`.
+const PUBLIC_NPM = /^https?:\/\/registry\.(?:npmjs\.org|yarnpkg\.com)\/?$/i;
+const PUBLIC_PY = /^https:\/\/(?:pypi\.org|files\.pythonhosted\.org|download\.pytorch\.org)\//;
+function envIndexes(words) {
+  const out = [];
+  for (const x of words) {
+    const m = /^(npm_config_registry|PIP_INDEX_URL|PIP_EXTRA_INDEX_URL|UV_INDEX_URL|UV_DEFAULT_INDEX|UV_EXTRA_INDEX_URL|UV_INDEX)=(.+)$/i.exec(x);
+    if (m && !(/^npm/i.test(m[1]) ? PUBLIC_NPM : PUBLIC_PY).test(m[2])) out.push({ eco: /^npm/i.test(m[1]) ? "npm" : "pypi", index: m[2] });
+  }
+  return out;
+}
+// A program downloaded and run in one go without a pipe: `bash -c "$(curl -fsSL URL)"`, `bash <(curl URL)`, `eval "$(curl URL)"`.
+const SUBSTITUTED = /^\s*(?:\$\(|`)\s*(curl|wget)\b([^)`]*)[)`]\s*$/;
+const urlIn = text => (String(text).match(/https?:\/\/[^\s"'`)]+/) || [])[0];
+// What runs a download it reads on stdin: a shell, or an interpreter given no script of its own (`python3`, `python3 -`).
+const SHELL = /^(?:ba|z|da|k)?sh$/;
+function runsStdin(words) {
+  const b = base(words[0]);
+  if (SHELL.test(b)) return true;
+  return /^(?:python[\d.]*|node|perl|ruby)$/.test(b) && (words.length === 1 || words[1] === "-");
+}
 
 // Flags that take a value, per tool, so the value is not read as a package name.
 const VALUE_FLAGS = {
-  npm: /^(--registry|--prefix|-w|--workspace|--cache|--userconfig|--tag|--otp|-C|--omit|--include|--loglevel)$/,
+  npm: /^(--registry|--prefix|-w|--workspace|--cache|--userconfig|--tag|--otp|-C|--omit|--include|--loglevel|--cwd|--dir|--filter|-F)$/,
   pip: /^(-r|--requirement|-c|--constraint|-i|--index-url|--extra-index-url|-f|--find-links|-t|--target|--prefix|--root|--python|--platform|--python-version|--implementation|--abi|--cache-dir|--src|--upgrade-strategy|--progress-bar|--config-settings|-C|--trusted-host|--proxy|--only-binary|--no-binary|--group|--extra|--with|--index|--default-index|-p)$/,
 };
 
@@ -77,6 +116,12 @@ function npmSpec(spec) {
   const m = /^(@[\w.~-]+\/[\w.~-]+|[\w.~-]+)(?:@(.+))?$/.exec(spec);
   // An exact version or a tag is looked up as asked; a range (^4, >=1 <2) is checked by name alone.
   return m ? { eco: "npm", name: m[1].toLowerCase(), want: m[2] && /^[\w.+-]+$/.test(m[2]) ? m[2] : null } : null;
+}
+// What `npm init x` / `npm create x` / `yarn create x` fetches and runs: create-x, @scope/create, @scope/create-x.
+function createSpec(word) {
+  const scoped = /^(@[\w.~-]+)(?:\/([\w.~-]+))?(@.+)?$/.exec(word);
+  if (scoped) return `${scoped[1]}/create${scoped[2] ? "-" + scoped[2] : ""}${scoped[3] || ""}`;
+  return /^[\w.~-]+(?:@.+)?$/.test(word) ? `create-${word}` : word; // anything else (a repository, a path) is read as given
 }
 // A crate version as cargo would match it exactly: 1.2.3, =1.2.3, or a prefix (1, 1.2). Ranges are checked by name alone.
 const crateVersion = v => { const s = String(v ?? "").replace(/^=\s*/, ""); return /^\d+(?:\.\d+){0,2}(?:[-+][\w.+-]*)?$/.test(s) ? s : null; };
@@ -94,25 +139,60 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
   const add = (spec, via, parse) => { const p = parse(spec); if (p) out.push({ ...p, via }); };
   const args = (w, eco) => { const a = []; for (let i = 0; i < w.length; i++) { if (VALUE_FLAGS[eco].test(w[i])) { a.push({ flag: w[i], value: w[++i] }); continue; } if (w[i].startsWith("-")) { a.push({ flag: w[i].split("=")[0], value: w[i].includes("=") ? w[i].slice(w[i].indexOf("=") + 1) : null }); continue; } a.push({ word: w[i] }); } return a; };
   cmds.forEach((raw, i) => {
-    const w = strip(raw), bin = base(w[0]);
-    // A download piped straight into a shell.
-    if (raw.sep === "|" && /^(curl|wget)$/.test(bin) && /^(?:ba|z|da|k)?sh$/.test(base(strip(cmds[i + 1] || [])[0]))) {
+    const w = strip(raw), n = out.length;
+    one(raw, w, i);
+    // An index set in front of an install (`PIP_INDEX_URL=… pip install x`) is the same question as `-i …`.
+    if (out.length > n) for (const ix of envIndexes(raw.slice(0, raw.length - w.length))) out.push({ ...ix, via: base(w[0]) });
+  });
+  return out;
+
+  function one(raw, w, i) {
+    const bin = base(w[0]);
+    // A download piped straight into a shell, or into an interpreter that reads its program from stdin.
+    if (raw.sep === "|" && /^(curl|wget)$/.test(bin) && runsStdin(strip(cmds[i + 1] || []))) {
       const url = w.find(x => /^https?:\/\//.test(x));
       if (!url || !INSTALLER.test(url)) out.push({ pipe: url || "a download", via: `${bin} | ${base(strip(cmds[i + 1])[0])}` });
       return;
     }
     if (/^(npm|pnpm|yarn|bun)$/.test(bin)) {
-      const rest = w.slice(1), sub = rest.find(x => !x.startsWith("-")), after = rest.slice(rest.indexOf(sub) + 1);
+      // Options may come before the verb (`npm --prefix app install x`); the ones that take a value are skipped with it.
+      const rest = w.slice(1), pre = [];
+      let k = 0;
+      while (k < rest.length && rest[k].startsWith("-")) { if (VALUE_FLAGS.npm.test(rest[k])) { pre.push(rest[k], rest[k + 1]); k += 2; } else pre.push(rest[k++]); }
+      const sub = rest[k], after = rest.slice(k + 1);
       const global = sub === "global" && bin === "yarn";
       const verb = global ? after.find(x => !x.startsWith("-")) : sub, list = global ? after.slice(after.indexOf(verb) + 1) : after;
+      const via = `${bin} ${verb}`;
       if ((bin === "npm" && /^(i|in|ins|inst|insta|instal|install|isnt|isnta|isntal|isntall|add)$/.test(verb)) || (bin !== "npm" && verb === "add") || (bin === "bun" && /^(i|install)$/.test(verb) && list.some(x => !x.startsWith("-"))))
-        for (const a of args(list, "npm")) if (a.word) add(a.word, `${bin} ${verb}`, npmSpec);
-      if ((bin === "npm" && /^(exec|x)$/.test(verb)) || (/^(pnpm|yarn)$/.test(bin) && verb === "dlx") || (bin === "bun" && verb === "x")) runner(list, `${bin} ${verb}`);
+        for (const a of args(list, "npm")) if (a.word) add(a.word, via, npmSpec);
+      if ((bin === "npm" && /^(exec|x)$/.test(verb)) || (/^(pnpm|yarn)$/.test(bin) && verb === "dlx") || (bin === "bun" && verb === "x")) runner(list, via);
+      // npm init x / npm create x / yarn|pnpm|bun create x: fetches create-x and runs it.
+      if ((bin === "npm" && /^(create|init|innit)$/.test(verb)) || (bin !== "npm" && verb === "create")) {
+        const first = args(list, "npm").find(a => a.word);
+        if (first) add(createSpec(first.word), via, npmSpec);
+      }
+      // --registry sends the install to another registry: the same question as pip's --index-url.
+      const fetches = verb === undefined ? bin === "yarn" : /^(i|in|ins|inst|insta|instal|install|isnt|isnta|isntal|isntall|add|ci|exec|x|dlx|create|init|innit|update|up|upgrade)$/.test(verb);
+      if (fetches) for (const a of [...args(pre, "npm"), ...args(list, "npm")]) if (a.flag === "--registry" && a.value && !PUBLIC_NPM.test(a.value)) out.push({ eco: "npm", index: a.value, via });
       return;
     }
     if (/^(npx|bunx|pnpx)$/.test(bin)) return runner(w.slice(1), bin);
-    // sh -c "…": the string is a command line of its own.
-    if (/^(?:ba|z|da|k)?sh$/.test(bin) && w.includes("-c") && w[w.indexOf("-c") + 1]) return void out.push(...parseInstalls(w[w.indexOf("-c") + 1], { cwd, exists }));
+    if (SHELL.test(bin) || /^(source|\.|eval)$/.test(bin)) {
+      // bash -c "…", bash -lc "…", sh -ec "…": the string is a command line of its own.
+      const c = bin === "eval" ? 0 : w.findIndex((x, k) => k > 0 && /^-[A-Za-z]*c[A-Za-z]*$/.test(x));
+      const script = c >= 0 ? w[c + 1] : null;
+      // bash -c "$(curl …)" and eval "$(curl …)": a download run as it arrives, like curl | sh.
+      const sub = script != null && SUBSTITUTED.exec(script);
+      // bash <(curl …), source <(curl …): the same, through a process substitution.
+      const proc = !sub && w.findIndex(x => /^<\((?:curl|wget)$/.test(x));
+      if (sub || proc > 0) {
+        const url = sub ? urlIn(sub[2]) : urlIn(w.slice(proc + 1).join(" "));
+        if (!url || !INSTALLER.test(url)) out.push({ pipe: url || "a download", via: `${bin} ${sub ? sub[1] : w[proc].slice(2)}` });
+        return;
+      }
+      if (script) return void out.push(...parseInstalls(script, { cwd, exists }));
+      return;
+    }
     // Registering an MCP server: what follows the name is run at every start of the agent.
     if (/^(claude|codex|gemini)$/.test(bin) && w[1] === "mcp" && /^(add|add-json)$/.test(w[2])) return mcpAdd(w.slice(3), `${bin} mcp ${w[2]}`, w[2] === "add-json");
     if (/^pip[\d.]*$/.test(bin) && w[1] === "install") return pip(w.slice(2), "pip install");
@@ -127,8 +207,7 @@ export function parseInstalls(line, { cwd = process.cwd(), exists = fs.existsSyn
     if (bin === "poetry" && w[1] === "add") return pip(w.slice(2), "poetry add");
     if (bin === "cargo" && /^(add|install)$/.test(w[1])) return crates(w.slice(2), `cargo ${w[1]}`);
     if (bin === "go" && /^(get|install|run)$/.test(w[1])) return goModules(w.slice(2), `go ${w[1]}`, w[1] === "run");
-  });
-  return out;
+  }
 
   // npx-style: the first plain word is the package, unless -p / --package names it.
   function runner(list, via) {

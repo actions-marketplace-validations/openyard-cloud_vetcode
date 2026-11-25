@@ -199,7 +199,7 @@ An agent decides to install a package in a second: a name it remembered wrong, a
 | install a package whose code shows signs of malware short of that | ask |
 | install a name one letter from a popular package (`expres`, `reqeusts`) that few people install | ask |
 | install a release less than 72 hours old, or one that lost its provenance or gained an install script | ask |
-| pipe a download into a shell, or install from another index, a repository or a URL | ask |
+| run a download as it arrives (`curl … \| sh`, `curl … \| python3`, `bash -c "$(curl …)"`, `bash <(curl …)`), or install from another index, a repository or a URL | ask |
 | install in a project whose own `.npmrc`, `.yarnrc.yml` or `pip.conf` sends installs to a registry you have not set up yourself | ask |
 | add an MCP server at a tunnel address (ngrok, trycloudflare…) or over plain HTTP to another machine | ask |
 | install well-known packages at settled versions | allow, silently |
@@ -216,7 +216,7 @@ node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
 
 | Where | What is checked |
 |---|---|
-| `npm install x`, `npx x`, `pip install x`, `uvx x`, `cargo add x`, `cargo install x`, `go get x`, `go install x@v`, also inside `bash -c "…"` | the packages named |
+| `npm install x`, `npx x`, `npm create x` (and `npm init x`, `yarn`/`pnpm`/`bun create x`, which run `create-x`), `pip install x`, `uvx x`, `cargo add x`, `cargo install x`, `go get x`, `go install x@v`, also inside `bash -lc "…"`, a subshell, or behind `sudo` or `timeout` | the packages named; a version range is checked by name |
 | `npm install`, `npm ci`, `pnpm install`, `yarn`, `bun install`, `pip install -r requirements.txt` | the dependencies added since the lockfile was written, one by one; and everything the lockfile or requirements file pins, against malware advisories |
 | `claude mcp add … -- npx x`, `codex mcp add`, `gemini mcp add` | the package the server would run, and the server's address |
 | writing `.mcp.json`, `claude_desktop_config.json`, agent `settings.json` or Codex `config.toml` | the same, for every server or hook command in the text being written |

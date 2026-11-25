@@ -73,9 +73,9 @@ const text = t => ({ content: [{ type: "text", text: t }] });
 async function callTool(name, args = {}) {
   if (name === "vetcode_guard") {
     if (typeof args.command !== "string" || !args.command.trim()) throw rpcError(-32602, "command must be the shell command to check");
-    const { guard, scanArchive, privateRegistries } = await import(pathToFileURL(path.join(SKILL, "scripts/lib/guard.mjs")).href);
+    const { guard, scanArchive, privateRegistries, projectRegistries } = await import(pathToFileURL(path.join(SKILL, "scripts/lib/guard.mjs")).href);
     const cwd = typeof args.cwd === "string" && fs.existsSync(args.cwd) ? args.cwd : process.cwd();
-    const r = await guard(args.command, { cwd, isPrivate: privateRegistries({ cwd }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
+    const r = await guard(args.command, { cwd, isPrivate: privateRegistries({ cwd }), redirects: dir => projectRegistries({ cwd: dir }), scan: (eco, url, size) => scanArchive(eco, url, size, { vet }) });
     const lines = [`Decision: ${r.decision}${r.checked ? ` (${r.checked} package${r.checked === 1 ? "" : "s"} checked)` : " (nothing to install in this command)"}`, r.message, ...r.notes.map(n => `Note: ${n}`)].filter(Boolean);
     return { content: [{ type: "text", text: lines.join("\n") }], structuredContent: { decision: r.decision, reasons: r.results.flatMap(x => x.reasons || []), packages: r.results.filter(x => x.name).map(x => ({ name: x.name, ecosystem: x.eco, version: x.version || null, decision: x.decision })) } };
   }

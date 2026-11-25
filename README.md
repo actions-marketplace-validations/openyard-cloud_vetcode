@@ -19,7 +19,7 @@
 claude plugin marketplace add openyard-cloud/vetcode && claude plugin install vetcode@openyard
 
 npx skills add openyard-cloud/vetcode            # any other agent, as a skill
-npx github:openyard-cloud/vetcode#v0.8.17 .       # no agent: scan a project, a package or a cloned repo
+npx github:openyard-cloud/vetcode#v0.8.19 .       # no agent: scan a project, a package or a cloned repo
 ```
 
 An agent installs a package in a second and runs a cloned project without reading it. vetcode is the check in between. It is three things:
@@ -145,7 +145,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 ```json
 {
   "mcpServers": {
-    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.17", "vetcode-mcp"] }
+    "vetcode": { "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.19", "vetcode-mcp"] }
   }
 }
 ```
@@ -158,7 +158,7 @@ Four tools (`vetcode_scan`, `vetcode_guard`, `vetcode_guide`, `vetcode_reference
 VS Code (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.17", "vetcode-mcp"] } } }
+{ "servers": { "vetcode": { "type": "stdio", "command": "npx", "args": ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.19", "vetcode-mcp"] } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -166,7 +166,7 @@ Codex (`~/.codex/config.toml`):
 ```toml
 [mcp_servers.vetcode]
 command = "npx"
-args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.17", "vetcode-mcp"]
+args = ["-y", "-p", "github:openyard-cloud/vetcode#v0.8.19", "vetcode-mcp"]
 ```
 
 </details>
@@ -199,7 +199,8 @@ An agent decides to install a package in a second: a name it remembered wrong, a
 | install a package whose code shows signs of malware short of that | ask |
 | install a name one letter from a popular package (`expres`, `reqeusts`) that few people install | ask |
 | install a release less than 72 hours old, or one that lost its provenance or gained an install script | ask |
-| pipe a download into a shell, or install from another index, a repository or a URL | ask |
+| run a download as it arrives (`curl … \| sh`, `curl … \| python3`, `bash -c "$(curl …)"`, `bash <(curl …)`), or install from another index, a repository or a URL | ask |
+| install in a project whose own `.npmrc`, `.yarnrc.yml` or `pip.conf` sends installs to a registry you have not set up yourself | ask |
 | add an MCP server at a tunnel address (ngrok, trycloudflare…) or over plain HTTP to another machine | ask |
 | install well-known packages at settled versions | allow, silently |
 
@@ -215,7 +216,7 @@ node skills/vetcode/scripts/guard.mjs "npm install expres"     # try it by hand
 
 | Where | What is checked |
 |---|---|
-| `npm install x`, `npx x`, `pip install x`, `uvx x`, `cargo add x`, `cargo install x`, `go get x`, `go install x@v`, also inside `bash -c "…"` | the packages named |
+| `npm install x`, `npx x`, `npm create x` (and `npm init x`, `yarn`/`pnpm`/`bun create x`, which run `create-x`), `pip install x`, `uvx x`, `cargo add x`, `cargo install x`, `go get x`, `go install x@v`, also inside `bash -lc "…"`, a subshell, or behind `sudo` or `timeout` | the packages named; a version range is checked by name |
 | `npm install`, `npm ci`, `pnpm install`, `yarn`, `bun install`, `pip install -r requirements.txt` | the dependencies added since the lockfile was written, one by one; and everything the lockfile or requirements file pins, against malware advisories |
 | `claude mcp add … -- npx x`, `codex mcp add`, `gemini mcp add` | the package the server would run, and the server's address |
 | writing `.mcp.json`, `claude_desktop_config.json`, agent `settings.json` or Codex `config.toml` | the same, for every server or hook command in the text being written |
@@ -260,7 +261,7 @@ or run `/vetcode` in Claude Code (`/vetcode:vetcode` when installed as a plugin)
 ### The scanner on its own
 
 ```bash
-npx github:openyard-cloud/vetcode#v0.8.17 [path] [options]   # straight from a release
+npx github:openyard-cloud/vetcode#v0.8.19 [path] [options]   # straight from a release
 node skills/vetcode/scripts/vet.mjs [path] [options]         # from a clone
 ```
 
@@ -299,12 +300,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
-      - uses: openyard-cloud/vetcode@v0.8.17   # a release tag, or its commit SHA
+      - uses: openyard-cloud/vetcode@v0.8.19   # a release tag, or its commit SHA
         with:
           fail-on: high        # critical, high, medium, low, or empty to never fail
 ```
 
-Comments are not repeated on later pushes. Once a finding is gone, its thread gets a reply saying so; GitHub lets the workflow token resolve the thread only with `contents: write`, so add that permission if you want those threads closed as well. Pull requests from forks get a read-only token, so their results go to the job summary, and their `vetcode-ignore` comments are not honoured. Inputs: `path`, `fail-on`, `comment`, `sarif`, `online`, `github-token`.
+Comments are not repeated on later pushes. Once a finding is gone, its thread gets a reply saying so; GitHub lets the workflow token resolve the thread only with `contents: write`, so add that permission if you want those threads closed as well. Pull requests from forks get a read-only token, so their results go to the job summary, and their `vetcode-ignore` comments are not honoured. In every pull request the `.vetcodeignore` of the base branch applies, and a change to it is reported, so a change cannot hide its own files. Inputs: `path`, `fail-on`, `comment`, `sarif`, `online`, `github-token`.
 
 <details>
 <summary>With an AI agent, the Security tab, and other CI</summary>

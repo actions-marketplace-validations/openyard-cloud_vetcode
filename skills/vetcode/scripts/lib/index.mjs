@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { walk, loadIgnore, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
+import { walk, loadIgnore, ignoreFrom, installedPackages, readText, SKIP_DIRS_NO_GIT } from "./walk.mjs";
 import { profiles, purposeMismatches } from "./profile.mjs";
 import { crateProfiles, scanBuildTime } from "./rust.mjs";
 import { npmHistory } from "./npmhistory.mjs";
@@ -41,7 +41,7 @@ async function yarnCopiesAreOfficial(copies, out, log) {
 let PLACE_RULES = new Set();
 try { PLACE_RULES = new Set(JSON.parse(fs.readFileSync(new URL("./data/web-places.json", import.meta.url), "utf8")).places); } catch {}
 
-export const VERSION = "0.8.17";
+export const VERSION = "0.8.19";
 
 /** Arguments for `git diff` from `base` to HEAD: changes since the branch point, or, in a
  *  shallow clone without that history (a pull request checkout in CI), straight against base. */
@@ -65,6 +65,12 @@ export function changedFiles(root, base) {
 }
 
 function gitFiles(root) {
+  // A folder the surrounding repository ignores (node_modules/x, a download in tmp/) is not that
+  // repository's code: git would list nothing in it, so it is read like a folder outside git.
+  const top = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd: root, encoding: "utf8" });
+  if (top.status !== 0) return null;
+  const inside = path.relative(fs.realpathSync(top.stdout.trim()), root).split(path.sep).join("/");
+  if (inside && (/(^|\/)node_modules(\/|$)/.test(inside) || spawnSync("git", ["check-ignore", "-q", "--", root], { cwd: root }).status === 0)) return null;
   const r = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], { cwd: root, encoding: "utf8", maxBuffer: 256 << 20 });
   if (r.status !== 0) return null;
   return r.stdout.split("\0").filter(Boolean).filter(f => !/(^|\/)node_modules\//.test(f));
@@ -78,18 +84,40 @@ export async function vet(target, opts = {}) {
   options.suppressed = new Set();
   options.owner = (opts.repo || "").split("/")[0].toLowerCase();
   forgetCapabilities();
-  const ignore = opts.noIgnore ? [] : loadIgnore(root);
+  let ignore = opts.noIgnore ? [] : loadIgnore(root);
+  const findings = [];
+  // Against a base (a pull request), the change itself must not decide what is skipped: the
+  // .vetcodeignore of the base applies, and a change to it is reported for a person to look at.
+  if (!opts.noIgnore && opts.diff) {
+    const before = spawnSync("git", ["show", `${opts.diff}:./.vetcodeignore`], { cwd: root, encoding: "utf8" });
+    const was = before.status === 0 ? before.stdout : "", now = readText(path.join(root, ".vetcodeignore")) ?? "";
+    if (was !== now) {
+      ignore = ignoreFrom(was);
+      findings.push(finding({ id: "vetcodeignore-changed", category: "supply-chain", severity: "medium", confidence: "high", title: "This change edits what vetcode skips",
+        why: "A change that adds a path to .vetcodeignore can hide its own code from the scan. The scan of this change used the .vetcodeignore of the base instead.",
+        fix: "Check that every new pattern covers only generated or third-party files, and merge the .vetcodeignore change on its own." }, ".vetcodeignore", 1, `${ignoreFrom(was).length} pattern(s) at ${opts.diff}, ${ignoreFrom(now).length} now`));
+    }
+  }
   const only = opts.diff !== undefined ? changedFiles(root, opts.diff || null) : null;
   // In a git repository, read what git sees (tracked + untracked, minus .gitignore'd
   // build output); outside one, read everything.
   const listed = only || gitFiles(root);
-  const findings = [];
   const sinks = [];
   const files = [];
   const partial = [];
   const yarnCopies = [];
   // Each file is scanned on its own (perfile.mjs), on several threads for a big project.
-  const walked = [...walk(root, { ignore, only: listed, ...(listed ? {} : { skipDirs: SKIP_DIRS_NO_GIT }) })];
+  const links = [];
+  const walked = [...walk(root, { ignore, only: listed, links, ...(listed ? {} : { skipDirs: SKIP_DIRS_NO_GIT }) })];
+  // Symlinks are not followed; one that leaves the project is a way to make a reader open the user's own files.
+  for (const rel of links) {
+    let to = null; try { to = fs.readlinkSync(path.join(root, rel)); } catch { continue; }
+    const at = path.resolve(path.dirname(path.join(root, rel)), to);
+    if (at === root || at.startsWith(root + path.sep)) continue;
+    findings.push(finding({ id: "symlink-outside", category: "supply-chain", severity: "medium", confidence: "medium", title: "A file in the project is a link to a place outside it",
+      why: "Whoever opens this file (an editor, a build, an agent asked to read the project) reads the target instead, which can be your own credentials or settings. vetcode did not follow it.",
+      fix: "Check where it points. A link to a home folder, credentials or system files has no reason to be in a project: remove it before working in this folder." }, rel, 1, `→ ${to}`));
+  }
   const scanned = await scanAll(walked, root);
   walked.forEach((file, i) => {
     const r = scanned[i];

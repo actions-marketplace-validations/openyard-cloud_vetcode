@@ -1610,7 +1610,14 @@ test("the plugin folder: the directory edition is Markdown alone, the full editi
   // The skill says what to do when its programs are not there, and does not tell the agent to fetch them.
   const skill = fs.readFileSync(path.join(lite, "skills/vetcode/SKILL.md"), "utf8");
   assert.match(skill, /If this copy of the skill has no `scripts` folder/);
-  assert.match(skill, /Do not download or run it yourself/);
+  assert.match(skill, /Do not install it yourself/);
+  // The directory's automated review refuses text that reads as a command fetching code and running it,
+  // even in documentation. Describe such commands in words in this edition.
+  for (const f of files(lite).filter((f) => f.startsWith("skills/"))) {
+    const text = fs.readFileSync(path.join(lite, f), "utf8");
+    const hit = /\b(?:npx|uvx|bunx|pipx|curl|wget|iex|Invoke-Expression|npm pack|pip download)\b|node -e\b|nc -e\b|\|\s*(?:ba)?sh\b|fetch(?:es)? and evals?|download(?:s|ed)? (?:and|or) run/i.exec(text);
+    assert.equal(hit, null, `${f}: ${hit?.[0]}`);
+  }
   standsAlone(lite);
 
   const full = build({ WITH_CODE: "1" });
